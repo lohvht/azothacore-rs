@@ -1,2 +1,8 @@
 group_imports = "StdExternalCrate"
-max_width = 120
+max_width = 140
+imports_granularity = "Crate"
+imports_layout = "HorizontalVertical"
+match_block_trailing_comma = true
+normalize_doc_attributes = true
+reorder_impl_items = true
+struct_field_align_threshold = 20

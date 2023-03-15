@@ -1,0 +1,12 @@
+[package]
+name = "azothacore_proc_macros"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+itertools = "0.10.5"
+quote = "1.0.24"
+syn = "1.0.109"
