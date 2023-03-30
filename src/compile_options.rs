@@ -1,7 +1,14 @@
 use const_format::formatcp;
 use git_version::git_version;
 
-pub const GIT_VERSION: &str = git_version!();
+pub const GIT_VERSION: &str = git_version!(
+    args = ["--always", "--dirty=-modified", "--abbrev=10"],
+    prefix = "git:",
+    cargo_prefix = "cargo:",
+    fallback = "unknown"
+);
+pub const GIT_HASH: &str = git_version!(args = ["--abbrev=10", "--always"]);
+
 #[cfg(target_os = "windows")]
 pub const CONF_DIR: &str = option_env!("CONF_DIR").unwrap_or("configs\\");
 

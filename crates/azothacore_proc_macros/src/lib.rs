@@ -1,5 +1,4 @@
 #![feature(proc_macro_span)]
-#![feature(option_result_contains)]
 
 extern crate proc_macro;
 
@@ -65,9 +64,9 @@ pub fn scripts_registration(input: TokenStream) -> TokenStream {
     };
     let register_fn = quote! {
         #[doc = "Runs through a run of init functions, returning early if at the first script that fails to register"]
-        pub fn register() -> Result<(), Box<dyn std::error::Error>> {
+        pub async fn register() -> Result<(), Box<dyn std::error::Error>> {
             #(
-                #script_names::init()?;
+                #script_names::init().await?;
             )*
             Ok(())
         }
@@ -82,12 +81,9 @@ pub fn scripts_registration(input: TokenStream) -> TokenStream {
 
     let expanded = quote! {
         #modules
-
         #register_fn
-
         #registed_module_slice
     };
-    eprintln!("BODY>>>\n{}\n<<<BODY", expanded);
 
     TokenStream::from(expanded)
 }

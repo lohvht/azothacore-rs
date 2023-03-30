@@ -1,4 +1,4 @@
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 
 pub struct ObjectMgr {}
 
@@ -8,8 +8,8 @@ impl ObjectMgr {
     }
 
     pub fn get_script_id(&self, _name: &str) -> Result<i64, Box<dyn std::error::Error>> {
-        panic!("NOT IMPL");
+        todo!("NOT IMPL");
     }
 }
 
-pub static S_OBJECT_MGR: RwLock<ObjectMgr> = RwLock::new(ObjectMgr::new());
+pub static S_OBJECT_MGR: RwLock<ObjectMgr> = RwLock::const_new(ObjectMgr::new());

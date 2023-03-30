@@ -1,8 +1,22 @@
-use parking_lot::RwLock;
+use num_derive::ToPrimitive;
+use once_cell::sync::OnceCell;
 
+#[derive(Debug, Clone, ToPrimitive)]
 pub enum ServerProcessType {
-    Authserver,
-    Worldserver,
+    Authserver = 0,
+    Worldserver = 1,
 }
 
-pub static THIS_SERVER_PROCESS: RwLock<Option<ServerProcessType>> = RwLock::new(None);
+pub struct ThisServerProcess;
+
+impl ThisServerProcess {
+    pub fn get() -> ServerProcessType {
+        THIS_SERVER_PROCESS.get().expect("Server process not set").clone()
+    }
+
+    pub fn set(e: ServerProcessType) {
+        THIS_SERVER_PROCESS.set(e).expect("Server process already set");
+    }
+}
+
+static THIS_SERVER_PROCESS: OnceCell<ServerProcessType> = OnceCell::new();

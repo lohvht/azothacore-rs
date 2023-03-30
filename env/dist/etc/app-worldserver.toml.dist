@@ -1,6 +1,51 @@
 ################################################
 # AzerothCore World Server configuration file #
 ################################################
+
+#
+#    LoginDatabaseInfo
+#    WorldDatabaseInfo
+#    CharacterDatabaseInfo
+#        Description: Database connection settings for the world server.
+#        Example:     "hostname;port;username;password;database"
+#                     ".;somenumber;username;password;database" - (Use named pipes on Windows
+#                                                                 "enable-named-pipe" to [mysqld]
+#                                                                 section my.ini)
+#                     ".;/path/to/unix_socket;username;password;database" - (use Unix sockets on
+#                                                                           Unix/Linux)
+#        Default:     "127.0.0.1;3306;acore;acore;acore_auth"       - (LoginDatabaseInfo)
+#                     "127.0.0.1;3306;acore;acore;acore_world"      - (WorldDatabaseInfo)
+#                     "127.0.0.1;3306;acore;acore;acore_characters" - (CharacterDatabaseInfo)
+[worldserver.LoginDatabaseInfo]
+Address="127.0.0.1:3306"
+User="acore"
+Password="acore"
+DatabaseName="acore_auth"
+WorkerThreads=1
+SynchThreads=1
+BaseFilePath="data/sql/base/db_auth"
+DBModuleName="db-auth"
+
+[worldserver.WorldDatabaseInfo]
+Address="127.0.0.1:3306"
+User="acore"
+Password="acore"
+DatabaseName="acore_world"
+WorkerThreads=1
+SynchThreads=1
+BaseFilePath="data/sql/base/db_world"
+DBModuleName="db-world"
+
+[worldserver.CharacterDatabaseInfo]
+Address="127.0.0.1:3306"
+User="acore"
+Password="acore"
+DatabaseName="acore_characters"
+WorkerThreads=1
+SynchThreads=1
+BaseFilePath="data/sql/base/db_characters"
+DBModuleName="db-characters"
+
 [worldserver]
 
 ###################################################################################################
@@ -90,25 +135,6 @@ LogsDir = ""
 #        Default:     "" - (Temp files will be stored in the current path)
 
 TempDir = ""
-
-#
-#    LoginDatabaseInfo
-#    WorldDatabaseInfo
-#    CharacterDatabaseInfo
-#        Description: Database connection settings for the world server.
-#        Example:     "hostname;port;username;password;database"
-#                     ".;somenumber;username;password;database" - (Use named pipes on Windows
-#                                                                 "enable-named-pipe" to [mysqld]
-#                                                                 section my.ini)
-#                     ".;/path/to/unix_socket;username;password;database" - (use Unix sockets on
-#                                                                           Unix/Linux)
-#        Default:     "127.0.0.1;3306;acore;acore;acore_auth"       - (LoginDatabaseInfo)
-#                     "127.0.0.1;3306;acore;acore;acore_world"      - (WorldDatabaseInfo)
-#                     "127.0.0.1;3306;acore;acore;acore_characters" - (CharacterDatabaseInfo)
-
-LoginDatabaseInfo     = {Address="127.0.0.1:3306", User="acore", Password="acore", DatabaseName="acore_auth", WorkerThreads=1, SynchThreads=1}
-WorldDatabaseInfo     = {Address="127.0.0.1:3306", User="acore", Password="acore", DatabaseName="acore_world", WorkerThreads=1, SynchThreads=1}
-CharacterDatabaseInfo = {Address="127.0.0.1:3306", User="acore", Password="acore", DatabaseName="acore_characters", WorkerThreads=1, SynchThreads=1}
 
 #
 #    Database.Reconnect.Seconds
@@ -1333,7 +1359,8 @@ IsPreloadedContinentTransport.Enabled = false
 #        Default:     <blank>
 #
 
-TOTPMasterSecret = ""
+# TOTPMasterSecret = ""
+# TOTPOldMasterSecret = ""
 
 #
 ###################################################################################################

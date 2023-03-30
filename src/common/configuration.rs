@@ -1,13 +1,14 @@
-use std::{collections::BTreeSet, error, fmt, fs, io, path::Path};
+use std::{collections::BTreeSet, fs, io, path::Path};
 
-use parking_lot::RwLock;
+use tokio::sync::RwLock;
 use tracing::{error, info, instrument};
 
 mod structs;
 
 pub use structs::*;
+use thiserror::Error;
 
-use crate::server::game::scripting::ScriptMgr;
+use crate::{server::game::scripting::ScriptMgr, GenericResult};
 
 pub struct ConfigMgr {
     filename:        String,
@@ -16,27 +17,12 @@ pub struct ConfigMgr {
     config:          Option<Config>,
 }
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ConfigError {
-    UnexpectedOSError(io::Error),
-}
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ConfigError::UnexpectedOSError(e) => {
-                write!(f, "encountered unexpected error accessing file: {}", e)
-            },
-        }
-    }
-}
-
-impl error::Error for ConfigError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            ConfigError::UnexpectedOSError(e) => Some(e),
-        }
-    }
+    #[error("encountered unexpected error accessing file")]
+    UnexpectedOSError(#[from] io::Error),
+    #[error("generic error: {msg}")]
+    Generic { msg: String },
 }
 
 /// Get the config file or config
@@ -97,18 +83,18 @@ impl ConfigMgr {
                 &init_file_name, e
             )
         });
-        self.list_of_modules.extend(list_of_modules);
+        self.list_of_modules = list_of_modules.into_iter().collect::<BTreeSet<_>>();
     }
 
     /// Loads the main app configuration. This doesnt load the module configurations
     #[instrument(skip(self))]
-    pub fn load_app_configs(&mut self) -> Result<(), Box<dyn std::error::Error>> {
+    pub fn load_app_configs(&mut self) -> GenericResult {
         self.config = Some(Config::toml_from_filepath(self.filename.as_str())?);
         Ok(())
     }
 
     #[instrument(skip(self))]
-    pub fn load_modules_configs(&mut self, is_reload: bool, is_need_print_info: bool) -> Result<(), Box<dyn std::error::Error>> {
+    pub async fn load_modules_configs(&mut self, is_reload: bool, is_need_print_info: bool) -> GenericResult {
         // if self.list_of_modules
         if self.list_of_modules.is_empty() {
             return Ok(());
@@ -116,7 +102,7 @@ impl ConfigMgr {
         if is_need_print_info {
             info!("\nLoading Module Configuration...");
         }
-        let script_configs = match ScriptMgr::on_load_module_config(is_reload) {
+        let script_configs = match ScriptMgr::on_load_module_config(is_reload).await {
             Err(e) => {
                 if !is_reload {
                     error!(
@@ -142,4 +128,4 @@ impl ConfigMgr {
     }
 }
 
-pub static S_CONFIG_MGR: RwLock<ConfigMgr> = RwLock::new(ConfigMgr::new());
+pub static S_CONFIG_MGR: RwLock<ConfigMgr> = RwLock::const_new(ConfigMgr::new());

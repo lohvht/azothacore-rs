@@ -1,5 +1,5 @@
 group_imports = "StdExternalCrate"
-max_width = 140
+max_width = 160
 imports_granularity = "Crate"
 imports_layout = "HorizontalVertical"
 match_block_trailing_comma = true

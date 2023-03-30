@@ -1,38 +1,31 @@
 use std::{
-    error,
-    fmt,
     fs,
     io,
+    ops::BitAnd,
     path::{Path, PathBuf},
 };
 
+use flagset::{flags, FlagSet};
 use serde::{Deserialize, Serialize};
+use serde_default::DefaultFromSerde;
+use serde_inline_default::serde_inline_default;
+use thiserror::Error;
 use toml;
 
-#[derive(Debug)]
+#[derive(Error, Debug)]
 pub enum ConfigError {
-    Filesystem { filepath: PathBuf, err: io::Error },
-    TOMLDecode { filepath: PathBuf, err: toml::de::Error },
-}
-
-impl fmt::Display for ConfigError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        match self {
-            ConfigError::Filesystem { filepath, err } => {
-                write!(f, "Error reading from filesystem: {}, err was: {}", filepath.display(), err)
-            },
-            ConfigError::TOMLDecode { filepath, err } => write!(f, "Error decoding from TOML: {}, err was: {}", filepath.display(), err),
-        }
-    }
-}
-
-impl error::Error for ConfigError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        match self {
-            ConfigError::Filesystem { err, .. } => Some(err),
-            ConfigError::TOMLDecode { err, .. } => Some(err),
-        }
-    }
+    #[error("Error reading from filesystem: {filepath:?}, err was: {err}")]
+    Filesystem {
+        filepath: PathBuf,
+        #[source]
+        err:      io::Error,
+    },
+    #[error("Error decoding from TOML: {filepath:?}, err was: {err}")]
+    TOMLDecode {
+        filepath: PathBuf,
+        #[source]
+        err:      toml::de::Error,
+    },
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
@@ -63,704 +56,1387 @@ impl Config {
 }
 
 structstruck::strike! {
-  #[strikethrough[derive(Deserialize, Serialize, Clone, Debug,  PartialEq)]]
+  #[strikethrough[serde_inline_default]]
+  #[strikethrough[derive(Deserialize, DefaultFromSerde, Serialize, Clone, Debug,  PartialEq)]]
   #[strikethrough[allow(non_snake_case)]]
   pub struct WorldserverConfig {
+    #[serde_inline_default(1)]
     pub RealmID: u32,
+    #[serde_inline_default(".".to_string())]
     pub DataDir: String,
+    #[serde_inline_default("".to_string())]
     pub LogsDir: String,
+    #[serde_inline_default("".to_string())]
     pub TempDir: String,
+    #[serde_inline_default(DatabaseInfo::default_with_info("acore_auth", "data/sql/base/db_auth", "db-auth"))]
     pub LoginDatabaseInfo: DatabaseInfo,
+    #[serde_inline_default(DatabaseInfo::default_with_info("acore_world", "data/sql/base/db_world", "db-world"))]
     pub WorldDatabaseInfo: DatabaseInfo,
+    #[serde_inline_default(DatabaseInfo::default_with_info("acore_characters", "data/sql/base/db_characters", "db-characters"))]
     pub CharacterDatabaseInfo: DatabaseInfo,
+    #[serde_inline_default(Database::default())]
     pub Database: struct {
-      pub Reconnect: struct {
-        pub Seconds: u8,
-        pub Attempts: u8,
-      }
+        #[serde_inline_default(Reconnect::default())]
+        pub Reconnect: struct {
+            #[serde_inline_default(15)]
+            pub Seconds: u8,
+            #[serde_inline_default(20)]
+            pub Attempts: u8,
+        }
     },
+    #[serde(default)]
+    pub PidFile: Option<String>,
     /// MaxPingTime In minutes
+    #[serde_inline_default(30)]
     pub MaxPingTime: i32,
+    #[serde_inline_default("8085".to_string())]
     pub WorldServerPort: String,
+    #[serde_inline_default("0.0.0.0".to_string())]
     pub BindIP: String,
     // CMakeCommand String = ""
     // BuildDirectory String = ""
     // SourceDirectory String = ""
     // MySQLExecutable String = ""
+    #[serde_inline_default(2)]
     pub ThreadPool: i32,
+    #[serde_inline_default("".to_string())]
     pub IPLocationFile: String,
+    #[serde_inline_default(true)]
     pub AllowLoggingIPAddressesInDatabase: bool,
+    #[serde_inline_default(0)]
     pub UseProcessors: i32,
+    #[serde_inline_default(true)]
     pub ProcessPriority: bool,
+    #[serde_inline_default(1i32)]
     pub Compression: i32,
+    #[serde_inline_default(1000)]
     pub PlayerLimit: i32,
+    #[serde_inline_default(true)]
     pub SaveRespawnTimeImmediately: bool,
+    #[serde_inline_default(2)]
     pub MaxOverspeedPings: i32,
+    #[serde_inline_default(true)]
     pub CloseIdleConnections: bool,
+    #[serde_inline_default(900000)]
     pub SocketTimeOutTime: i32,
+    #[serde_inline_default(60000)]
     pub SocketTimeOutTimeActive: i32,
+    #[serde_inline_default(10000)]
     pub SessionAddDelay: i32,
+    #[serde_inline_default(100)]
     pub MapUpdateInterval: i32,
+    #[serde_inline_default(600000)]
     pub ChangeWeatherInterval: i32,
+    #[serde_inline_default(900000)]
     pub PlayerSaveInterval: i32,
+    #[serde_inline_default(PlayerSave::default())]
     pub PlayerSave: struct {
-      pub Stats: struct PlayerSaveStats {
-        pub MinLevel: i32,
-        pub SaveOnlyOnLogout: bool,
-      }
+    #[serde_inline_default(PlayerSaveStats::default())]
+        pub Stats: struct PlayerSaveStats {
+            #[serde_inline_default(0)]
+            pub MinLevel: i32,
+            #[serde_inline_default(true)]
+            pub SaveOnlyOnLogout: bool,
+        }
     },
+    #[serde_inline_default(Vmap::default())]
     pub vmap: struct {
-      pub enableLOS: bool,
-      pub enableHeight: bool,
-      pub petLOS: bool,
-      pub BlizzlikePvPLOS: bool,
-      pub enableIndoorCheck: bool,
+        #[serde_inline_default(true)]
+        pub enableLOS: bool,
+        #[serde_inline_default(true)]
+        pub enableHeight: bool,
+        #[serde_inline_default(true)]
+        pub petLOS: bool,
+        #[serde_inline_default(true)]
+        pub BlizzlikePvPLOS: bool,
+        #[serde_inline_default(true)]
+        pub enableIndoorCheck: bool,
     },
+    #[serde_inline_default(true)]
     pub DetectPosCollision: bool,
+    #[serde_inline_default(true)]
     pub CheckGameObjectLoS: bool,
+    #[serde_inline_default(1.5)]
     pub TargetPosRecalculateRange: f64,
+    #[serde_inline_default(1i32)]
     pub UpdateUptimeInterval: i32,
+    #[serde_inline_default(LogDb::default())]
     pub LogDB: struct {
+        #[serde_inline_default(Opt::default())]
       pub Opt: struct {
+        #[serde_inline_default(10)]
         pub ClearInterval: i32,
+        #[serde_inline_default(1209600)]
         pub ClearTime: i32,
       },
     },
+    #[serde_inline_default(0)]
     pub MaxCoreStuckTime: i32,
+    #[serde_inline_default(true)]
     pub AddonChannel: bool,
-    pub MapUpdate: struct { pub Threads: i32 },
+    #[serde_inline_default(MapUpdate::default())] pub MapUpdate: struct { #[serde_inline_default(1i32)] pub Threads: i32 },
+    #[serde_inline_default(false)]
     pub CleanCharacterDB: bool,
+    #[serde_inline_default(0)]
     pub PersistentCharacterCleanFlags: i32,
+    #[serde_inline_default(false)]
     pub PreloadAllNonInstancedMapGrids: bool,
+    #[serde_inline_default(false)]
     pub SetAllCreaturesWithWaypointMovementActive: bool,
-    pub PidFile: Option<String>,
+    #[serde_inline_default("".to_string())]
     pub PacketLogFile: String,
+    #[serde_inline_default(0)]
     pub GameType: i32,
+    #[serde_inline_default(1i32)]
     pub RealmZone: i32,
-    pub World: struct { pub RealmAvailability: bool, },
+    #[serde_inline_default(World::default())] pub World: struct { #[serde_inline_default(true)] pub RealmAvailability: bool, },
+    #[serde_inline_default(0)]
     pub StrictPlayerNames: i32,
+    #[serde_inline_default(0)]
     pub StrictCharterNames: i32,
+    #[serde_inline_default(0)]
     pub StrictPetNames: i32,
-    pub DBC: struct{ pub Locale: i32 },
+    #[serde_inline_default(Dbc::default())] pub DBC: struct{ #[serde_inline_default(255)] pub Locale: i32 },
+    #[serde_inline_default(false)]
     pub DeclinedNames: bool,
+    #[serde_inline_default(2)]
     pub Expansion: i32,
+    #[serde_inline_default(2)]
     pub MinPlayerName: i32,
+    #[serde_inline_default(2)]
     pub MinCharterName: i32,
+    #[serde_inline_default(2)]
     pub MinPetName: i32,
+    #[serde_inline_default(Guild::default())]
     pub Guild: struct {
-      pub CharterCost: i32,
-      pub EventLogRecordsCount: i32,
-      pub ResetHour: i32,
-      pub BankEventLogRecordsCount: i32,
-      pub AllowMultipleGuildMaster: bool,
-      pub BankInitialTabs: i32,
-      pub BankTabCost0: i32,
-      pub BankTabCost1: i32,
-      pub BankTabCost2: i32,
-      pub BankTabCost3: i32,
-      pub BankTabCost4: i32,
-      pub BankTabCost5: i32,
+        #[serde_inline_default(1000)]
+        pub CharterCost: i32,
+        #[serde_inline_default(100)]
+        pub EventLogRecordsCount: i32,
+        #[serde_inline_default(6)]
+        pub ResetHour: i32,
+        #[serde_inline_default(25)]
+        pub BankEventLogRecordsCount: i32,
+        #[serde_inline_default(false)]
+        pub AllowMultipleGuildMaster: bool,
+        #[serde_inline_default(0)]
+        pub BankInitialTabs: i32,
+        #[serde_inline_default(1000000)]
+        pub BankTabCost0: i32,
+        #[serde_inline_default(2500000)]
+        pub BankTabCost1: i32,
+        #[serde_inline_default(5000000)]
+        pub BankTabCost2: i32,
+        #[serde_inline_default(10000000)]
+        pub BankTabCost3: i32,
+        #[serde_inline_default(25000000)]
+        pub BankTabCost4: i32,
+        #[serde_inline_default(50000000)]
+        pub BankTabCost5: i32,
     },
+    #[serde_inline_default(ArenaTeam::default())]
     pub ArenaTeam: struct {
-      pub CharterCost: struct {
-        #[serde(rename = "2v2")]
-        pub T_2v2 :i32,
-        #[serde(rename = "3v3")]
-        pub T_3v3 :i32,
-        #[serde(rename = "5v5")]
-        pub T_5v5 :i32,
-      },
+        #[serde_inline_default(CharterCost::default())]
+        pub CharterCost: struct {
+            #[serde(rename = "2v2")]
+            #[serde_inline_default(800000)]
+            pub T_2v2 :i32,
+            #[serde(rename = "3v3")]
+            #[serde_inline_default(1200000)]
+            pub T_3v3 :i32,
+            #[serde(rename = "5v5")]
+            #[serde_inline_default(2000000)]
+            pub T_5v5 :i32,
+        },
     },
+    #[serde_inline_default(49)]
     pub MaxWhoListReturns: i32,
+    #[serde_inline_default(CharacterCreating::default())]
     pub CharacterCreating: struct {
-      pub MinLevelForHeroicCharacter: i32,
-      pub Disabled: struct {
-        /// Disable character creation for players based on faction
-        pub DisableFaction: i32,
-        /// Mask of races which cannot be created by players
-        pub RaceMask: i32,
-        /// Mask of classes which cannot be created by players
-        pub ClassMask: i32,
-      },
+        #[serde_inline_default(55)]
+        pub MinLevelForHeroicCharacter: i32,
+        #[serde_inline_default(Disabled::default())]
+        pub Disabled: struct {
+            /// Disable character creation for players based on faction
+            #[serde_inline_default(0)]
+            pub DisableFaction: i32,
+            /// Mask of races which cannot be created by players
+            #[serde_inline_default(0)]
+            pub RaceMask: i32,
+            /// Mask of classes which cannot be created by players
+            #[serde_inline_default(0)]
+            pub ClassMask: i32,
+        },
     },
+    #[serde_inline_default(50)]
     pub CharactersPerAccount: i32,
+    #[serde_inline_default(10)]
     pub CharactersPerRealm: i32,
+    #[serde_inline_default(1i32)]
     pub HeroicCharactersPerRealm: i32,
+    #[serde_inline_default(0)]
     pub SkipCinematics: i32,
+    #[serde_inline_default(80)]
     pub MaxPlayerLevel: i32,
+    #[serde_inline_default(40)]
     pub MinDualSpecLevel: i32,
+    #[serde_inline_default(1i32)]
     pub StartPlayerLevel: i32,
+    #[serde_inline_default(55)]
     pub StartHeroicPlayerLevel: i32,
+    #[serde_inline_default(0)]
     pub StartPlayerMoney: i32,
+    #[serde_inline_default(2000)]
     pub StartHeroicPlayerMoney: i32,
+    #[serde_inline_default(75000)]
     pub MaxHonorPoints: i32,
+    #[serde_inline_default(0)]
     pub MaxHonorPointsMoneyPerPoint: i32,
+    #[serde_inline_default(0)]
     pub StartHonorPoints: i32,
+    #[serde_inline_default(10000)]
     pub MaxArenaPoints: i32,
+    #[serde_inline_default(0)]
     pub StartArenaPoints: i32,
+    #[serde_inline_default(RecruitAFriend::default())]
     pub RecruitAFriend: struct {
-      pub MaxLevel: i32,
-      pub MaxDifference: i32,
+        #[serde_inline_default(60)]
+        pub MaxLevel: i32,
+        #[serde_inline_default(4)]
+        pub MaxDifference: i32,
     },
+    #[serde_inline_default(1i32)]
     pub InstantLogout: i32,
+    #[serde_inline_default(0)]
     pub PreventAFKLogout: i32,
+    #[serde_inline_default(4)]
     pub DisableWaterBreath: i32,
+    #[serde_inline_default(false)]
     pub AllFlightPaths: bool,
+    #[serde_inline_default(0)]
     pub InstantFlightPaths: i32,
+    #[serde_inline_default(false)]
     pub AlwaysMaxSkillForLevel: bool,
+    #[serde_inline_default(true)]
     pub ActivateWeather: bool,
     // CastUnstuck = 1
+    #[serde_inline_default(Instance::default())]
     pub Instance: struct {
-      pub IgnoreLevel: bool,
-      pub IgnoreRaid: bool,
-      pub GMSummonPlayer: bool,
-      pub ResetTimeHour: i32,
-      pub UnloadDelay: i32,
-      pub SharedNormalHeroicId: bool,
-      pub ResetTimeRelativeTimestamp: i32,
+        #[serde_inline_default(false)]
+        pub IgnoreLevel: bool,
+        #[serde_inline_default(false)]
+        pub IgnoreRaid: bool,
+        #[serde_inline_default(false)]
+        pub GMSummonPlayer: bool,
+        #[serde_inline_default(4)]
+        pub ResetTimeHour: i32,
+        #[serde_inline_default(1800000)]
+        pub UnloadDelay: i32,
+        #[serde_inline_default(true)]
+        pub SharedNormalHeroicId: bool,
+        #[serde_inline_default(1135814400)]
+        pub ResetTimeRelativeTimestamp: i32,
     },
+    #[serde_inline_default(Quests::default())]
     pub Quests: struct {
-      pub EnableQuestTracker: bool,
-      pub LowLevelHideDiff: i32,
-      pub HighLevelHideDiff: i32,
-      pub IgnoreRaid: bool,
-      pub IgnoreAutoAccept: bool,
-      pub IgnoreAutoComplete: bool,
+        #[serde_inline_default(false)]
+        pub EnableQuestTracker: bool,
+        #[serde_inline_default(4)]
+        pub LowLevelHideDiff: i32,
+        #[serde_inline_default(7)]
+        pub HighLevelHideDiff: i32,
+        #[serde_inline_default(false)]
+        pub IgnoreRaid: bool,
+        #[serde_inline_default(false)]
+        pub IgnoreAutoAccept: bool,
+        #[serde_inline_default(false)]
+        pub IgnoreAutoComplete: bool,
     },
-    pub Calendar: struct{ pub DeleteOldEventsHour: i32 },
+    #[serde_inline_default(Calendar::default())] pub Calendar: struct{ #[serde_inline_default(6)] pub DeleteOldEventsHour: i32 },
+    #[serde_inline_default(2)]
     pub MaxPrimaryTradeSkill: i32,
+    #[serde_inline_default(9)]
     pub MinPetitionSigns: i32,
+    #[serde_inline_default(74)]
     pub MaxGroupXPDistance: i32,
+    #[serde_inline_default(100)]
     pub MaxRecruitAFriendBonusDistance: i32,
+    #[serde_inline_default(3600)]
     pub MailDeliveryDelay: i32,
+    #[serde_inline_default(true)]
     pub OffhandCheckAtSpellUnlearn: bool,
+    #[serde_inline_default(0)]
     pub ClientCacheVersion: i32,
-    pub Event: pub struct{ pub Announce: bool },
+    #[serde_inline_default(Event::default())]
+    pub Event: pub struct{ #[serde_inline_default(false)] pub Announce: bool },
+    #[serde_inline_default(true)]
     pub BeepAtStart: bool,
+    #[serde_inline_default(true)]
     pub FlashAtStart: bool,
+    #[serde_inline_default("Welcome to an AzerothCore server.".to_string())]
     pub Motd: String,
-    pub Server: pub struct{ pub LoginInfo: i32 },
-    pub Command: pub struct{ pub LookupMaxResults: i32 },
+    #[serde_inline_default(Server::default())] pub Server: pub struct{ #[serde_inline_default(0)] pub LoginInfo: i32 },
+    #[serde_inline_default(Command::default())] pub Command: pub struct{ #[serde_inline_default(0)] pub LookupMaxResults: i32 },
+    #[serde_inline_default(true)]
     pub AllowTickets: bool,
+    #[serde_inline_default(false)]
     pub DeletedCharacterTicketTrace: bool,
-    pub DungeonFinder: pub struct{ pub OptionsMask: i32 },
+    #[serde_inline_default(DungeonFinder::default())] pub DungeonFinder: pub struct{ #[serde_inline_default(5)] pub OptionsMask: i32 },
+    #[serde_inline_default(5)]
     pub AccountInstancesPerHour: i32,
+    #[serde_inline_default(1222964635)]
     pub BirthdayTime: i32,
-    pub IsContinentTransport: pub struct{ pub Enabled: bool },
-    pub IsPreloadedContinentTransport: pub struct{ pub Enabled: bool },
-    pub TOTPMasterSecret: String,
+    #[serde_inline_default(IsContinentTransport::default())]
+    pub IsContinentTransport: pub struct{ #[serde_inline_default(true)] pub Enabled: bool },
+    #[serde_inline_default(IsPreloadedContinentTransport::default())]
+    pub IsPreloadedContinentTransport: pub struct{ #[serde_inline_default(false)] pub Enabled: bool },
+    #[serde(default)]
+    pub TOTPMasterSecret: Option<String>,
+    #[serde(default)]
+    pub TOTPOldMasterSecret: Option<String>,
+    #[serde_inline_default(Updates::default())]
     pub Updates: struct {
-      pub EnableDatabases: i32,
-      pub AutoSetup: bool,
-      pub Redundancy: bool,
-      pub ArchivedRedundancy: bool,
-      pub AllowRehash: bool,
-      pub CleanDeadRefMaxCount: i32,
+        #[serde_inline_default(DatabaseTypeFlags::All.into())]
+        pub EnableDatabases: FlagSet<DatabaseTypeFlags>,
+        #[serde_inline_default(true)]
+        pub AutoSetup: bool,
+        #[serde_inline_default(true)]
+        pub Redundancy: bool,
+        #[serde_inline_default(false)]
+        pub ArchivedRedundancy: bool,
+        #[serde_inline_default(true)]
+        pub AllowRehash: bool,
+        #[serde_inline_default(Some(3))]
+        pub CleanDeadRefMaxCount: Option<usize>,
+
     },
+    #[serde_inline_default(Warden::default())]
     pub Warden: struct {
-      pub Enabled: bool,
-      pub NumMemChecks: i32,
-      pub NumLuaChecks: i32,
-      pub NumOtherChecks: i32,
-      pub ClientResponseDelay: i32,
-      pub ClientCheckHoldOff: i32,
-      pub ClientCheckFailAction: i32,
-      pub BanDuration: i32,
+        #[serde_inline_default(true)]
+        pub Enabled: bool,
+        #[serde_inline_default(3)]
+        pub NumMemChecks: i32,
+        #[serde_inline_default(1i32)]
+        pub NumLuaChecks: i32,
+        #[serde_inline_default(7)]
+        pub NumOtherChecks: i32,
+        #[serde_inline_default(600)]
+        pub ClientResponseDelay: i32,
+        #[serde_inline_default(30)]
+        pub ClientCheckHoldOff: i32,
+        #[serde_inline_default(0)]
+        pub ClientCheckFailAction: i32,
+        #[serde_inline_default(259200)]
+        pub BanDuration: i32,
     },
+    #[serde_inline_default(AllowTwoSide::default())]
     pub AllowTwoSide: struct {
-      pub Accounts: bool,
-      pub Interaction: struct {
-        pub Calendar: bool,
-        pub Chat: bool,
-        pub Emote: bool,
-        pub Channel: bool,
-        pub Group: bool,
-        pub Guild: bool,
-        pub Auction: bool,
-        pub Mail: bool,
-      },
-      pub WhoList: bool,
-      pub AddFriend: bool,
-      pub Trade: bool,
+        #[serde_inline_default(true)]
+        pub Accounts: bool,
+        #[serde_inline_default(Interaction::default())]
+        pub Interaction: struct {
+            #[serde_inline_default(false)]
+            pub Calendar: bool,
+            #[serde_inline_default(false)]
+            pub Chat: bool,
+            #[serde_inline_default(false)]
+            pub Emote: bool,
+            #[serde_inline_default(false)]
+            pub Channel: bool,
+            #[serde_inline_default(false)]
+            pub Group: bool,
+            #[serde_inline_default(false)]
+            pub Guild: bool,
+            #[serde_inline_default(false)]
+            pub Auction: bool,
+            #[serde_inline_default(false)]
+            pub Mail: bool,
+        },
+        #[serde_inline_default(false)]
+        pub WhoList: bool,
+        #[serde_inline_default(false)]
+        pub AddFriend: bool,
+        #[serde_inline_default(false)]
+        pub Trade: bool,
     },
+    #[serde_inline_default(true)]
     pub TalentsInspecting: bool,
     // ThreatRadius = 60
+    #[serde_inline_default(30)]
     pub CreatureFamilyFleeAssistanceRadius: i32,
+    #[serde_inline_default(10)]
     pub CreatureFamilyAssistanceRadius: i32,
+    #[serde_inline_default(2000)]
     pub CreatureFamilyAssistanceDelay: i32,
+    #[serde_inline_default(3000)]
     pub CreatureFamilyAssistancePeriod: i32,
+    #[serde_inline_default(7000)]
     pub CreatureFamilyFleeDelay: i32,
+    #[serde_inline_default(3)]
     pub WorldBossLevelDiff: i32,
+    #[serde_inline_default(Corpse::default())]
     pub Corpse: struct {
-      pub Decay: struct CorpseDecay {
-        pub NORMAL: i32,
-        pub RARE: i32,
-        pub ELITE: i32,
-        pub RAREELITE: i32,
-        pub WORLDBOSS: i32,
-      },
+        #[serde_inline_default(CorpseDecay::default())]
+        pub Decay: struct CorpseDecay {
+            #[serde_inline_default(60)]
+            pub NORMAL: i32,
+            #[serde_inline_default(300)]
+            pub RARE: i32,
+            #[serde_inline_default(300)]
+            pub ELITE: i32,
+            #[serde_inline_default(300)]
+            pub RAREELITE: i32,
+            #[serde_inline_default(3600)]
+            pub WORLDBOSS: i32,
+        },
     },
+    #[serde_inline_default(Rate::default())]
     pub Rate: struct {
-      pub Corpse: struct RateCorpse { pub Decay: struct{ pub Looted: f64 } },
-      pub Creature: struct RateCreature {
-        pub Aggro: f64,
-        pub Normal: struct {
-          pub Damage: f64,
-          pub SpellDamage: f64,
-          pub HP: f64,
+        #[serde_inline_default(RateCorpse::default())]
+        pub Corpse: struct RateCorpse {
+            #[serde_inline_default(Decay::default())]
+            pub Decay: struct{ #[serde_inline_default(0.5)] pub Looted: f64 },
         },
-        pub Elite: struct RateElite {
-          pub Elite: struct RateEliteElite {
-            pub Damage: f64,
-            pub SpellDamage: f64,
-            pub HP: f64,
-          },
-          pub RARE: struct {
-            pub Damage: f64,
-            pub SpellDamage: f64,
-            pub HP: f64,
-          },
-          pub RAREELITE: struct {
-            pub Damage: f64,
-            pub SpellDamage: f64,
-            pub HP: f64,
-          },
-          pub WORLDBOSS: struct {
-            pub Damage: f64,
-            pub SpellDamage: f64,
-            pub HP: f64,
-          },
+        #[serde_inline_default(RateCreature::default())]
+        pub Creature: struct RateCreature {
+            #[serde_inline_default(1.0)]
+            pub Aggro: f64,
+            #[serde_inline_default(Normal::default())]
+            pub Normal: struct {
+                #[serde_inline_default(1.0)]
+                pub Damage: f64,
+                #[serde_inline_default(1.0)]
+                pub SpellDamage: f64,
+                #[serde_inline_default(1.0)]
+                pub HP: f64,
+            },
+            #[serde_inline_default(RateElite::default())]
+            pub Elite: struct RateElite {
+                #[serde_inline_default(RateEliteElite::default())]
+                pub Elite: struct RateEliteElite {
+                    #[serde_inline_default(1.0)]
+                    pub Damage: f64,
+                    #[serde_inline_default(1.0)]
+                    pub SpellDamage: f64,
+                    #[serde_inline_default(1.0)]
+                    pub HP: f64,
+                },
+                #[serde_inline_default(Rare::default())]
+                pub RARE: struct {
+                    #[serde_inline_default(1.0)]
+                    pub Damage: f64,
+                    #[serde_inline_default(1.0)]
+                    pub SpellDamage: f64,
+                    #[serde_inline_default(1.0)]
+                    pub HP: f64,
+                },
+                #[serde_inline_default(Rareelite::default())]
+                pub RAREELITE: struct {
+                    #[serde_inline_default(1.0)]
+                    pub Damage: f64,
+                    #[serde_inline_default(1.0)]
+                    pub SpellDamage: f64,
+                    #[serde_inline_default(1.0)]
+                    pub HP: f64,
+                },
+                #[serde_inline_default(Worldboss::default())]
+                pub WORLDBOSS: struct {
+                    #[serde_inline_default(1.0)]
+                    pub Damage: f64,
+                    #[serde_inline_default(1.0)]
+                    pub SpellDamage: f64,
+                    #[serde_inline_default(1.0)]
+                    pub HP: f64,
+                },
+            },
         },
-      },
-      pub Health: f64,
-      pub Mana: f64,
-      pub Rage: struct {
-        pub Income: f64,
-        pub Loss: f64,
-      },
-      pub RunicPower: struct {
-        pub Income: f64,
-        pub Loss: f64,
-      },
-      pub Focus: f64,
-      pub Energy: f64,
-      pub Loyalty: f64,
-      pub Skill: struct{ pub Discovery: f64, },
-      pub Drop: struct {
-        pub Item: struct DropItem {
-          pub Poor: f64,
-          pub Normal: f64,
-          pub Uncommon: f64,
-          pub Rare: f64,
-          pub Epic: f64,
-          pub Legendary: f64,
-          pub Artifact: f64,
-          pub Referenced: f64,
-          pub ReferencedAmount: f64,
+        #[serde_inline_default(1.0)]
+        pub Health: f64,
+        #[serde_inline_default(1.0)]
+        pub Mana: f64,
+        #[serde_inline_default(Rage::default())]
+        pub Rage: struct {
+            #[serde_inline_default(1.0)]
+            pub Income: f64,
+            #[serde_inline_default(1.0)]
+            pub Loss: f64,
         },
-        pub Money: f64,
-      },
-      pub RewardBonusMoney: f64,
-      pub SellValue: struct {
-        pub Item: struct SellValueItem {
-          pub Poor: f64,
-          pub Normal: f64,
-          pub Uncommon: f64,
-          pub Rare: f64,
-          pub Epic: f64,
-          pub Legendary: f64,
-          pub Artifact: f64,
-          pub Heirloom: f64,
+        #[serde_inline_default(RunicPower::default())]
+        pub RunicPower: struct {
+            #[serde_inline_default(1.0)]
+            pub Income: f64,
+            #[serde_inline_default(1.0)]
+            pub Loss: f64,
         },
-      },
-      pub BuyValue: struct {
-        pub Item: struct BuyValueItem {
-          pub Poor: f64,
-          pub Normal: f64,
-          pub Uncommon: f64,
-          pub Rare: f64,
-          pub Epic: f64,
-          pub Legendary: f64,
-          pub Artifact: f64,
-          pub Heirloom: f64,
+        #[serde_inline_default(1.0)]
+        pub Focus: f64,
+        #[serde_inline_default(1.0)]
+        pub Energy: f64,
+        #[serde_inline_default(1.0)]
+        pub Loyalty: f64,
+        #[serde_inline_default(Skill::default())]
+        pub Skill: struct{
+            #[serde_inline_default(1.0)]
+            pub Discovery: f64,
         },
-      },
-      pub XP: struct {
-        pub Kill: f64,
-        pub Quest: struct {
-          pub General: f64,
-          pub DF: f64,
+        #[serde_inline_default(Drop::default())]
+        pub Drop: struct {
+            #[serde_inline_default(DropItem::default())]
+            pub Item: struct DropItem {
+                #[serde_inline_default(1.0)]
+                pub Poor: f64,
+                #[serde_inline_default(1.0)]
+                pub Normal: f64,
+                #[serde_inline_default(1.0)]
+                pub Uncommon: f64,
+                #[serde_inline_default(1.0)]
+                pub Rare: f64,
+                #[serde_inline_default(1.0)]
+                pub Epic: f64,
+                #[serde_inline_default(1.0)]
+                pub Legendary: f64,
+                #[serde_inline_default(1.0)]
+                pub Artifact: f64,
+                #[serde_inline_default(1.0)]
+                pub Referenced: f64,
+                #[serde_inline_default(1.0)]
+                pub ReferencedAmount: f64,
+            },
+            #[serde_inline_default(1.0)]
+            pub Money: f64,
         },
-        pub Explore: f64,
-        pub Pet: f64,
-        pub BattlegroundKillAV: f64,
-        pub BattlegroundKillWSG: f64,
-        pub BattlegroundKillAB: f64,
-        pub BattlegroundKillEOTS: f64,
-        pub BattlegroundKillSOTA: f64,
-        pub BattlegroundKillIC: f64,
-      },
-      pub RepairCost: f64,
-      pub Rest: struct {
-        pub InGame: f64,
-        pub Offline: struct {
-          pub InTavernOrCity: f64,
-          pub InWilderness: f64,
+        #[serde_inline_default(1.0)]
+        pub RewardBonusMoney: f64,
+        #[serde_inline_default(SellValue::default())]
+        pub SellValue: struct {
+            #[serde_inline_default(SellValueItem::default())]
+            pub Item: struct SellValueItem {
+                #[serde_inline_default(1.0)]
+                pub Poor: f64,
+                #[serde_inline_default(1.0)]
+                pub Normal: f64,
+                #[serde_inline_default(1.0)]
+                pub Uncommon: f64,
+                #[serde_inline_default(1.0)]
+                pub Rare: f64,
+                #[serde_inline_default(1.0)]
+                pub Epic: f64,
+                #[serde_inline_default(1.0)]
+                pub Legendary: f64,
+                #[serde_inline_default(1.0)]
+                pub Artifact: f64,
+                #[serde_inline_default(1.0)]
+                pub Heirloom: f64,
+            },
         },
-      },
-      pub Damage: struct{ pub Fall: f64, },
-      pub Auction: struct {
-        pub Time: f64,
-        pub Deposit: f64,
-        pub Cut: f64,
-      },
-      pub Honor: f64,
-      pub ArenaPoints: f64,
-      pub Talent: f64,
-      pub Reputation: struct {
-        pub Gain: f64,
-        pub LowLevel: struct {
-          pub Kill: f64,
-          pub Quest: f64,
+        #[serde_inline_default(BuyValue::default())]
+        pub BuyValue: struct {
+            #[serde_inline_default(BuyValueItem::default())]
+            pub Item: struct BuyValueItem {
+                #[serde_inline_default(1.0)]
+                pub Poor: f64,
+                #[serde_inline_default(1.0)]
+                pub Normal: f64,
+                #[serde_inline_default(1.0)]
+                pub Uncommon: f64,
+                #[serde_inline_default(1.0)]
+                pub Rare: f64,
+                #[serde_inline_default(1.0)]
+                pub Epic: f64,
+                #[serde_inline_default(1.0)]
+                pub Legendary: f64,
+                #[serde_inline_default(1.0)]
+                pub Artifact: f64,
+                #[serde_inline_default(1.0)]
+                pub Heirloom: f64,
+            },
         },
-        pub RecruitAFriendBonus: f64,
-      },
-      pub MoveSpeed: f64,
-      pub InstanceResetTime: f64,
-      pub Pet: struct{ LevelXP: f64, },
-      pub MissChanceMultiplier: struct {
-        pub TargetCreature: f64,
-        pub TargetPlayer: f64,
-        pub OnlyAffectsPlayer: f64,
-      },
+        #[serde_inline_default(Xp::default())]
+        pub XP: struct {
+            #[serde_inline_default(1.0)]
+            pub Kill: f64,
+            #[serde_inline_default(Quest::default())]
+            pub Quest: struct {
+                #[serde_inline_default(1.0)]
+                pub General: f64,
+                #[serde_inline_default(1.0)]
+                pub DF: f64,
+            },
+            #[serde_inline_default(1.0)]
+            pub Explore: f64,
+            #[serde_inline_default(1.0)]
+            pub Pet: f64,
+            #[serde_inline_default(1.0)]
+            pub BattlegroundKillAV: f64,
+            #[serde_inline_default(1.0)]
+            pub BattlegroundKillWSG: f64,
+            #[serde_inline_default(1.0)]
+            pub BattlegroundKillAB: f64,
+            #[serde_inline_default(1.0)]
+            pub BattlegroundKillEOTS: f64,
+            #[serde_inline_default(1.0)]
+            pub BattlegroundKillSOTA: f64,
+            #[serde_inline_default(1.0)]
+            pub BattlegroundKillIC: f64,
+        },
+        #[serde_inline_default(1.0)]
+        pub RepairCost: f64,
+        #[serde_inline_default(Rest::default())]
+        pub Rest: struct {
+            #[serde_inline_default(1.0)]
+            pub InGame: f64,
+            #[serde_inline_default(Offline::default())]
+            pub Offline: struct {
+                #[serde_inline_default(1.0)]
+                pub InTavernOrCity: f64,
+                #[serde_inline_default(1.0)]
+                pub InWilderness: f64,
+            },
+        },
+        #[serde_inline_default(Damage::default())]
+        pub Damage: struct{
+            #[serde_inline_default(1.0)]
+            pub Fall: f64,
+        },
+        #[serde_inline_default(Auction::default())]
+        pub Auction: struct {
+            #[serde_inline_default(1.0)]
+            pub Time: f64,
+            #[serde_inline_default(1.0)]
+            pub Deposit: f64,
+            #[serde_inline_default(1.0)]
+            pub Cut: f64,
+        },
+        #[serde_inline_default(1.0)]
+        pub Honor: f64,
+        #[serde_inline_default(1.0)]
+        pub ArenaPoints: f64,
+        #[serde_inline_default(1.0)]
+        pub Talent: f64,
+        #[serde_inline_default(Reputation::default())]
+        pub Reputation: struct {
+            #[serde_inline_default(1.0)]
+            pub Gain: f64,
+            #[serde_inline_default(LowLevel::default())]
+            pub LowLevel: struct {
+                #[serde_inline_default(1.0)]
+                pub Kill: f64,
+                #[serde_inline_default(1.0)]
+                pub Quest: f64,
+            },
+            #[serde_inline_default(0.1)]
+            pub RecruitAFriendBonus: f64,
+        },
+        #[serde_inline_default(1.0)]
+        pub MoveSpeed: f64,
+        #[serde_inline_default(1.0)]
+        pub InstanceResetTime: f64,
+        #[serde_inline_default(Pet::default())]
+        pub Pet: struct{
+            #[serde_inline_default(0.05)]
+            LevelXP: f64,
+        },
+        #[serde_inline_default(MissChanceMultiplier::default())]
+        pub MissChanceMultiplier: struct {
+            #[serde_inline_default(11.0)]
+            pub TargetCreature: f64,
+            #[serde_inline_default(7.0)]
+            pub TargetPlayer: f64,
+            #[serde_inline_default(0.0)]
+            pub OnlyAffectsPlayer: f64,
+        },
     },
+    #[serde_inline_default(ListenRange::default())]
     pub ListenRange: struct {
-      pub Say: i32,
-      pub TextEmote: i32,
-      pub Yell: i32,
+        #[serde_inline_default(40)]
+        pub Say: i32,
+        #[serde_inline_default(40)]
+        pub TextEmote: i32,
+        #[serde_inline_default(300)]
+        pub Yell: i32,
     },
-    pub Creature: struct{ pub MovingStopTimeForPlayer: i32, },
+    #[serde_inline_default(Creature::default())]
+    pub Creature: struct{
+        #[serde_inline_default(180000)]
+        pub MovingStopTimeForPlayer: i32,
+    },
+    #[serde_inline_default(120)]
     pub WaypointMovementStopTimeForPlayer: i32,
+    #[serde_inline_default(5)]
     pub NpcEvadeIfTargetIsUnreachable: i32,
+    #[serde_inline_default(true)]
     pub NpcRegenHPIfTargetIsUnreachable: bool,
+    #[serde_inline_default(10)]
     pub NpcRegenHPTimeIfTargetIsUnreachable: i32,
-    pub Creatures: struct{ pub CustomIDs: Vec<i32>, },
+    #[serde_inline_default(Creatures::default())]
+    pub Creatures: struct{
+        #[serde_inline_default(vec![190010, 55005, 999991, 25462, 98888, 601014, 34567, 34568])]
+        pub CustomIDs: Vec<i32>,
+    },
+    #[serde_inline_default(true)]
     pub ChatFakeMessagePreventing: bool,
+    #[serde_inline_default(ChatStrictLinkChecking::default())]
     pub ChatStrictLinkChecking: struct {
-      pub Severity: i32,
-      pub Kick: i32,
+        #[serde_inline_default(0)]
+        pub Severity: i32,
+        #[serde_inline_default(0)]
+        pub Kick: i32,
     },
+    #[serde_inline_default(ChatFlood::default())]
     pub ChatFlood: struct {
-      pub MessageCount: i32,
-      pub MessageDelay: i32,
-      pub AddonMessageCount: i32,
-      pub AddonMessageDelay: i32,
-      pub MuteTime: i32,
+        #[serde_inline_default(10)]
+        pub MessageCount: i32,
+        #[serde_inline_default(1i32)]
+        pub MessageDelay: i32,
+        #[serde_inline_default(100)]
+        pub AddonMessageCount: i32,
+        #[serde_inline_default(1i32)]
+        pub AddonMessageDelay: i32,
+        #[serde_inline_default(10)]
+        pub MuteTime: i32,
     },
+    #[serde_inline_default(Chat::default())]
     pub Chat: struct {
-      pub MuteFirstLogin: bool,
-      pub MuteTimeFirstLogin: i32,
+        #[serde_inline_default(false)]
+        pub MuteFirstLogin: bool,
+        #[serde_inline_default(120)]
+        pub MuteTimeFirstLogin: i32,
     },
+    #[serde_inline_default(Channel::default())]
     pub Channel: struct {
-      pub RestrictedLfg: bool,
-      pub SilentlyGMJoin: bool,
-      pub ModerationGMLevel: i32,
+        #[serde_inline_default(true)]
+        pub RestrictedLfg: bool,
+        #[serde_inline_default(false)]
+        pub SilentlyGMJoin: bool,
+        #[serde_inline_default(1i32)]
+        pub ModerationGMLevel: i32,
     },
+    #[serde_inline_default(ChatLevelReq::default())]
     pub ChatLevelReq: struct {
-      pub Channel: i32,
-      pub Whisper: i32,
-      pub Say: i32,
+        #[serde_inline_default(1i32)]
+        pub Channel: i32,
+        #[serde_inline_default(1i32)]
+        pub Whisper: i32,
+        #[serde_inline_default(1i32)]
+        pub Say: i32,
     },
+    #[serde_inline_default(1i32)]
     pub PartyLevelReq: i32,
+    #[serde_inline_default(true)]
     pub AllowPlayerCommands: bool,
+    #[serde_inline_default(true)]
     pub PreserveCustomChannels: bool,
+    #[serde_inline_default(14)]
     pub PreserveCustomChannelDuration: i32,
+    #[serde_inline_default(Gm::default())]
     pub GM: struct {
-      pub LoginState: i32,
-      pub Visible: i32,
-      pub Chat: i32,
-      pub WhisperingTo: i32,
-      pub InGMList: struct{ pub Level: i32, },
-      pub InWhoList: struct{ pub Level: i32, },
-      pub StartLevel: i32,
-      pub AllowInvite: bool,
-      pub AllowFriend: bool,
-      pub LowerSecurity: bool,
-      pub TicketSystem: struct{ pub ChanceOfGMSurvey: i32, },
-    },
-    pub Visibility: struct {
-      pub GroupMode: i32,
-      pub Distance: struct {
-        pub Continents: i32,
-        pub Instances: i32,
-        pub BGArenas: i32,
-      },
-      pub Notify: struct {
-        pub Period: struct {
-          pub OnContinents: i32,
-          pub InInstances: i32,
-          pub InBGArenas: i32,
+        #[serde_inline_default(2)]
+        pub LoginState: i32,
+        #[serde_inline_default(2)]
+        pub Visible: i32,
+        #[serde_inline_default(2)]
+        pub Chat: i32,
+        #[serde_inline_default(2)]
+        pub WhisperingTo: i32,
+        #[serde_inline_default(InGmList::default())]
+        pub InGMList: struct{
+            #[serde_inline_default(3)]
+            pub Level: i32,
         },
-      },
-      pub ObjectSparkles: bool,
-      pub ObjectQuestMarkers: bool,
+        #[serde_inline_default(InWhoList::default())]
+        pub InWhoList: struct{
+            #[serde_inline_default(3)]
+            pub Level: i32,
+        },
+        #[serde_inline_default(1i32)]
+        pub StartLevel: i32,
+        #[serde_inline_default(false)]
+        pub AllowInvite: bool,
+        #[serde_inline_default(false)]
+        pub AllowFriend: bool,
+        #[serde_inline_default(false)]
+        pub LowerSecurity: bool,
+        #[serde_inline_default(TicketSystem::default())]
+        pub TicketSystem: struct{
+            #[serde_inline_default(50)]
+            pub ChanceOfGMSurvey: i32,
+        },
     },
-    pub WaterBreath: struct{ Timer: u32 },
+    #[serde_inline_default(Visibility::default())]
+    pub Visibility: struct {
+        #[serde_inline_default(1i32)]
+        pub GroupMode: i32,
+        #[serde_inline_default(Distance::default())]
+        pub Distance: struct {
+            #[serde_inline_default(90)]
+            pub Continents: i32,
+            #[serde_inline_default(120)]
+            pub Instances: i32,
+            #[serde_inline_default(180)]
+            pub BGArenas: i32,
+        },
+        #[serde_inline_default(Notify::default())]
+        pub Notify: struct {
+            #[serde_inline_default(Period::default())]
+            pub Period: struct {
+                #[serde_inline_default(1000)]
+                pub OnContinents: i32,
+                #[serde_inline_default(1000)]
+                pub InInstances: i32,
+                #[serde_inline_default(1000)]
+                pub InBGArenas: i32,
+            },
+        },
+        #[serde_inline_default(true)]
+        pub ObjectSparkles: bool,
+        #[serde_inline_default(true)]
+        pub ObjectQuestMarkers: bool,
+    },
+    #[serde_inline_default(WaterBreath::default())]
+    pub WaterBreath: struct{
+        #[serde_inline_default(180000)]
+        pub Timer: u32
+    },
+    #[serde_inline_default(true)]
     pub EnableLowLevelRegenBoost: bool,
+    #[serde_inline_default(SkillGain::default())]
     pub SkillGain: struct {
-      pub Crafting: i32,
-      pub Defense: i32,
-      pub Gathering: i32,
-      pub Weapon: i32,
+        #[serde_inline_default(1i32)]
+        pub Crafting: i32,
+        #[serde_inline_default(1i32)]
+        pub Defense: i32,
+        #[serde_inline_default(1i32)]
+        pub Gathering: i32,
+        #[serde_inline_default(1i32)]
+        pub Weapon: i32,
     },
+    #[serde_inline_default(SkillChance::default())]
     pub SkillChance: struct {
-      pub Prospecting: bool,
-      pub Milling: bool,
-      pub Orange: i32,
-      pub Yellow: i32,
-      pub Green: i32,
-      pub Grey: i32,
-      pub MiningSteps: i32,
-      pub SkinningSteps: i32,
+        #[serde_inline_default(false)]
+        pub Prospecting: bool,
+        #[serde_inline_default(false)]
+        pub Milling: bool,
+        #[serde_inline_default(100)]
+        pub Orange: i32,
+        #[serde_inline_default(75)]
+        pub Yellow: i32,
+        #[serde_inline_default(25)]
+        pub Green: i32,
+        #[serde_inline_default(0)]
+        pub Grey: i32,
+        #[serde_inline_default(0)]
+        pub MiningSteps: i32,
+        #[serde_inline_default(0)]
+        pub SkinningSteps: i32,
     },
+    #[serde_inline_default(DurabilityLoss::default())]
     pub DurabilityLoss: struct {
-      pub InPvP: bool,
-      pub OnDeath: i32,
+        #[serde_inline_default(false)]
+        pub InPvP: bool,
+        #[serde_inline_default(10)]
+        pub OnDeath: i32,
     },
+    #[serde_inline_default(DurabilityLossChance::default())]
     pub DurabilityLossChance: struct {
-      Damage: f64,
-      Absorb: f64,
-      Parry: f64,
-      Block: f64,
+        #[serde_inline_default(0.5)]
+        pub Damage: f64,
+        #[serde_inline_default(0.5)]
+        pub Absorb: f64,
+        #[serde_inline_default(0.05)]
+        pub Parry: f64,
+        #[serde_inline_default(0.05)]
+        pub Block: f64,
     },
+    #[serde_inline_default(Death::default())]
     pub Death: struct {
-      pub SicknessLevel: i32,
-      pub CorpseReclaimDelay: struct {
-        pub PvP: bool,
-        pub PvE: bool,
-      },
-      pub Bones: struct {
-        pub World: bool,
-        pub BattlegroundOrArena: bool,
-      },
+        #[serde_inline_default(11)]
+        pub SicknessLevel: i32,
+        #[serde_inline_default(CorpseReclaimDelay::default())]
+        pub CorpseReclaimDelay: struct {
+            #[serde_inline_default(true)]
+            pub PvP: bool,
+            #[serde_inline_default(false)]
+            pub PvE: bool,
+        },
+        #[serde_inline_default(Bones::default())]
+        pub Bones: struct {
+            #[serde_inline_default(true)]
+            pub World: bool,
+            #[serde_inline_default(true)]
+            pub BattlegroundOrArena: bool,
+        },
     },
-    pub Die: struct{ pub Command: struct DieCommand{ pub Mode: bool, }, },
+    #[serde_inline_default(Die::default())]
+    pub Die: struct{
+        #[serde_inline_default(DieCommand::default())]
+        pub Command: struct DieCommand{
+            #[serde_inline_default(true)]
+            pub Mode: bool,
+        },
+    },
+    #[serde_inline_default(Stats::default())]
     pub Stats: struct {
-      pub Limits: struct {
-        pub Enable: bool,
-        Dodge: f64,
-        Parry: f64,
-        Block: f64,
-        Crit: f64,
-      },
+        #[serde_inline_default(Limits::default())]
+        pub Limits: struct {
+            #[serde_inline_default(false)]
+            pub Enable: bool,
+            #[serde_inline_default(95.0)]
+            pub Dodge: f64,
+            #[serde_inline_default(95.0)]
+            pub Parry: f64,
+            #[serde_inline_default(95.0)]
+            pub Block: f64,
+            #[serde_inline_default(95.0)]
+            pub Crit: f64,
+        },
     },
+    #[serde_inline_default(AutoBroadcast::default())]
     pub AutoBroadcast: struct {
+      #[serde_inline_default(false)]
       pub On: bool,
+      #[serde_inline_default(0)]
       pub Center: i32,
+      #[serde_inline_default(60000)]
       pub Timer: i32,
+      #[serde_inline_default(0)]
       pub MinDisableLevel: i32,
     },
+    #[serde_inline_default(Battleground::default())]
     pub Battleground: struct {
-      pub CastDeserter: bool,
-      pub QueueAnnouncer: struct BattlegroundQueueAnnouncer {
-        pub Enable: bool,
-        pub Limit: struct {
-          pub MinLevel: u32,
-          pub MinPlayers: u32,
+        #[serde_inline_default(true)]
+        pub CastDeserter: bool,
+        #[serde_inline_default(BattlegroundQueueAnnouncer::default())]
+        pub QueueAnnouncer: struct BattlegroundQueueAnnouncer {
+            #[serde_inline_default(false)]
+            pub Enable: bool,
+            #[serde_inline_default(Limit::default())]
+            pub Limit: struct {
+                #[serde_inline_default(0)]
+                pub MinLevel: u32,
+                #[serde_inline_default(3)]
+                pub MinPlayers: u32,
+            },
+            #[serde_inline_default(SpamProtection::default())]
+            pub SpamProtection: struct{
+                #[serde_inline_default(30)]
+                pub Delay: u32,
+            },
+            #[serde_inline_default(false)]
+            pub PlayerOnly: bool,
+            #[serde_inline_default(false)]
+            pub Timed: bool,
+            #[serde_inline_default(30000)]
+            pub Timer: u32,
         },
-        pub SpamProtection: struct{ pub Delay: u32, },
-        pub PlayerOnly: bool,
-        pub Timed: bool,
-        pub Timer: u32,
-      },
-      pub PrematureFinishTimer: u32,
-      pub PremadeGroupWaitForMatch: u32,
-      pub GiveXPForKills: bool,
-      pub Random: struct{ pub ResetHour: i32, },
-      pub StoreStatistics: struct{ pub Enable: bool, },
-      pub TrackDeserters: struct{ pub Enable: bool, },
-      pub InvitationType: i32,
-      pub ReportAFK: struct {
-        pub Number: i32,
-        pub Timer: i32,
-      },
-      pub DisableQuestShareInBG: bool,
-      pub DisableReadyCheckInBG: bool,
-      pub RewardWinnerHonorFirst: i32,
-      pub RewardWinnerArenaFirst: i32,
-      pub RewardWinnerHonorLast: i32,
-      pub RewardWinnerArenaLast: i32,
-      pub RewardLoserHonorFirst: i32,
-      pub RewardLoserHonorLast: i32,
-      pub PlayerRespawn: i32,
-      pub RestorationBuffRespawn: i32,
-      pub BerserkingBuffRespawn: i32,
-      pub SpeedBuffRespawn: i32,
+        #[serde_inline_default(300000)]
+        pub PrematureFinishTimer: u32,
+        #[serde_inline_default(1800000)]
+        pub PremadeGroupWaitForMatch: u32,
+        #[serde_inline_default(false)]
+        pub GiveXPForKills: bool,
+        #[serde_inline_default(Random::default())]
+        pub Random: struct{
+            #[serde_inline_default(6)]
+            pub ResetHour: i32,
+        },
+        #[serde_inline_default(StoreStatistics::default())]
+        pub StoreStatistics: struct{
+            #[serde_inline_default(true)]
+            pub Enable: bool,
+        },
+        #[serde_inline_default(TrackDeserters::default())]
+        pub TrackDeserters: struct{
+            #[serde_inline_default(true)]
+            pub Enable: bool,
+        },
+        #[serde_inline_default(0)]
+        pub InvitationType: i32,
+        #[serde_inline_default(ReportAfk::default())]
+        pub ReportAFK: struct {
+            #[serde_inline_default(3)]
+            pub Number: i32,
+            #[serde_inline_default(4)]
+            pub Timer: i32,
+        },
+        #[serde_inline_default(false)]
+        pub DisableQuestShareInBG: bool,
+        #[serde_inline_default(false)]
+        pub DisableReadyCheckInBG: bool,
+        #[serde_inline_default(30)]
+        pub RewardWinnerHonorFirst: i32,
+        #[serde_inline_default(25)]
+        pub RewardWinnerArenaFirst: i32,
+        #[serde_inline_default(15)]
+        pub RewardWinnerHonorLast: i32,
+        #[serde_inline_default(0)]
+        pub RewardWinnerArenaLast: i32,
+        #[serde_inline_default(5)]
+        pub RewardLoserHonorFirst: i32,
+        #[serde_inline_default(5)]
+        pub RewardLoserHonorLast: i32,
+        #[serde_inline_default(30)]
+        pub PlayerRespawn: i32,
+        #[serde_inline_default(20)]
+        pub RestorationBuffRespawn: i32,
+        #[serde_inline_default(120)]
+        pub BerserkingBuffRespawn: i32,
+        #[serde_inline_default(150)]
+        pub SpeedBuffRespawn: i32,
     },
+    #[serde_inline_default(Wintergrasp::default())]
     pub Wintergrasp: struct {
-      pub Enable: i32,
-      pub PlayerMax: i32,
-      pub PlayerMin: i32,
-      pub PlayerMinLvl: i32,
-      pub BattleTimer: i32,
-      pub NoBattleTimer: i32,
-      pub CrashRestartTimer: i32,
+        #[serde_inline_default(1i32)]
+        pub Enable: i32,
+        #[serde_inline_default(120)]
+        pub PlayerMax: i32,
+        #[serde_inline_default(0)]
+        pub PlayerMin: i32,
+        #[serde_inline_default(77)]
+        pub PlayerMinLvl: i32,
+        #[serde_inline_default(30)]
+        pub BattleTimer: i32,
+        #[serde_inline_default(150)]
+        pub NoBattleTimer: i32,
+        #[serde_inline_default(10)]
+        pub CrashRestartTimer: i32,
     },
+    #[serde_inline_default(Arena::default())]
     pub Arena: struct {
-      pub MaxRatingDifference: u32,
-      pub RatingDiscardTimer: u32,
-      pub PreviousOpponentsDiscardTimer: u32,
-      pub AutoDistributePoints: bool,
-      pub AutoDistributeInterval: u32,
-      pub GamesRequired: u32,
-      pub QueueAnnouncer: struct {
-        pub Enable: bool,
-        pub PlayerOnly: bool,
-      },
-      pub ArenaSeason: struct {
-        pub ID: u32,
-        pub InProgress: bool,
-      },
-      pub ArenaStartRating: u32,
-      pub ArenaStartPersonalRating: u32,
-      pub ArenaStartMatchmakerRating: u32,
-      pub ArenaWinRatingModifier1: f64,
-      pub ArenaWinRatingModifier2: f64,
-      pub ArenaLoseRatingModifier: f64,
-      pub ArenaMatchmakerRatingModifier: f64,
+        #[serde_inline_default(150)]
+        pub MaxRatingDifference: u32,
+        #[serde_inline_default(600000)]
+        pub RatingDiscardTimer: u32,
+        #[serde_inline_default(120000)]
+        pub PreviousOpponentsDiscardTimer: u32,
+        #[serde_inline_default(false)]
+        pub AutoDistributePoints: bool,
+        #[serde_inline_default(7)]
+        pub AutoDistributeInterval: u32,
+        #[serde_inline_default(10)]
+        pub GamesRequired: u32,
+        #[serde_inline_default(QueueAnnouncer::default())]
+        pub QueueAnnouncer: struct {
+            #[serde_inline_default(false)]
+            pub Enable: bool,
+            #[serde_inline_default(false)]
+            pub PlayerOnly: bool,
+        },
+        #[serde_inline_default(ArenaSeason::default())]
+        pub ArenaSeason: struct {
+            #[serde_inline_default(8)]
+            pub ID: u32,
+            #[serde_inline_default(true)]
+            pub InProgress: bool,
+        },
+        #[serde_inline_default(0)]
+        pub ArenaStartRating: u32,
+        #[serde_inline_default(0)]
+        pub ArenaStartPersonalRating: u32,
+        #[serde_inline_default(1500)]
+        pub ArenaStartMatchmakerRating: u32,
+        #[serde_inline_default(48.0)]
+        pub ArenaWinRatingModifier1: f64,
+        #[serde_inline_default(24.0)]
+        pub ArenaWinRatingModifier2: f64,
+        #[serde_inline_default(24.0)]
+        pub ArenaLoseRatingModifier: f64,
+        #[serde_inline_default(24.0)]
+        pub ArenaMatchmakerRatingModifier: f64,
     },
     // Network.Threads = 1
     // Network.OutKBuff = -1
     // Network.OutUBuff = 65536
     // Network.TcpNodelay = 1
-    pub Console: struct{ pub Enable: bool, },
+    #[serde_inline_default(Console::default())]
+    pub Console: struct{
+        #[serde_inline_default(true)]
+        pub Enable: bool,
+    },
+    #[serde_inline_default(Ra::default())]
     pub Ra: struct {
-      pub Enable: bool,
-      pub IP: String,
-      pub Port: String,
-      pub MinLevel: i32,
+        #[serde_inline_default(false)]
+        pub Enable: bool,
+        #[serde_inline_default("0.0.0.0".to_string())]
+        pub IP: String,
+        #[serde_inline_default("3443".to_string())]
+        pub Port: String,
+        #[serde_inline_default(3)]
+        pub MinLevel: i32,
     },
+    #[serde_inline_default(Soap::default())]
     pub SOAP: struct {
-      pub Enabled: bool,
-      pub IP: String,
-      pub Port: String,
+        #[serde_inline_default(false)]
+        pub Enabled: bool,
+        #[serde_inline_default("127.0.0.1".to_string())]
+        pub IP: String,
+        #[serde_inline_default("7878".to_string())]
+        pub Port: String,
     },
+    #[serde_inline_default(CharDelete::default())]
     pub CharDelete: struct {
-      pub Method: i32,
-      pub MinLevel: i32,
-      pub KeepDays: i32,
+        #[serde_inline_default(0)]
+        pub Method: i32,
+        #[serde_inline_default(0)]
+        pub MinLevel: i32,
+        #[serde_inline_default(30)]
+        pub KeepDays: i32,
     },
+    #[serde_inline_default(ItemDelete::default())]
     pub ItemDelete: struct {
-      pub Method: i32,
-      pub Vendor: i32,
-      pub Quality: i32,
-      pub ItemLevel: i32,
+        #[serde_inline_default(0)]
+        pub Method: i32,
+        #[serde_inline_default(0)]
+        pub Vendor: i32,
+        #[serde_inline_default(3)]
+        pub Quality: i32,
+        #[serde_inline_default(80)]
+        pub ItemLevel: i32,
     },
+    #[serde_inline_default(0)]
     pub HonorPointsAfterDuel: i32,
+    #[serde_inline_default(false)]
     pub AlwaysMaxWeaponSkill: bool,
+    #[serde_inline_default(PvPToken::default())]
     pub PvPToken: struct {
-      pub Enable: bool,
-      pub MapAllowType: i32,
-      pub ItemID: i32,
-      pub ItemCount: i32,
+        #[serde_inline_default(false)]
+        pub Enable: bool,
+        #[serde_inline_default(4)]
+        pub MapAllowType: i32,
+        #[serde_inline_default(29434)]
+        pub ItemID: i32,
+        #[serde_inline_default(1i32)]
+        pub ItemCount: i32,
     },
+    #[serde_inline_default(false)]
     pub NoResetTalentsCost: bool,
-    pub ToggleXP: struct{ pub Cost: i32, },
+    #[serde_inline_default(ToggleXp::default())]
+    pub ToggleXP: struct{
+        #[serde_inline_default(100000)]
+        pub Cost: i32,
+    },
+    #[serde_inline_default(false)]
     pub ShowKickInWorld: bool,
+    #[serde_inline_default(false)]
     pub ShowMuteInWorld: bool,
+    #[serde_inline_default(false)]
     pub ShowBanInWorld: bool,
+    #[serde_inline_default(300000)]
     pub RecordUpdateTimeDiffInterval: i32,
+    #[serde_inline_default(100)]
     pub MinRecordUpdateTimeDiff: i32,
+    #[serde_inline_default(PlayerStart::default())]
     pub PlayerStart: struct {
-      pub String: String,
-      pub AllReputation: bool,
-      pub CustomSpells: bool,
-      pub MapsExplored: bool,
+        #[serde_inline_default("".to_string())]
+        pub String: String,
+        #[serde_inline_default(false)]
+        pub AllReputation: bool,
+        #[serde_inline_default(false)]
+        pub CustomSpells: bool,
+        #[serde_inline_default(false)]
+        pub MapsExplored: bool,
     },
+    #[serde_inline_default(LevelReq::default())]
     pub LevelReq: struct {
-      pub Trade: i32,
-      pub Ticket: i32,
-      pub Auction: i32,
-      pub Mail: i32,
+        #[serde_inline_default(1i32)]
+        pub Trade: i32,
+        #[serde_inline_default(1i32)]
+        pub Ticket: i32,
+        #[serde_inline_default(1i32)]
+        pub Auction: i32,
+        #[serde_inline_default(1i32)]
+        pub Mail: i32,
     },
+    #[serde_inline_default(PlayerDump::default())]
     pub PlayerDump: struct {
-      pub DisallowPaths: bool,
-      pub DisallowOverwrite: bool,
+        #[serde_inline_default(true)]
+        pub DisallowPaths: bool,
+        #[serde_inline_default(true)]
+        pub DisallowOverwrite: bool,
     },
+    #[serde_inline_default(0)]
     pub DisconnectToleranceInterval: i32,
+    #[serde_inline_default(50.000000)]
     pub MonsterSight: f64,
+    #[serde_inline_default(0)]
     pub StrictChannelNames: i32,
+    #[serde_inline_default(25)]
     pub TeleportTimeoutNear: i32,
+    #[serde_inline_default(45)]
     pub TeleportTimeoutFar: i32,
+    #[serde_inline_default(500)]
     pub MaxAllowedMMRDrop: i32,
+    #[serde_inline_default(true)]
     pub EnableLoginAfterDC: bool,
+    #[serde_inline_default(false)]
     pub DontCacheRandomMovementPaths: bool,
-    pub MoveMaps: struct{ pub Enable: bool, },
-    pub Minigob: struct{ pub Manabonk: struct{ pub Enable: bool, }, },
+    #[serde_inline_default(MoveMaps::default())]
+    pub MoveMaps: struct{
+        #[serde_inline_default(true)]
+        pub Enable: bool,
+    },
+    #[serde_inline_default(Minigob::default())]
+    pub Minigob: struct{
+        #[serde_inline_default(Manabonk::default())]
+        pub Manabonk: struct{
+            #[serde_inline_default(true)]
+            pub Enable: bool,
+        },
+    },
+    #[serde_inline_default(Allow::default())]
     pub Allow: struct {
-      pub IP: struct {
-        pub Based: struct{ pub Action: struct{ pub Logging: bool, }, },
-      },
+        #[serde_inline_default(Ip::default())]
+        pub IP: struct {
+            #[serde_inline_default(Based::default())]
+            pub Based: struct{
+                #[serde_inline_default(Action::default())]
+                pub Action: struct{
+                    #[serde_inline_default(false)]
+                    pub Logging: bool,
+                },
+            },
+        },
     },
-
+    #[serde_inline_default(Calculate::default())]
     pub Calculate: struct {
-      pub Creature: struct CalculateCreature {
-        pub Zone: struct CalculateCreatureZone{ pub Area: struct CalculateCreatureZoneArea{ pub Data: bool, }, },
-      },
-      pub Gameoject: struct {
-        pub Zone: struct CalculateGameojectZone{ pub Area: struct CalculateGameojectZoneArea{ pub Data: bool, }, },
-      },
+        #[serde_inline_default(CalculateCreature::default())]
+        pub Creature: struct CalculateCreature {
+            #[serde_inline_default(CalculateCreatureZone::default())]
+            pub Zone: struct CalculateCreatureZone{
+                #[serde_inline_default(CalculateCreatureZoneArea::default())]
+                pub Area: struct CalculateCreatureZoneArea{
+                    #[serde_inline_default(false)]
+                    pub Data: bool,
+                },
+            },
+        },
+        #[serde_inline_default(Gameoject::default())]
+        pub Gameoject: struct {
+            #[serde_inline_default(CalculateGameojectZone::default())]
+            pub Zone: struct CalculateGameojectZone{
+                #[serde_inline_default(CalculateGameojectZoneArea::default())]
+                pub Area: struct CalculateGameojectZoneArea{
+                    #[serde_inline_default(false)]
+                    pub Data: bool,
+                },
+            },
+        },
     },
+    #[serde_inline_default(Group::default())]
     pub Group: struct {
-      pub Raid: struct{ pub LevelRestriction: i32, },
+        #[serde_inline_default(Raid::default())]
+        pub Raid: struct{
+            #[serde_inline_default(10)]
+            pub LevelRestriction: i32,
+        },
     },
+    #[serde_inline_default(Lfg::default())]
     pub LFG: struct {
-      pub Location: struct{ pub All: bool, },
-      pub MaxKickCount: i32,
-      pub KickPreventionTimer: i32,
+        #[serde_inline_default(Location::default())]
+        pub Location: struct{
+            #[serde_inline_default(false)]
+            pub All: bool,
+        },
+        #[serde_inline_default(2)]
+        pub MaxKickCount: i32,
+        #[serde_inline_default(900)]
+        pub KickPreventionTimer: i32,
     },
+    #[serde_inline_default(DungeonAccessRequirements::default())]
     pub DungeonAccessRequirements: struct {
-      pub PrintMode: i32,
-      pub PortalAvgIlevelCheck: bool,
-      pub LFGLevelDBCOverride: bool,
-      pub OptionalStringID: i32,
+        #[serde_inline_default(1i32)]
+        pub PrintMode: i32,
+        #[serde_inline_default(false)]
+        pub PortalAvgIlevelCheck: bool,
+        #[serde_inline_default(false)]
+        pub LFGLevelDBCOverride: bool,
+        #[serde_inline_default(0)]
+        pub OptionalStringID: i32,
     },
+    #[serde_inline_default(Icc::default())]
     pub ICC: struct {
-      pub Buff: struct {
-        pub Horde: i32,
-        pub Alliance: i32,
-      },
+        #[serde_inline_default(Buff::default())]
+        pub Buff: struct {
+            #[serde_inline_default(73822)]
+            pub Horde: i32,
+            #[serde_inline_default(73828)]
+            pub Alliance: i32,
+        },
     },
-    pub Item: struct{ pub SetItemTradeable: bool, },
+    #[serde_inline_default(Item::default())]
+    pub Item: struct{
+        #[serde_inline_default(true)]
+        pub SetItemTradeable: bool,
+    },
+    #[serde_inline_default(30)]
     pub FFAPvPTimer: i32,
+    #[serde_inline_default(70)]
     pub LootNeedBeforeGreedILvlRestriction: i32,
+    #[serde_inline_default(false)]
     pub EnablePlayerSettings: bool,
-    pub JoinBGAndLFG: struct{ pub Enable: bool, },
-    pub LeaveGroupOnLogout: struct{ pub Enabled: bool, },
-    pub QuestPOI: struct{ pub Enabled: bool, },
-    pub ChangeFaction: struct{ pub MaxMoney: i32, },
+    #[serde_inline_default(JoinBgAndLfg::default())]
+    pub JoinBGAndLFG: struct{
+        #[serde_inline_default(false)]
+        pub Enable: bool,
+    },
+    #[serde_inline_default(LeaveGroupOnLogout::default())]
+    pub LeaveGroupOnLogout: struct{
+        #[serde_inline_default(true)]
+        pub Enabled: bool,
+    },
+    #[serde_inline_default(QuestPoi::default())]
+    pub QuestPOI: struct{
+        #[serde_inline_default(true)]
+        pub Enabled: bool,
+    },
+    #[serde_inline_default(ChangeFaction::default())]
+    pub ChangeFaction: struct{
+        #[serde_inline_default(0)]
+        pub MaxMoney: i32,
+    },
     // TODO: Logging
     // Appender                           map[String]LogAppender
     // Logger                             map[String]LogLoggerConfig
-    pub Log: struct{ pub Async: struct{ pub Enable: bool, }, },
+    #[serde_inline_default(Log::default())]
+    pub Log: struct{
+        #[serde_inline_default(Async::default())]
+        pub Async: struct{
+            #[serde_inline_default(false)]
+            pub Enable: bool,
+        },
+    },
+    #[serde_inline_default(PacketSpoof::default())]
     pub PacketSpoof: struct {
-      pub Policy: i32,
-      pub BanMode: i32,
-      pub BanDuration: i32,
+        #[serde_inline_default(1i32)]
+        pub Policy: i32,
+        #[serde_inline_default(0)]
+        pub BanMode: i32,
+        #[serde_inline_default(86400)]
+        pub BanDuration: i32,
     },
+    #[serde_inline_default(Debug::default())]
     pub Debug: struct {
-      pub Battleground: bool,
-      pub Arena: bool,
+        #[serde_inline_default(false)]
+        pub Battleground: bool,
+        #[serde_inline_default(false)]
+        pub Arena: bool,
     },
+    #[serde_inline_default(Metric::default())]
     pub Metric: struct {
-      pub Enable: bool,
-      pub Interval: i32,
-      pub ConnectionInfo: struct {
-        pub Hostname: String,
-        pub Port: String,
-        pub Database: String,
-      },
-      pub OverallStatusInterval: i32,
+        #[serde_inline_default(false)]
+        pub Enable: bool,
+        #[serde_inline_default(10)]
+        pub Interval: i32,
+        #[serde_inline_default(ConnectionInfo::default())]
+        pub ConnectionInfo: struct {
+            #[serde_inline_default("127.0.0.1".to_string())]
+            pub Hostname: String,
+            #[serde_inline_default("8086".to_string())]
+            pub Port: String,
+            #[serde_inline_default("worldserver".to_string())]
+            pub Database: String,
+        },
+        #[serde_inline_default(1i32)]
+        pub OverallStatusInterval: i32,
     },
   }
 }
@@ -777,20 +1453,110 @@ pub enum LogLevel {
     Trace,
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+#[serde_inline_default]
+#[derive(Deserialize, Serialize, DefaultFromSerde, Clone, Debug, PartialEq)]
 #[allow(non_snake_case)]
 pub struct DatabaseInfo {
-    Address:       String,
-    User:          String,
-    Password:      String,
-    DatabaseName:  String,
-    WorkerThreads: u32,
-    SynchThreads:  u32,
+    #[serde_inline_default("127.0.0.1:3306".to_string())]
+    pub Address:       String,
+    #[serde_inline_default("acore".to_string())]
+    pub User:          String,
+    #[serde_inline_default("acore".to_string())]
+    pub Password:      String,
+    #[serde_inline_default("".to_string())]
+    pub DatabaseName:  String,
+    #[serde_inline_default(1)]
+    pub WorkerThreads: u32,
+    #[serde_inline_default(1)]
+    pub SynchThreads:  u32,
+    #[serde_inline_default("".to_string())]
+    pub BaseFilePath:  String,
+    #[serde_inline_default("".to_string())]
+    pub DBModuleName:  String,
+}
+
+impl DatabaseInfo {
+    pub fn default_with_info(database: &str, base_file_path: &str, db_module_name: &str) -> Self {
+        Self {
+            DatabaseName: database.to_string(),
+            BaseFilePath: base_file_path.to_string(),
+            DBModuleName: db_module_name.to_string(),
+            ..Self::default()
+        }
+    }
+
+    pub fn connect_url(&self) -> String {
+        format!("mysql://{}:{}@{}/{}", self.User, self.Password, self.Address, self.DatabaseName)
+    }
+
+    pub fn connect_url_without_db(&self) -> String {
+        format!("mysql://{}:{}@{}", self.User, self.Password, self.Address)
+    }
+}
+
+flags! {
+  pub enum DatabaseTypeFlags: u8 {
+    None        = 0,
+    #[allow(clippy::identity_op)]
+    Login       = 0b001,
+    Character   = 0b010,
+    World       = 0b100,
+    All = (DatabaseTypeFlags::Login | DatabaseTypeFlags::Character | DatabaseTypeFlags::World).bits(),
+  }
+}
+
+impl Updates {
+    pub fn update_enabled(&self, update_flags: DatabaseTypeFlags) -> bool {
+        self.EnableDatabases.bitand(FlagSet::from(update_flags)).bits() > 0
+    }
 }
 
 #[cfg(test)]
 mod tests {
+    use flagset::FlagSet;
+
     use crate::common::configuration::*;
+
+    #[test]
+    fn it_sanity_checks_database_type_flags() {
+        assert_eq!(FlagSet::from(DatabaseTypeFlags::None).bits(), 0);
+        assert_eq!(FlagSet::from(DatabaseTypeFlags::Login).bits(), 1);
+        assert_eq!(FlagSet::from(DatabaseTypeFlags::Character).bits(), 2);
+        assert_eq!(FlagSet::from(DatabaseTypeFlags::World).bits(), 4);
+        assert_eq!(FlagSet::from(DatabaseTypeFlags::All).bits(), 7);
+    }
+
+    #[test]
+    fn it_checks_updates_enabled() {
+        let mut u = Updates {
+            EnableDatabases: FlagSet::from(DatabaseTypeFlags::None),
+            ..Default::default()
+        };
+        assert!(!u.update_enabled(DatabaseTypeFlags::Login));
+        assert!(!u.update_enabled(DatabaseTypeFlags::Character));
+        assert!(!u.update_enabled(DatabaseTypeFlags::World));
+        assert!(!u.update_enabled(DatabaseTypeFlags::All));
+        u.EnableDatabases = FlagSet::from(DatabaseTypeFlags::Login);
+        assert!(u.update_enabled(DatabaseTypeFlags::Login));
+        assert!(!u.update_enabled(DatabaseTypeFlags::Character));
+        assert!(!u.update_enabled(DatabaseTypeFlags::World));
+        assert!(u.update_enabled(DatabaseTypeFlags::All));
+        u.EnableDatabases = FlagSet::from(DatabaseTypeFlags::Character);
+        assert!(!u.update_enabled(DatabaseTypeFlags::Login));
+        assert!(u.update_enabled(DatabaseTypeFlags::Character));
+        assert!(!u.update_enabled(DatabaseTypeFlags::World));
+        assert!(u.update_enabled(DatabaseTypeFlags::All));
+        u.EnableDatabases = FlagSet::from(DatabaseTypeFlags::World);
+        assert!(!u.update_enabled(DatabaseTypeFlags::Login));
+        assert!(!u.update_enabled(DatabaseTypeFlags::Character));
+        assert!(u.update_enabled(DatabaseTypeFlags::World));
+        assert!(u.update_enabled(DatabaseTypeFlags::All));
+        u.EnableDatabases = FlagSet::from(DatabaseTypeFlags::All);
+        assert!(u.update_enabled(DatabaseTypeFlags::Login));
+        assert!(u.update_enabled(DatabaseTypeFlags::Character));
+        assert!(u.update_enabled(DatabaseTypeFlags::World));
+        assert!(u.update_enabled(DatabaseTypeFlags::All));
+    }
 
     #[test]
     fn it_reads_the_worldserver_toml_dist_file() {
@@ -798,704 +1564,11 @@ mod tests {
             .unwrap()
             .worldserver
             .unwrap();
-        let example = WorldserverConfig {
-            RealmID: 1,
-            DataDir: ".".to_string(),
-            LogsDir: "".to_string(),
-            TempDir: "".to_string(),
-            LoginDatabaseInfo: DatabaseInfo {
-                Address:       "127.0.0.1:3306".to_string(),
-                User:          "acore".to_string(),
-                Password:      "acore".to_string(),
-                DatabaseName:  "acore_auth".to_string(),
-                WorkerThreads: 1,
-                SynchThreads:  1,
-            },
-            WorldDatabaseInfo: DatabaseInfo {
-                Address:       "127.0.0.1:3306".to_string(),
-                User:          "acore".to_string(),
-                Password:      "acore".to_string(),
-                DatabaseName:  "acore_world".to_string(),
-                WorkerThreads: 1,
-                SynchThreads:  1,
-            },
-            CharacterDatabaseInfo: DatabaseInfo {
-                Address:       "127.0.0.1:3306".to_string(),
-                User:          "acore".to_string(),
-                Password:      "acore".to_string(),
-                DatabaseName:  "acore_characters".to_string(),
-                WorkerThreads: 1,
-                SynchThreads:  1,
-            },
-            Database: Database {
-                Reconnect: Reconnect {
-                    Seconds:  15,
-                    Attempts: 20,
-                },
-            },
-            MaxPingTime: 30,
-            WorldServerPort: "8085".to_string(),
-            BindIP: "0.0.0.0".to_string(),
-            ThreadPool: 2,
-            IPLocationFile: "".to_string(),
-            AllowLoggingIPAddressesInDatabase: true,
-            UseProcessors: 0,
-            ProcessPriority: true,
-            Compression: 1,
-            PlayerLimit: 1000,
-            SaveRespawnTimeImmediately: true,
-            MaxOverspeedPings: 2,
-            CloseIdleConnections: true,
-            SocketTimeOutTime: 900000,
-            SocketTimeOutTimeActive: 60000,
-            SessionAddDelay: 10000,
-            MapUpdateInterval: 100,
-            ChangeWeatherInterval: 600000,
-            PlayerSaveInterval: 900000,
-            PlayerSave: PlayerSave {
-                Stats: PlayerSaveStats {
-                    MinLevel:         0,
-                    SaveOnlyOnLogout: true,
-                },
-            },
-            vmap: Vmap {
-                enableLOS:         true,
-                enableHeight:      true,
-                petLOS:            true,
-                BlizzlikePvPLOS:   true,
-                enableIndoorCheck: true,
-            },
-            DetectPosCollision: true,
-            CheckGameObjectLoS: true,
-            TargetPosRecalculateRange: 1.5,
-            UpdateUptimeInterval: 1,
-            LogDB: LogDb {
-                Opt: Opt {
-                    ClearInterval: 10,
-                    ClearTime:     1209600,
-                },
-            },
-            MaxCoreStuckTime: 0,
-            AddonChannel: true,
-            MapUpdate: MapUpdate { Threads: 1 },
-            CleanCharacterDB: false,
-            PersistentCharacterCleanFlags: 0,
-            PreloadAllNonInstancedMapGrids: false,
-            SetAllCreaturesWithWaypointMovementActive: false,
-            PidFile: None,
-            PacketLogFile: "".to_string(),
-            GameType: 0,
-            RealmZone: 1,
-            World: World { RealmAvailability: true },
-            StrictPlayerNames: 0,
-            StrictCharterNames: 0,
-            StrictPetNames: 0,
-            DBC: Dbc { Locale: 255 },
-            DeclinedNames: false,
-            Expansion: 2,
-            MinPlayerName: 2,
-            MinCharterName: 2,
-            MinPetName: 2,
-            Guild: Guild {
-                CharterCost:              1000,
-                EventLogRecordsCount:     100,
-                ResetHour:                6,
-                BankEventLogRecordsCount: 25,
-                AllowMultipleGuildMaster: false,
-                BankInitialTabs:          0,
-                BankTabCost0:             1000000,
-                BankTabCost1:             2500000,
-                BankTabCost2:             5000000,
-                BankTabCost3:             10000000,
-                BankTabCost4:             25000000,
-                BankTabCost5:             50000000,
-            },
-            ArenaTeam: ArenaTeam {
-                CharterCost: CharterCost {
-                    T_2v2: 800000,
-                    T_3v3: 1200000,
-                    T_5v5: 2000000,
-                },
-            },
-            MaxWhoListReturns: 49,
-            CharacterCreating: CharacterCreating {
-                MinLevelForHeroicCharacter: 55,
-                Disabled:                   Disabled {
-                    DisableFaction: 0,
-                    RaceMask:       0,
-                    ClassMask:      0,
-                },
-            },
-            CharactersPerAccount: 50,
-            CharactersPerRealm: 10,
-            HeroicCharactersPerRealm: 1,
-            SkipCinematics: 0,
-            MaxPlayerLevel: 80,
-            MinDualSpecLevel: 40,
-            StartPlayerLevel: 1,
-            StartHeroicPlayerLevel: 55,
-            StartPlayerMoney: 0,
-            StartHeroicPlayerMoney: 2000,
-            MaxHonorPoints: 75000,
-            MaxHonorPointsMoneyPerPoint: 0,
-            StartHonorPoints: 0,
-            MaxArenaPoints: 10000,
-            StartArenaPoints: 0,
-            RecruitAFriend: RecruitAFriend {
-                MaxLevel:      60,
-                MaxDifference: 4,
-            },
-            InstantLogout: 1,
-            PreventAFKLogout: 0,
-            DisableWaterBreath: 4,
-            AllFlightPaths: false,
-            InstantFlightPaths: 0,
-            AlwaysMaxSkillForLevel: false,
-            ActivateWeather: true,
-            Instance: Instance {
-                IgnoreLevel:                false,
-                IgnoreRaid:                 false,
-                GMSummonPlayer:             false,
-                ResetTimeHour:              4,
-                UnloadDelay:                1800000,
-                SharedNormalHeroicId:       true,
-                ResetTimeRelativeTimestamp: 1135814400,
-            },
-            Quests: Quests {
-                EnableQuestTracker: false,
-                LowLevelHideDiff:   4,
-                HighLevelHideDiff:  7,
-                IgnoreRaid:         false,
-                IgnoreAutoAccept:   false,
-                IgnoreAutoComplete: false,
-            },
-            Calendar: Calendar { DeleteOldEventsHour: 6 },
-            MaxPrimaryTradeSkill: 2,
-            MinPetitionSigns: 9,
-            MaxGroupXPDistance: 74,
-            MaxRecruitAFriendBonusDistance: 100,
-            MailDeliveryDelay: 3600,
-            OffhandCheckAtSpellUnlearn: true,
-            ClientCacheVersion: 0,
-            Event: Event { Announce: false },
-            BeepAtStart: true,
-            FlashAtStart: true,
-            Motd: "Welcome to an AzerothCore server.".to_string(),
-            Server: Server { LoginInfo: 0 },
-            Command: Command { LookupMaxResults: 0 },
-            AllowTickets: true,
-            DeletedCharacterTicketTrace: false,
-            DungeonFinder: DungeonFinder { OptionsMask: 5 },
-            AccountInstancesPerHour: 5,
-            BirthdayTime: 1222964635,
-            IsContinentTransport: IsContinentTransport { Enabled: true },
-            IsPreloadedContinentTransport: IsPreloadedContinentTransport { Enabled: false },
-            TOTPMasterSecret: "".to_string(),
-            Updates: Updates {
-                EnableDatabases:      7,
-                AutoSetup:            true,
-                Redundancy:           true,
-                ArchivedRedundancy:   false,
-                AllowRehash:          true,
-                CleanDeadRefMaxCount: 3,
-            },
-            Warden: Warden {
-                Enabled:               true,
-                NumMemChecks:          3,
-                NumLuaChecks:          1,
-                NumOtherChecks:        7,
-                ClientResponseDelay:   600,
-                ClientCheckHoldOff:    30,
-                ClientCheckFailAction: 0,
-                BanDuration:           259200,
-            },
-            AllowTwoSide: AllowTwoSide {
-                Accounts:    true,
-                Interaction: Interaction {
-                    Calendar: false,
-                    Chat:     false,
-                    Emote:    false,
-                    Channel:  false,
-                    Group:    false,
-                    Guild:    false,
-                    Auction:  false,
-                    Mail:     false,
-                },
-                WhoList:     false,
-                AddFriend:   false,
-                Trade:       false,
-            },
-            TalentsInspecting: true,
-            CreatureFamilyFleeAssistanceRadius: 30,
-            CreatureFamilyAssistanceRadius: 10,
-            CreatureFamilyAssistanceDelay: 2000,
-            CreatureFamilyAssistancePeriod: 3000,
-            CreatureFamilyFleeDelay: 7000,
-            WorldBossLevelDiff: 3,
-            Corpse: Corpse {
-                Decay: CorpseDecay {
-                    NORMAL:    60,
-                    RARE:      300,
-                    ELITE:     300,
-                    RAREELITE: 300,
-                    WORLDBOSS: 3600,
-                },
-            },
-            Rate: Rate {
-                Corpse:               RateCorpse {
-                    Decay: Decay { Looted: 0.5 },
-                },
-                Creature:             RateCreature {
-                    Aggro:  1.0,
-                    Normal: Normal {
-                        Damage:      1.0,
-                        SpellDamage: 1.0,
-                        HP:          1.0,
-                    },
-                    Elite:  RateElite {
-                        Elite:     RateEliteElite {
-                            Damage:      1.0,
-                            SpellDamage: 1.0,
-                            HP:          1.0,
-                        },
-                        RARE:      Rare {
-                            Damage:      1.0,
-                            SpellDamage: 1.0,
-                            HP:          1.0,
-                        },
-                        RAREELITE: Rareelite {
-                            Damage:      1.0,
-                            SpellDamage: 1.0,
-                            HP:          1.0,
-                        },
-                        WORLDBOSS: Worldboss {
-                            Damage:      1.0,
-                            SpellDamage: 1.0,
-                            HP:          1.0,
-                        },
-                    },
-                },
-                Health:               1.0,
-                Mana:                 1.0,
-                Rage:                 Rage { Income: 1.0, Loss: 1.0 },
-                RunicPower:           RunicPower { Income: 1.0, Loss: 1.0 },
-                Focus:                1.0,
-                Energy:               1.0,
-                Loyalty:              1.0,
-                Skill:                Skill { Discovery: 1.0 },
-                Drop:                 Drop {
-                    Item:  DropItem {
-                        Poor:             1.0,
-                        Normal:           1.0,
-                        Uncommon:         1.0,
-                        Rare:             1.0,
-                        Epic:             1.0,
-                        Legendary:        1.0,
-                        Artifact:         1.0,
-                        Referenced:       1.0,
-                        ReferencedAmount: 1.0,
-                    },
-                    Money: 1.0,
-                },
-                RewardBonusMoney:     1.0,
-                SellValue:            SellValue {
-                    Item: SellValueItem {
-                        Poor:      1.0,
-                        Normal:    1.0,
-                        Uncommon:  1.0,
-                        Rare:      1.0,
-                        Epic:      1.0,
-                        Legendary: 1.0,
-                        Artifact:  1.0,
-                        Heirloom:  1.0,
-                    },
-                },
-                BuyValue:             BuyValue {
-                    Item: BuyValueItem {
-                        Poor:      1.0,
-                        Normal:    1.0,
-                        Uncommon:  1.0,
-                        Rare:      1.0,
-                        Epic:      1.0,
-                        Legendary: 1.0,
-                        Artifact:  1.0,
-                        Heirloom:  1.0,
-                    },
-                },
-                XP:                   Xp {
-                    Kill:                 1.0,
-                    Quest:                Quest {
-                        General: 1.0,
-                        DF:      1.0,
-                    },
-                    Explore:              1.0,
-                    Pet:                  1.0,
-                    BattlegroundKillAV:   1.0,
-                    BattlegroundKillWSG:  1.0,
-                    BattlegroundKillAB:   1.0,
-                    BattlegroundKillEOTS: 1.0,
-                    BattlegroundKillSOTA: 1.0,
-                    BattlegroundKillIC:   1.0,
-                },
-                RepairCost:           1.0,
-                Rest:                 Rest {
-                    InGame:  1.0,
-                    Offline: Offline {
-                        InTavernOrCity: 1.0,
-                        InWilderness:   1.0,
-                    },
-                },
-                Damage:               Damage { Fall: 1.0 },
-                Auction:              Auction {
-                    Time:    1.0,
-                    Deposit: 1.0,
-                    Cut:     1.0,
-                },
-                Honor:                1.0,
-                ArenaPoints:          1.0,
-                Talent:               1.0,
-                Reputation:           Reputation {
-                    Gain:                1.0,
-                    LowLevel:            LowLevel { Kill: 1.0, Quest: 1.0 },
-                    RecruitAFriendBonus: 0.1,
-                },
-                MoveSpeed:            1.0,
-                InstanceResetTime:    1.0,
-                Pet:                  Pet { LevelXP: 0.05 },
-                MissChanceMultiplier: MissChanceMultiplier {
-                    TargetCreature:    11.0,
-                    TargetPlayer:      7.0,
-                    OnlyAffectsPlayer: 0.0,
-                },
-            },
-            ListenRange: ListenRange {
-                Say:       40,
-                TextEmote: 40,
-                Yell:      300,
-            },
-            Creature: Creature {
-                MovingStopTimeForPlayer: 180000,
-            },
-            WaypointMovementStopTimeForPlayer: 120,
-            NpcEvadeIfTargetIsUnreachable: 5,
-            NpcRegenHPIfTargetIsUnreachable: true,
-            NpcRegenHPTimeIfTargetIsUnreachable: 10,
-            Creatures: Creatures {
-                CustomIDs: vec![190010, 55005, 999991, 25462, 98888, 601014, 34567, 34568],
-            },
-            ChatFakeMessagePreventing: true,
-            ChatStrictLinkChecking: ChatStrictLinkChecking { Severity: 0, Kick: 0 },
-            ChatFlood: ChatFlood {
-                MessageCount:      10,
-                MessageDelay:      1,
-                AddonMessageCount: 100,
-                AddonMessageDelay: 1,
-                MuteTime:          10,
-            },
-            Chat: Chat {
-                MuteFirstLogin:     false,
-                MuteTimeFirstLogin: 120,
-            },
-            Channel: Channel {
-                RestrictedLfg:     true,
-                SilentlyGMJoin:    false,
-                ModerationGMLevel: 1,
-            },
-            ChatLevelReq: ChatLevelReq {
-                Channel: 1,
-                Whisper: 1,
-                Say:     1,
-            },
-            PartyLevelReq: 1,
-            AllowPlayerCommands: true,
-            PreserveCustomChannels: true,
-            PreserveCustomChannelDuration: 14,
-            GM: Gm {
-                LoginState:    2,
-                Visible:       2,
-                Chat:          2,
-                WhisperingTo:  2,
-                InGMList:      InGmList { Level: 3 },
-                InWhoList:     InWhoList { Level: 3 },
-                StartLevel:    1,
-                AllowInvite:   false,
-                AllowFriend:   false,
-                LowerSecurity: false,
-                TicketSystem:  TicketSystem { ChanceOfGMSurvey: 50 },
-            },
-            Visibility: Visibility {
-                GroupMode:          1,
-                Distance:           Distance {
-                    Continents: 90,
-                    Instances:  120,
-                    BGArenas:   180,
-                },
-                Notify:             Notify {
-                    Period: Period {
-                        OnContinents: 1000,
-                        InInstances:  1000,
-                        InBGArenas:   1000,
-                    },
-                },
-                ObjectSparkles:     true,
-                ObjectQuestMarkers: true,
-            },
-            WaterBreath: WaterBreath { Timer: 180000 },
-            EnableLowLevelRegenBoost: true,
-            SkillGain: SkillGain {
-                Crafting:  1,
-                Defense:   1,
-                Gathering: 1,
-                Weapon:    1,
-            },
-            SkillChance: SkillChance {
-                Prospecting:   false,
-                Milling:       false,
-                Orange:        100,
-                Yellow:        75,
-                Green:         25,
-                Grey:          0,
-                MiningSteps:   0,
-                SkinningSteps: 0,
-            },
-            DurabilityLoss: DurabilityLoss {
-                InPvP:   false,
-                OnDeath: 10,
-            },
-            DurabilityLossChance: DurabilityLossChance {
-                Damage: 0.5,
-                Absorb: 0.5,
-                Parry:  0.05,
-                Block:  0.05,
-            },
-            Death: Death {
-                SicknessLevel:      11,
-                CorpseReclaimDelay: CorpseReclaimDelay { PvP: true, PvE: false },
-                Bones:              Bones {
-                    World:               true,
-                    BattlegroundOrArena: true,
-                },
-            },
-            Die: Die {
-                Command: DieCommand { Mode: true },
-            },
-            Stats: Stats {
-                Limits: Limits {
-                    Enable: false,
-                    Dodge:  95.0,
-                    Parry:  95.0,
-                    Block:  95.0,
-                    Crit:   95.0,
-                },
-            },
-            AutoBroadcast: AutoBroadcast {
-                On:              false,
-                Center:          0,
-                Timer:           60000,
-                MinDisableLevel: 0,
-            },
-            Battleground: Battleground {
-                CastDeserter:             true,
-                QueueAnnouncer:           BattlegroundQueueAnnouncer {
-                    Enable:         false,
-                    Limit:          Limit {
-                        MinLevel:   0,
-                        MinPlayers: 3,
-                    },
-                    SpamProtection: SpamProtection { Delay: 30 },
-                    PlayerOnly:     false,
-                    Timed:          false,
-                    Timer:          30000,
-                },
-                PrematureFinishTimer:     300000,
-                PremadeGroupWaitForMatch: 1800000,
-                GiveXPForKills:           false,
-                Random:                   Random { ResetHour: 6 },
-                StoreStatistics:          StoreStatistics { Enable: true },
-                TrackDeserters:           TrackDeserters { Enable: true },
-                InvitationType:           0,
-                ReportAFK:                ReportAfk { Number: 3, Timer: 4 },
-                DisableQuestShareInBG:    false,
-                DisableReadyCheckInBG:    false,
-                RewardWinnerHonorFirst:   30,
-                RewardWinnerArenaFirst:   25,
-                RewardWinnerHonorLast:    15,
-                RewardWinnerArenaLast:    0,
-                RewardLoserHonorFirst:    5,
-                RewardLoserHonorLast:     5,
-                PlayerRespawn:            30,
-                RestorationBuffRespawn:   20,
-                BerserkingBuffRespawn:    120,
-                SpeedBuffRespawn:         150,
-            },
-            Wintergrasp: Wintergrasp {
-                Enable:            1,
-                PlayerMax:         120,
-                PlayerMin:         0,
-                PlayerMinLvl:      77,
-                BattleTimer:       30,
-                NoBattleTimer:     150,
-                CrashRestartTimer: 10,
-            },
-            Arena: Arena {
-                MaxRatingDifference:           150,
-                RatingDiscardTimer:            600000,
-                PreviousOpponentsDiscardTimer: 120000,
-                AutoDistributePoints:          false,
-                AutoDistributeInterval:        7,
-                GamesRequired:                 10,
-                QueueAnnouncer:                QueueAnnouncer {
-                    Enable:     false,
-                    PlayerOnly: false,
-                },
-                ArenaSeason:                   ArenaSeason {
-                    ID:         8,
-                    InProgress: true,
-                },
-                ArenaStartRating:              0,
-                ArenaStartPersonalRating:      0,
-                ArenaStartMatchmakerRating:    1500,
-                ArenaWinRatingModifier1:       48.0,
-                ArenaWinRatingModifier2:       24.0,
-                ArenaLoseRatingModifier:       24.0,
-                ArenaMatchmakerRatingModifier: 24.0,
-            },
-            Console: Console { Enable: true },
-            Ra: Ra {
-                Enable:   false,
-                IP:       "0.0.0.0".to_string(),
-                Port:     "3443".to_string(),
-                MinLevel: 3,
-            },
-            SOAP: Soap {
-                Enabled: false,
-                IP:      "127.0.0.1".to_string(),
-                Port:    "7878".to_string(),
-            },
-            CharDelete: CharDelete {
-                Method:   0,
-                MinLevel: 0,
-                KeepDays: 30,
-            },
-            ItemDelete: ItemDelete {
-                Method:    0,
-                Vendor:    0,
-                Quality:   3,
-                ItemLevel: 80,
-            },
-            HonorPointsAfterDuel: 0,
-            AlwaysMaxWeaponSkill: false,
-            PvPToken: PvPToken {
-                Enable:       false,
-                MapAllowType: 4,
-                ItemID:       29434,
-                ItemCount:    1,
-            },
-            NoResetTalentsCost: false,
-            ToggleXP: ToggleXp { Cost: 100000 },
-            ShowKickInWorld: false,
-            ShowMuteInWorld: false,
-            ShowBanInWorld: false,
-            RecordUpdateTimeDiffInterval: 300000,
-            MinRecordUpdateTimeDiff: 100,
-            PlayerStart: PlayerStart {
-                String:        "".to_string(),
-                AllReputation: false,
-                CustomSpells:  false,
-                MapsExplored:  false,
-            },
-            LevelReq: LevelReq {
-                Trade:   1,
-                Ticket:  1,
-                Auction: 1,
-                Mail:    1,
-            },
-            PlayerDump: PlayerDump {
-                DisallowPaths:     true,
-                DisallowOverwrite: true,
-            },
-            DisconnectToleranceInterval: 0,
-            MonsterSight: 50.000000,
-            StrictChannelNames: 0,
-            TeleportTimeoutNear: 25,
-            TeleportTimeoutFar: 45,
-            MaxAllowedMMRDrop: 500,
-            EnableLoginAfterDC: true,
-            DontCacheRandomMovementPaths: false,
-            MoveMaps: MoveMaps { Enable: true },
-            Minigob: Minigob {
-                Manabonk: Manabonk { Enable: true },
-            },
-            Allow: Allow {
-                IP: Ip {
-                    Based: Based {
-                        Action: Action { Logging: false },
-                    },
-                },
-            },
-            Calculate: Calculate {
-                Creature:  CalculateCreature {
-                    Zone: CalculateCreatureZone {
-                        Area: CalculateCreatureZoneArea { Data: false },
-                    },
-                },
-                Gameoject: Gameoject {
-                    Zone: CalculateGameojectZone {
-                        Area: CalculateGameojectZoneArea { Data: false },
-                    },
-                },
-            },
-            Group: Group {
-                Raid: Raid { LevelRestriction: 10 },
-            },
-            LFG: Lfg {
-                Location:            Location { All: false },
-                MaxKickCount:        2,
-                KickPreventionTimer: 900,
-            },
-            DungeonAccessRequirements: DungeonAccessRequirements {
-                PrintMode:            1,
-                PortalAvgIlevelCheck: false,
-                LFGLevelDBCOverride:  false,
-                OptionalStringID:     0,
-            },
-            ICC: Icc {
-                Buff: Buff {
-                    Horde:    73822,
-                    Alliance: 73828,
-                },
-            },
-            Item: Item { SetItemTradeable: true },
-            FFAPvPTimer: 30,
-            LootNeedBeforeGreedILvlRestriction: 70,
-            EnablePlayerSettings: false,
-            JoinBGAndLFG: JoinBgAndLfg { Enable: false },
-            LeaveGroupOnLogout: LeaveGroupOnLogout { Enabled: true },
-            QuestPOI: QuestPoi { Enabled: true },
-            ChangeFaction: ChangeFaction { MaxMoney: 0 },
-            Log: Log {
-                Async: Async { Enable: false },
-            },
-            PacketSpoof: PacketSpoof {
-                Policy:      1,
-                BanMode:     0,
-                BanDuration: 86400,
-            },
-            Debug: Debug {
-                Battleground: false,
-                Arena:        false,
-            },
-            Metric: Metric {
-                Enable:                false,
-                Interval:              10,
-                ConnectionInfo:        ConnectionInfo {
-                    Hostname: "127.0.0.1".to_string(),
-                    Port:     "8086".to_string(),
-                    Database: "worldserver".to_string(),
-                },
-                OverallStatusInterval: 1,
-            },
-        };
+        let example = WorldserverConfig::default();
+
+        fs::write("left.toml", toml::to_string(&dist).unwrap()).unwrap();
+        fs::write("right.toml", toml::to_string(&example).unwrap()).unwrap();
+
         assert_eq!(dist, example);
     }
 }

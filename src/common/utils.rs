@@ -1,26 +1,26 @@
-use std::{error, fmt, fs, io, path::Path, process};
+use std::{fs, io, path::Path, process};
 
-#[derive(Debug)]
+use flagset::InvalidBits;
+use thiserror::Error;
+
+#[derive(Error, Debug)]
+#[error("GenericError: {msg}")]
+pub struct GenericError {
+    pub msg: String,
+}
+
+#[derive(Error, Debug)]
+#[error("invalid bits: {err}")]
+pub struct InvalidBitsError {
+    pub err: InvalidBits,
+}
+
+#[derive(Error, Debug)]
+#[error("cannot create PID file {pid} (possible error: permission)")]
 pub struct PIDFileError {
     pid:   u32,
+    #[source]
     inner: io::Error,
-}
-
-impl fmt::Display for PIDFileError {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        // The wrapped error contains additional information and is available
-        // via the source() method.
-        write!(f, "cannot create PID file {} (possible error: permission)", self.pid)
-    }
-}
-
-impl error::Error for PIDFileError {
-    fn source(&self) -> Option<&(dyn error::Error + 'static)> {
-        // The cause is the underlying implementation error type. Is implicitly
-        // cast to the trait object `&error::Error`. This works because the
-        // underlying type already implements the `Error` trait.
-        Some(&self.inner)
-    }
 }
 
 /// create PID file
