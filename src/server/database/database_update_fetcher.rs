@@ -14,6 +14,7 @@ use tokio::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
 use walkdir::WalkDir;
 
+use super::{qargs, sql, sql_w_args};
 use crate::{
     common::configuration::Updates,
     server::database::database_loader_utils::{apply_file, DatabaseLoaderError},
@@ -77,12 +78,7 @@ pub struct UpdateFetcher<'u> {
 }
 
 impl<'u> UpdateFetcher<'u> {
-    pub fn new<Iter: IntoIterator<Item = String>>(
-        src_directory: String,
-        module_target: String,
-        module_iterator: Iter,
-        update_cfg: &'u Updates,
-    ) -> Self {
+    pub fn new<Iter: IntoIterator<Item = String>>(src_directory: String, module_target: String, module_iterator: Iter, update_cfg: &'u Updates) -> Self {
         let mut module_list = BTreeSet::new();
         module_list.extend(module_iterator);
         Self {
@@ -103,11 +99,8 @@ impl<'u> UpdateFetcher<'u> {
     }
 
     #[instrument(skip(self, pool))]
-    async fn receive_included_directories(
-        &self,
-        pool: &sqlx::Pool<MySql>,
-    ) -> Result<impl Iterator<Item = (PathBuf, FetcherState)>, DatabaseLoaderError> {
-        let mut directories: Vec<(PathBuf, FetcherState)> = sqlx::query("SELECT `path`, `state` FROM `updates_include`")
+    async fn receive_included_directories(&self, pool: &sqlx::Pool<MySql>) -> Result<impl Iterator<Item = (PathBuf, FetcherState)>, DatabaseLoaderError> {
+        let mut directories: Vec<(PathBuf, FetcherState)> = sql("SELECT `path`, `state` FROM `updates_include`")
             .fetch_all(pool)
             .await?
             .iter()
@@ -194,33 +187,32 @@ impl<'u> UpdateFetcher<'u> {
 
     #[instrument(skip(self, pool))]
     async fn receive_applied_files(&self, pool: &sqlx::Pool<MySql>) -> Result<BTreeMap<PathBuf, AppliedFileEntry>, DatabaseLoaderError> {
-        let map: BTreeMap<PathBuf, AppliedFileEntry> = sqlx::query(
-            "SELECT `name`, `hash`, `state`, UNIX_TIMESTAMP(`timestamp`) as `unix_timestamp` FROM `updates` ORDER BY `name` ASC",
-        )
-        .fetch_all(pool)
-        .await?
-        .iter()
-        .filter_map(|row| {
-            let name: String = row.get("name");
-            let state: FetcherState = FetcherState::from_str(row.get::<String, _>("state").as_str())
-                .inspect_err(|e| {
-                    warn!(
-                        "DBUpdater: update from `updates` table with name \"{}\" has invalid state, error was {}, skipped!",
-                        name, e,
-                    );
+        let map: BTreeMap<PathBuf, AppliedFileEntry> =
+            sql("SELECT `name`, `hash`, `state`, UNIX_TIMESTAMP(`timestamp`) as `unix_timestamp` FROM `updates` ORDER BY `name` ASC")
+                .fetch_all(pool)
+                .await?
+                .iter()
+                .filter_map(|row| {
+                    let name: String = row.get("name");
+                    let state: FetcherState = FetcherState::from_str(row.get::<String, _>("state").as_str())
+                        .inspect_err(|e| {
+                            warn!(
+                                "DBUpdater: update from `updates` table with name \"{}\" has invalid state, error was {}, skipped!",
+                                name, e,
+                            );
+                        })
+                        .ok()?;
+
+                    let e = AppliedFileEntry {
+                        name: Path::new(&name).to_path_buf(),
+                        hash: row.get("hash"),
+                        state,
+                        unix_timestamp: row.get("unix_timestamp"),
+                    };
+
+                    Some((Path::new(&name).to_path_buf(), e))
                 })
-                .ok()?;
-
-            let e = AppliedFileEntry {
-                name: Path::new(&name).to_path_buf(),
-                hash: row.get("hash"),
-                state,
-                unix_timestamp: row.get("unix_timestamp"),
-            };
-
-            Some((Path::new(&name).to_path_buf(), e))
-        })
-        .collect();
+                .collect();
         Ok(map)
     }
 
@@ -248,37 +240,18 @@ impl<'u> UpdateFetcher<'u> {
         // Apply default updates
         for (avail_file, avail_file_state) in available.iter() {
             if !matches!(avail_file_state, FetcherState::Custom | FetcherState::Module) {
-                imported_updates += apply_update_file(
-                    self.update_cfg,
-                    pool,
-                    &mut applied,
-                    &hash_to_filename,
-                    &available,
-                    avail_file,
-                    avail_file_state,
-                )
-                .await?;
+                imported_updates += apply_update_file(self.update_cfg, pool, &mut applied, &hash_to_filename, &available, avail_file, avail_file_state).await?;
             }
         }
         // Apply only custom/module updates
         for (avail_file, avail_file_state) in available.iter() {
             if matches!(avail_file_state, FetcherState::Custom | FetcherState::Module) {
-                imported_updates += apply_update_file(
-                    self.update_cfg,
-                    pool,
-                    &mut applied,
-                    &hash_to_filename,
-                    &available,
-                    avail_file,
-                    avail_file_state,
-                )
-                .await?;
+                imported_updates += apply_update_file(self.update_cfg, pool, &mut applied, &hash_to_filename, &available, avail_file, avail_file_state).await?;
             }
         }
         // Cleanup up orphaned entries (if enabled)
         if !applied.is_empty() {
-            let do_cleanup =
-                self.update_cfg.CleanDeadRefMaxCount.is_none() || applied.len() <= self.update_cfg.CleanDeadRefMaxCount.unwrap();
+            let do_cleanup = self.update_cfg.CleanDeadRefMaxCount.is_none() || applied.len() <= self.update_cfg.CleanDeadRefMaxCount.unwrap();
             let to_cleanup = applied
                 .into_iter()
                 .filter_map(|entry| {
@@ -300,7 +273,10 @@ impl<'u> UpdateFetcher<'u> {
                 if do_cleanup {
                     clean_up(pool, to_cleanup).await?;
                 } else {
-                    error!("Cleanup is disabled! There were {} dirty files applied to your database, but they are now missing in your source directory!", to_cleanup.len());
+                    error!(
+                        "Cleanup is disabled! There were {} dirty files applied to your database, but they are now missing in your source directory!",
+                        to_cleanup.len()
+                    );
                 }
             }
         }
@@ -315,11 +291,7 @@ fn get_sha256_hash<P: AsRef<Path>>(fp: P) -> Result<String, DatabaseLoaderError>
             inner: e,
         })
         .inspect_err(|e| {
-            let f = if let DatabaseLoaderError::OpenApplyFile { file, .. } = e {
-                file
-            } else {
-                ""
-            };
+            let f = if let DatabaseLoaderError::OpenApplyFile { file, .. } = e { file } else { "" };
             error!(
                 "Failed to open the sql update {} for reading! \n\
                 Stopping the server to keep the database integrity, \n\
@@ -335,9 +307,7 @@ fn get_sha256_hash<P: AsRef<Path>>(fp: P) -> Result<String, DatabaseLoaderError>
 
 #[instrument(skip(pool))]
 async fn update_state(pool: &sqlx::Pool<MySql>, file_name: String, state: FetcherState) -> Result<(), DatabaseLoaderError> {
-    sqlx::query("UPDATE `updates` SET `state` = ? where `name` = ?")
-        .execute(pool)
-        .await?;
+    sql("UPDATE `updates` SET `state` = ? where `name` = ?").execute(pool).await?;
     Ok(())
 }
 
@@ -384,11 +354,7 @@ async fn apply_update_file(
             );
         } else {
             if iter.state != *file_state {
-                debug!(
-                    ">> Updating the state of \"{}\" to \'{:?}\'...",
-                    file_path.to_string_lossy(),
-                    file_state,
-                );
+                debug!(">> Updating the state of \"{}\" to \'{:?}\'...", file_path.to_string_lossy(), file_state,);
                 update_state(pool, file_path.to_string_lossy().to_string(), *file_state).await?
             }
             debug!(">> Update is already applied and matches the hash \'{}\'.", hash);
@@ -454,37 +420,28 @@ async fn apply_update_file(
 
 #[instrument(skip(pool))]
 async fn rename_entry(pool: &sqlx::Pool<MySql>, from: &str, to: &str) -> Result<(), DatabaseLoaderError> {
-    sqlx::query("DELETE FROM `updates` WHERE `name`= ?").bind(to).execute(pool).await?;
-    sqlx::query("UPDATE `updates` SET `name`=? WHERE `name`=?")
-        .bind(to)
-        .bind(from)
+    sql("DELETE FROM `updates` WHERE `name`= ?").bind(to).execute(pool).await?;
+    sql_w_args("UPDATE `updates` SET `name`=? WHERE `name`=?", qargs!(to, from))
         .execute(pool)
         .await?;
     Ok(())
 }
 
 #[instrument(skip(pool))]
-async fn update_entry(
-    pool: &sqlx::Pool<MySql>,
-    filename: &str,
-    hash: &str,
-    state: &FetcherState,
-    speed: Duration,
-) -> Result<(), DatabaseLoaderError> {
-    sqlx::query("REPLACE INTO `updates` (`name`, `hash`, `state`, `speed`) VALUES (?,?,?,?)")
-        .bind(filename)
-        .bind(hash)
-        .bind(state.to_string())
-        .bind(speed.as_millis().to_string())
-        .execute(pool)
-        .await?;
+async fn update_entry(pool: &sqlx::Pool<MySql>, filename: &str, hash: &str, state: &FetcherState, speed: Duration) -> Result<(), DatabaseLoaderError> {
+    sql_w_args(
+        "REPLACE INTO `updates` (`name`, `hash`, `state`, `speed`) VALUES (?,?,?,?)",
+        qargs!(filename, hash, state.to_string(), speed.as_millis().to_string()),
+    )
+    .execute(pool)
+    .await?;
     Ok(())
 }
 
 #[instrument(skip(pool))]
 async fn clean_up(pool: &sqlx::Pool<MySql>, storage: Vec<String>) -> Result<(), DatabaseLoaderError> {
-    let sql = format!("DELETE FROM `updates` WHERE `name` IN ({})", vec!["?"; storage.len()].join(","));
-    let mut q = sqlx::query(sql.as_str());
+    let q = format!("DELETE FROM `updates` WHERE `name` IN ({})", vec!["?"; storage.len()].join(","));
+    let mut q = sql(q.as_str());
     for name in storage {
         q = q.bind(name);
     }

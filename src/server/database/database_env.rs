@@ -24,7 +24,6 @@ mod world_db {
 }
 
 pub use character_db::{CharacterDatabase, HugSql as CharacterPreparedStmts};
-pub use hugsqlx::params as dbargs;
 pub use login_db::{HugSql as LoginPreparedStmts, LoginDatabase};
 pub use world_db::{HugSql as WorldPreparedStmts, WorldDatabase};
 

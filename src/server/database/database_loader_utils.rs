@@ -6,6 +6,8 @@ use sqlx::MySql;
 use thiserror::Error;
 use tracing::{error, info};
 
+use crate::server::database::sql;
+
 #[derive(Error, Debug)]
 pub enum DatabaseLoaderError {
     #[error("Database pool was NOT open. There were errors opening the connection or errors with the underlying driver.")]
@@ -57,7 +59,7 @@ pub async fn apply_file<P: AsRef<Path>>(pool: &sqlx::Pool<MySql>, f: P) -> Resul
         };
         let stmt_str = &file_data[p_span];
 
-        let res = sqlx::query(stmt_str).execute(&mut tx).await;
+        let res = sql(stmt_str).execute(&mut tx).await;
         if let Err(e) = res {
             error!(
                 "Applying of file \'{}\' to database failed!\n\

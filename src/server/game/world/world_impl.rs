@@ -1,7 +1,7 @@
 use tracing::info;
 
 use super::{world_trait::WorldTrait, WorldError};
-use crate::server::database::database_env::WorldDatabase;
+use crate::server::database::{database_env::WorldDatabase, sql_as};
 
 pub struct World {
     exit_code:                  Option<i32>,
@@ -26,7 +26,7 @@ impl WorldTrait for World {
     }
 
     async fn load_db_version(&mut self) -> Result<(), WorldError> {
-        let row: Option<(String, u32)> = sqlx::query_as("SELECT db_version, cache_id FROM version LIMIT 1")
+        let row: Option<(String, u32)> = sql_as("SELECT db_version, cache_id FROM version LIMIT 1")
             .fetch_optional(WorldDatabase::get())
             .await?;
 

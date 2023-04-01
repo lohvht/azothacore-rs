@@ -9,6 +9,9 @@ use crate::{
     server::database::{
         database_loader_utils::{apply_file, DatabaseLoaderError},
         database_update_fetcher::UpdateFetcher,
+        qargs,
+        sql,
+        sql_w_args,
     },
 };
 
@@ -16,7 +19,7 @@ use crate::{
 pub async fn db_updater_create(executor: &mut MySqlConnection, cfg: &DatabaseInfo) -> Result<(), DatabaseLoaderError> {
     warn!("Database {} does not exist!", cfg.DatabaseName);
     info!("Creating database '{}'...", cfg.DatabaseName);
-    sqlx::query(&format!(
+    sql(&format!(
         "CREATE DATABASE `{}` DEFAULT CHARACTER SET UTF8MB4 COLLATE utf8mb4_general_ci",
         cfg.DatabaseName
     ))
@@ -28,7 +31,7 @@ pub async fn db_updater_create(executor: &mut MySqlConnection, cfg: &DatabaseInf
 
 #[instrument(skip(pool))]
 pub async fn db_updater_populate(pool: &sqlx::Pool<MySql>, cfg: &DatabaseInfo) -> Result<(), DatabaseLoaderError> {
-    let res = sqlx::query("SHOW TABLES").fetch_optional(pool).await?;
+    let res = sql("SHOW TABLES").fetch_optional(pool).await?;
     if res.is_some() {
         return Ok(());
     }
@@ -81,12 +84,7 @@ pub async fn db_updater_update(
     check_update_table(pool, cfg, "updates_include").await?;
 
     let source_directory = ".".to_string();
-    let uf = UpdateFetcher::new(
-        source_directory,
-        cfg.DBModuleName.clone(),
-        modules_list.clone().into_iter(),
-        update_cfg,
-    );
+    let uf = UpdateFetcher::new(source_directory, cfg.DBModuleName.clone(), modules_list.clone().into_iter(), update_cfg);
 
     let (updated, recent, archived) = uf.update(pool).await?;
     let info = format!("Containing {} new and {} archived updates.", recent, archived);
@@ -100,10 +98,7 @@ pub async fn db_updater_update(
 
 #[instrument(skip(pool))]
 async fn check_update_table(pool: &sqlx::Pool<MySql>, cfg: &DatabaseInfo, table_name: &str) -> Result<(), DatabaseLoaderError> {
-    let res = sqlx::query(&format!("SHOW TABLES LIKE '{}'", table_name))
-        .bind(table_name)
-        .fetch_optional(pool)
-        .await?;
+    let res = sql_w_args("SHOW TABLES LIKE ?", qargs!(table_name)).fetch_optional(pool).await?;
     if res.is_some() {
         return Ok(());
     }

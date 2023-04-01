@@ -18,6 +18,8 @@ use azothacore_rs::{
         database::{
             database_env::{CharacterDatabase, LoginDatabase, WorldDatabase},
             database_loader::DatabaseLoader,
+            qargs,
+            sql_w_args,
         },
         game::{
             scripting::ScriptMgr,
@@ -143,13 +145,18 @@ async fn main() -> GenericResult {
     handles.push(Box::new(stop_db()));
 
     // set server offline (not connectable)
+
     let realm_id = S_CONFIG_MGR.read().await.world().RealmID;
-    sqlx::query("UPDATE realmlist SET flag = (flag & ~?) | ? WHERE id = ?")
-        .bind(FlagSet::from(RealmFlags::Offline).bits())
-        .bind(FlagSet::from(RealmFlags::VersionMismatch).bits())
-        .bind(realm_id)
-        .execute(LoginDatabase::get())
-        .await?;
+    sql_w_args(
+        "UPDATE realmlist SET flag = (flag & ~?) | ? WHERE id = ?",
+        qargs!(
+            FlagSet::from(RealmFlags::Offline).bits(),
+            FlagSet::from(RealmFlags::VersionMismatch).bits(),
+            realm_id
+        ),
+    )
+    .execute(LoginDatabase::get())
+    .await?;
 
     load_realm_info().await?;
 
@@ -230,9 +237,7 @@ async fn start_db() -> GenericResult {
     clear_online_accounts(realm_id).await?;
 
     // Insert version info into DB
-    sqlx::query("UPDATE version SET core_version = ?, core_revision = ?")
-        .bind(GIT_VERSION)
-        .bind(GIT_HASH)
+    sql_w_args("UPDATE version SET core_version = ?, core_revision = ?", qargs!(GIT_VERSION, GIT_HASH))
         .execute(WorldDatabase::get())
         .await?;
 
@@ -258,15 +263,11 @@ async fn stop_db() -> GenericResult {
 async fn clear_online_accounts(realm_id: u32) -> GenericResult {
     // Reset online status for all accounts with characters on the current realm
     // pussywizard: tc query would set online=0 even if logged in on another realm >_>
-    sqlx::query("UPDATE account SET online = ? WHERE online = ?")
-        .bind(false)
-        .bind(realm_id)
+    sql_w_args("UPDATE account SET online = ? WHERE online = ?", qargs!(false, realm_id))
         .execute(LoginDatabase::get())
         .await?;
     // Reset online status for all characters
-    sqlx::query("UPDATE characters SET online = ? WHERE online <> ?")
-        .bind(false)
-        .bind(false)
+    sql_w_args("UPDATE characters SET online = ? WHERE online <> ?", qargs!(false, false))
         .execute(LoginDatabase::get())
         .await?;
 
@@ -277,9 +278,10 @@ async fn clear_online_accounts(realm_id: u32) -> GenericResult {
 async fn load_realm_info() -> GenericResult {
     let realm_id = S_CONFIG_MGR.read().await.world().RealmID;
 
-    let realm = sqlx::query(
+    let realm = sql_w_args(
         "SELECT id, name, address, localAddress, localSubnetMask, port, icon, flag, timezone, allowedSecurityLevel, population, gamebuild FROM realmlist WHERE id = ?",
-    ).bind(realm_id).try_map(|r| {
+        qargs!(realm_id),
+    ).try_map(|r| {
         use sqlx::Row;
         let id = r.try_get("id")?;
         let name = r.try_get("name")?;
