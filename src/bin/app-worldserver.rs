@@ -79,7 +79,7 @@ fn signal_handler() -> JoinHandle<Result<(), std::io::Error>> {
 }
 
 #[tokio::main]
-async fn main() -> GenericResult {
+async fn main() -> GenericResult<()> {
     let _wg = init_logging();
     ThisServerProcess::set(ServerProcessType::Worldserver);
     let vm = ConsoleArgs::parse();
@@ -96,7 +96,7 @@ async fn main() -> GenericResult {
     // sLog->Initialize(sConfigMgr->GetOption<bool>("Log.Async.Enable", false) ? ioContext.get() : nullptr);
 
     let filename = S_CONFIG_MGR.read().await.get_filename().clone();
-    banner::azotha_banner_show("worldserver-daemon", Some(|| info!("> Using configuration file       {}", filename)));
+    banner::azotha_banner_show("worldserver-daemon", || info!("> Using configuration file       {}", filename));
     // Seed the OsRng here.
     // That way it won't auto-seed when calling OsRng and slow down the first world login
     OsRng.gen_bigint(16 * 8);
@@ -133,7 +133,7 @@ async fn main() -> GenericResult {
     // // TODO: Implement process priority?
     // // Set process priority according to configuration settings
     // SetProcessPriority("server.worldserver", sConfigMgr->GetOption<int32>(CONFIG_PROCESSOR_AFFINITY, 0), sConfigMgr->GetOption<bool>(CONFIG_HIGH_PRIORITY, false));
-    let mut handles: Vec<Box<dyn Future<Output = GenericResult>>> = Vec::new();
+    let mut handles: Vec<Box<dyn Future<Output = GenericResult<()>>>> = Vec::new();
     // Loading the modules/scripts before configs as the hooks are required!
     info!("Initializing Scripts...");
     ScriptMgr::initialise().await?;
@@ -175,10 +175,13 @@ async fn main() -> GenericResult {
     //     sMetric->Unload();
     // });
 
-    // // TODO: hirogoro@29/03/2023
+    // TODO: hirogoro@29/03/2023: implement secrets mgr?
     // //- Initialize the World
     // sSecretMgr->Initialize();
+
+    // // TODO: hirogoro@29/03/2023: Implement set initial world settings
     // sWorld->SetInitialWorldSettings();
+    S_WORLD.write().await.set_initial_world_settings().await?;
 
     // Begin shutdown, waiting for signal handler first. Then unload everything else.
     signal_handler.await??;
@@ -195,7 +198,7 @@ async fn main() -> GenericResult {
     Ok(())
 }
 
-async fn start_db() -> GenericResult {
+async fn start_db() -> GenericResult<()> {
     let (realm_id, updates, auth_cfg, world_cfg, character_cfg) = {
         let config_mgr_r = S_CONFIG_MGR.read().await;
         let world_cfg = config_mgr_r.world();
@@ -250,7 +253,7 @@ async fn start_db() -> GenericResult {
     Ok(())
 }
 
-async fn stop_db() -> GenericResult {
+async fn stop_db() -> GenericResult<()> {
     LoginDatabase::get().close().await;
     WorldDatabase::get().close().await;
     CharacterDatabase::get().close().await;
@@ -260,7 +263,7 @@ async fn stop_db() -> GenericResult {
 
 /// Clear 'online' status for all accounts with characters in this realm
 #[instrument]
-async fn clear_online_accounts(realm_id: u32) -> GenericResult {
+async fn clear_online_accounts(realm_id: u32) -> GenericResult<()> {
     // Reset online status for all accounts with characters on the current realm
     // pussywizard: tc query would set online=0 even if logged in on another realm >_>
     sql_w_args("UPDATE account SET online = ? WHERE online = ?", qargs!(false, realm_id))
@@ -275,7 +278,7 @@ async fn clear_online_accounts(realm_id: u32) -> GenericResult {
 }
 
 #[instrument]
-async fn load_realm_info() -> GenericResult {
+async fn load_realm_info() -> GenericResult<()> {
     let realm_id = S_CONFIG_MGR.read().await.world().RealmID;
 
     let realm = sql_w_args(

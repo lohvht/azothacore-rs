@@ -88,13 +88,13 @@ impl ConfigMgr {
 
     /// Loads the main app configuration. This doesnt load the module configurations
     #[instrument(skip(self))]
-    pub fn load_app_configs(&mut self) -> GenericResult {
+    pub fn load_app_configs(&mut self) -> GenericResult<()> {
         self.config = Some(Config::toml_from_filepath(self.filename.as_str())?);
         Ok(())
     }
 
     #[instrument(skip(self))]
-    pub async fn load_modules_configs(&mut self, is_reload: bool, is_need_print_info: bool) -> GenericResult {
+    pub async fn load_modules_configs(&mut self, is_reload: bool, is_need_print_info: bool) -> GenericResult<()> {
         // if self.list_of_modules
         if self.list_of_modules.is_empty() {
             return Ok(());
@@ -105,10 +105,7 @@ impl ConfigMgr {
         let script_configs = match ScriptMgr::on_load_module_config(is_reload).await {
             Err(e) => {
                 if !is_reload {
-                    error!(
-                        "error loading initial module configuration for script. Stop loading!\nError was {}",
-                        e,
-                    );
+                    error!("error loading initial module configuration for script. Stop loading!\nError was {}", e,);
                     return Err(e);
                 }
                 error!("error loading module configuration for script.\nError was {}.", e,);

@@ -1,5 +1,5 @@
 [package]
-name = "azothacore_proc_macros"
+name = "azothacore-proc-macros"
 version = "0.1.0"
 edition = "2021"
 

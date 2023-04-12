@@ -16,7 +16,7 @@ pub trait ScriptObject: Sync + Send {
     fn is_database_bound(&self) -> bool {
         false
     }
-    fn check_validity(&self) -> GenericResult {
+    fn check_validity(&self) -> GenericResult<()> {
         Ok(())
     }
 }
@@ -83,7 +83,7 @@ pub struct ScriptMgr {
 }
 
 impl ScriptMgr {
-    pub async fn initialise() -> GenericResult {
+    pub async fn initialise() -> GenericResult<()> {
         info!("initialising scripts...");
         scripts::register().await?;
         modules::register().await?;
@@ -91,7 +91,7 @@ impl ScriptMgr {
         Ok(())
     }
 
-    pub async fn unload() -> GenericResult {
+    pub async fn unload() -> GenericResult<()> {
         WorldScriptRegistry::unload().await;
         DatabaseScriptRegistry::unload().await;
 

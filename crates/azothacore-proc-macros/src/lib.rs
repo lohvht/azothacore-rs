@@ -23,6 +23,13 @@ pub fn scripts_registration(input: TokenStream) -> TokenStream {
     let binding = source.path();
     let mut directory = binding.parent().unwrap().to_path_buf();
     directory.push(child_dir);
+    // eprintln!(
+    //     "binding >>>\n{}>>>\n{}>>>\n{}>>>\n{}\n<<< binding",
+    //     binding.to_string_lossy(),
+    //     binding.parent().unwrap().to_string_lossy(),
+    //     directory.to_string_lossy(),
+    //     directory.is_dir(),
+    // );
     if !directory.is_dir() {
         // Generate nothing if the source isnt real, somehow
         return String::new().parse().unwrap();
@@ -84,6 +91,7 @@ pub fn scripts_registration(input: TokenStream) -> TokenStream {
         #register_fn
         #registed_module_slice
     };
+    // eprintln!("BODY>>>\n{}\n<<<BODY", expanded);
 
     TokenStream::from(expanded)
 }

@@ -1,0 +1,7 @@
+[submodule "recastnavigation"]
+	path = crates/recastnavigation-sys/recastnavigation
+	url = https://github.com/recastnavigation/recastnavigation
+
+[submodule "CascLib"]
+	path = crates/casclib-sys/CascLib
+	url = https://github.com/ladislav-zezula/CascLib

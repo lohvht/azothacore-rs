@@ -1,7 +1,8 @@
-use num_derive::ToPrimitive;
+use num_derive::{FromPrimitive, ToPrimitive};
 use once_cell::sync::OnceCell;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, ToPrimitive)]
+#[derive(Debug, Clone, ToPrimitive, FromPrimitive, Deserialize, Serialize, PartialEq)]
 pub enum ServerProcessType {
     Authserver = 0,
     Worldserver = 1,

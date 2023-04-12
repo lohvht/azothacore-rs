@@ -19,12 +19,13 @@ const BANNER: &str = r#"
 
 "#;
 
-pub fn azotha_banner_show(application_name: &str, log_extra_info: Option<impl Fn()>) {
+pub fn azotha_banner_show<F>(application_name: &str, log_extra_info: F)
+where
+    F: Fn(),
+{
     info!("{} ({})", GIT_VERSION, application_name);
     info!("<Ctrl-C> to stop.\n");
     info!("{}", BANNER);
 
-    if let Some(lei) = log_extra_info {
-        lei();
-    }
+    log_extra_info();
 }

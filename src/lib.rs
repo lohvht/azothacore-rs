@@ -14,7 +14,8 @@ pub mod logging;
 pub mod macros;
 pub mod modules;
 pub mod server;
+pub mod tools;
 
 pub use compile_options::*;
 
-pub type GenericResult = Result<(), Box<dyn std::error::Error>>;
+pub type GenericResult<T> = Result<T, Box<dyn std::error::Error>>;
