@@ -1,5 +1,5 @@
 [package]
-name = "wow_db2"
+name = "wow-db2-serde"
 version = "0.1.0"
 edition = "2021"
 

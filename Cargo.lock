@@ -234,7 +234,8 @@ dependencies = [
  "tracing-log",
  "tracing-subscriber",
  "walkdir",
- "wow_db2",
+ "wow-db2",
+ "wow-db2-serde",
 ]
 
 [[package]]
@@ -2814,7 +2815,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "wow_db2"
+name = "wow-db2"
+version = "0.1.0"
+
+[[package]]
+name = "wow-db2-serde"
 version = "0.1.0"
 
 [[package]]
