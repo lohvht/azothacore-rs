@@ -11,7 +11,7 @@ use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use flagset::{flags, FlagSet};
 use itertools::{FoldWhile, Itertools};
 
-use crate::{DB2Field, DB2FieldType, DB2RawRecord};
+use crate::{new_localised_string, DB2Field, DB2FieldType, DB2RawRecord};
 
 flags! {
     pub enum WDCFlags: u16 {
@@ -439,6 +439,7 @@ pub struct FileLoader<W>
 where
     W: WDC1,
 {
+    locale:                u32,
     header:                WDC1Header,
     field_data:            Vec<FieldStructure>,
     id_list:               Vec<u32>,
@@ -460,7 +461,7 @@ impl<W> FileLoader<W>
 where
     W: WDC1 + From<DB2RawRecord>,
 {
-    pub fn from_reader<R>(mut rdr: R) -> Result<FileLoader<W>, io::Error>
+    pub fn from_reader<R>(mut rdr: R, locale: u32) -> Result<FileLoader<W>, io::Error>
     where
         R: io::Read,
     {
@@ -493,6 +494,14 @@ where
                 ));
             }
         }
+        if (header.locale & (1 << locale)) == 0 {
+            let header_locale = header.locale;
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                format!("Attempted to load locale {locale} for db2 which has locales {header_locale}. Check if you placed your localised db2 files in correct directory."),
+            ));
+        }
+
         if header.lookup_column_count > 1 {
             return Err(io::Error::new(io::ErrorKind::Other, "lookup_column_count is greater than 1"));
         }
@@ -671,6 +680,7 @@ where
             ));
         }
         Ok(Self {
+            locale,
             header,
             field_data,
             id_list,
@@ -900,7 +910,10 @@ where
                     DB2FieldType::String => {
                         let mut vs = vec![];
                         for array_idx in 0..*arity {
-                            vs.push(self.record_get_string(raw_record, &offset_map_field_and_array_offsets, record_number, *field_idx, array_idx)?);
+                            let mut s = new_localised_string();
+                            s[self.locale as usize] =
+                                self.record_get_string(raw_record, &offset_map_field_and_array_offsets, record_number, *field_idx, array_idx)?;
+                            vs.push(s);
                         }
                         DB2Field::String(vs)
                     },

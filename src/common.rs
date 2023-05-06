@@ -3,7 +3,7 @@ use std::{
     str::FromStr,
 };
 
-use flagset::FlagSet;
+use flagset::{flags, FlagSet};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use thiserror::Error;
@@ -38,21 +38,22 @@ impl TryFrom<u8> for AccountTypes {
     }
 }
 
-#[allow(non_camel_case_types)]
-#[derive(Debug, Clone, Copy)]
-pub enum Locale {
-    enUS = 0,
-    koKR = 1,
-    frFR = 2,
-    deDE = 3,
-    zhCN = 4,
-    zhTW = 5,
-    esES = 6,
-    esMX = 7,
-    ruRU = 8,
-    none = 9,
-    ptBR = 10,
-    itIT = 11,
+flags! {
+    #[allow(non_camel_case_types)]
+    pub enum Locale: u32 {
+        enUS = 0,
+        koKR = 1,
+        frFR = 2,
+        deDE = 3,
+        zhCN = 4,
+        zhTW = 5,
+        esES = 6,
+        esMX = 7,
+        ruRU = 8,
+        none = 9,
+        ptBR = 10,
+        itIT = 11,
+    }
 }
 
 impl Locale {
@@ -71,6 +72,10 @@ impl Locale {
             Locale::ptBR => CascLocale::Ptbr | CascLocale::Ptpt,
             Locale::itIT => CascLocale::Itit.into(),
         }
+    }
+
+    pub fn to_flagset(self) -> FlagSet<Locale> {
+        self.into()
     }
 }
 

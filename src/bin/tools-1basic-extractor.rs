@@ -5,13 +5,13 @@ use std::{
     fs,
     io::{self},
     path::{Path, PathBuf},
-    process::{self, ExitCode},
     str::FromStr,
 };
 
 use azothacore_rs::{
     common::{banner, Locale, LocaleParseError},
     logging::init_logging,
+    server::shared::data_stores::db2_structure::{CinematicCamera, LiquidMaterial, LiquidObject, LiquidType, Map},
     tools::{
         extractor_common::casc_handles::{CascFileHandle, CascHandlerError, CascLocale, CascStorageHandle},
         wow7_3_5_26972::basic_extractor::DB_FILES_CLIENT_LIST,
@@ -22,6 +22,7 @@ use clap::Parser;
 use flagset::{flags, FlagSet};
 use tracing::{error, info};
 use walkdir::WalkDir;
+use wow_db2::wdc1;
 
 flags! {
     enum ExtractFlags: u8 {
@@ -67,6 +68,18 @@ impl Args {
 
     fn should_extract(&self, f: ExtractFlags) -> bool {
         (self.extract & FlagSet::from(f).bits()) > 0
+    }
+
+    fn output_camera_path(&self) -> PathBuf {
+        Path::new(self.output_path.as_str()).join("cameras")
+    }
+
+    fn output_gametable_path(&self) -> PathBuf {
+        Path::new(self.output_path.as_str()).join("gt")
+    }
+
+    fn output_map_path(&self) -> PathBuf {
+        Path::new(self.output_path.as_str()).join("maps")
     }
 }
 
@@ -219,21 +232,108 @@ fn extract_camera_files(args: &Args, locale: Locale) -> GenericResult<()> {
     info!("Extracting camera files...");
 
     let storage = get_casc_storage_handler(&args, locale)?;
+    let camera_file_names = read_cinematic_camera_dbc(&storage, locale)?;
 
-    read_cinematic_camera_dbc(&storage)?;
+    let output_path = args.output_camera_path();
 
-    todo!();
+    fs::create_dir_all(&output_path)?;
+
+    info!("output camera path is {}", output_path.display());
+
+    // extract M2s
+    let mut count = 0;
+    for camera_file_name in camera_file_names {
+        let mut dbc_file = storage.open_file(&camera_file_name, CascLocale::None.into())?;
+        let file_path = output_path.join(get_casc_filename_part(&camera_file_name));
+        if file_path.exists() {
+            continue;
+        }
+        if extract_file(&mut dbc_file, file_path).is_err() {
+            continue;
+        }
+        count += 1;
+    }
+    info!("Extracted {count} camera files");
+
+    Ok(())
 }
 
-fn read_cinematic_camera_dbc(storage: &CascStorageHandle) -> GenericResult<()> {
+fn read_cinematic_camera_dbc(storage: &CascStorageHandle, locale: Locale) -> GenericResult<Vec<String>> {
     info!("Read CinematicCamera.db2 file...");
-    let mut source = storage.open_file("DBFilesClient/CinematicCamera.db2", CascLocale::None.into())?;
+    let source = storage.open_file("DBFilesClient/CinematicCamera.db2", CascLocale::None.into())?;
+    let fl = wdc1::FileLoader::<CinematicCamera>::from_reader(source, locale as u32)?;
+    let data = fl.produce_data()?;
 
-    todo!();
+    let res = data
+        .values()
+        .map(|d| {
+            let fid = d.file_data_id;
+            format!("FILE{fid:08X}.xxx")
+        })
+        .collect::<Vec<_>>();
+
+    info!("Done! ({} CinematicCameras loaded)", res.len());
+    Ok(res)
 }
 
 fn extract_game_tables(args: &Args, locale: Locale) -> GenericResult<()> {
-    todo!();
+    info!("Extracting game tables...");
+    let storage = get_casc_storage_handler(args, locale)?;
+    let output_path = args.output_gametable_path();
+
+    fs::create_dir_all(&output_path)?;
+
+    info!("output game table path is {}", output_path.display());
+
+    let game_tables = [
+        "GameTables/ArmorMitigationByLvl.txt",
+        "GameTables/ArtifactKnowledgeMultiplier.txt",
+        "GameTables/ArtifactLevelXP.txt",
+        "GameTables/BarberShopCostBase.txt",
+        "GameTables/BaseMp.txt",
+        "GameTables/BattlePetTypeDamageMod.txt",
+        "GameTables/BattlePetXP.txt",
+        "GameTables/ChallengeModeDamage.txt",
+        "GameTables/ChallengeModeHealth.txt",
+        "GameTables/CombatRatings.txt",
+        "GameTables/CombatRatingsMultByILvl.txt",
+        "GameTables/HonorLevel.txt",
+        "GameTables/HpPerSta.txt",
+        "GameTables/ItemSocketCostPerLevel.txt",
+        "GameTables/NpcDamageByClass.txt",
+        "GameTables/NpcDamageByClassExp1.txt",
+        "GameTables/NpcDamageByClassExp2.txt",
+        "GameTables/NpcDamageByClassExp3.txt",
+        "GameTables/NpcDamageByClassExp4.txt",
+        "GameTables/NpcDamageByClassExp5.txt",
+        "GameTables/NpcDamageByClassExp6.txt",
+        "GameTables/NPCManaCostScaler.txt",
+        "GameTables/NpcTotalHp.txt",
+        "GameTables/NpcTotalHpExp1.txt",
+        "GameTables/NpcTotalHpExp2.txt",
+        "GameTables/NpcTotalHpExp3.txt",
+        "GameTables/NpcTotalHpExp4.txt",
+        "GameTables/NpcTotalHpExp5.txt",
+        "GameTables/NpcTotalHpExp6.txt",
+        "GameTables/SandboxScaling.txt",
+        "GameTables/SpellScaling.txt",
+        "GameTables/xp.txt",
+    ];
+
+    let mut count = 0;
+    for file_name in game_tables {
+        let mut dbc_file = storage.open_file(&file_name, CascLocale::None.into())?;
+        let file_path = output_path.join(get_casc_filename_part(&file_name));
+        if file_path.exists() {
+            continue;
+        }
+        if extract_file(&mut dbc_file, file_path).is_err() {
+            continue;
+        }
+        count += 1;
+    }
+    info!("Extracted {count} game table files");
+    Ok(())
 }
 
 fn extract_maps(args: &Args, locale: Locale, build_no: u32) -> GenericResult<()> {

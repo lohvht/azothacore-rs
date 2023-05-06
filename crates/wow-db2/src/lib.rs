@@ -34,6 +34,26 @@ impl DB2FieldType {
     }
 }
 
+pub type LocalisedString = [String; 12];
+
+pub fn new_localised_string() -> LocalisedString {
+    let ss = [
+        String::from(""),
+        String::from(""),
+        String::from(""),
+        String::from(""),
+        String::from(""),
+        String::from(""),
+        String::from(""),
+        String::from(""),
+        String::from(""),
+        String::from(""),
+        String::from(""),
+        String::from(""),
+    ];
+    ss
+}
+
 #[derive(Debug, Clone)]
 pub enum DB2Field {
     I64(Vec<i64>),
@@ -45,7 +65,7 @@ pub enum DB2Field {
     U16(Vec<u16>),
     U8(Vec<u8>),
     F32(Vec<f32>),
-    String(Vec<String>),
+    String(Vec<LocalisedString>),
 }
 
 #[derive(Debug, Clone)]

@@ -1,3 +1,4 @@
+use wow_db2::LocalisedString;
 use wow_db2_proc_macros::WDC1;
 
 #[derive(WDC1, Default, Debug)]
@@ -21,9 +22,9 @@ pub struct GarrItemLevelUpgradeData {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x2C4BE18C)]
 pub struct Achievement {
-    pub title:            String,
-    pub description:      String,
-    pub reward:           String,
+    pub title:            LocalisedString,
+    pub description:      LocalisedString,
+    pub reward:           LocalisedString,
     pub flags:            i32,
     /// -1 = none
     pub instance_id:      i16,
@@ -67,8 +68,8 @@ pub struct AreaGroupMember {
 #[layout_hash(0x0CA01129)]
 pub struct AreaTable {
     pub id: u32,
-    pub zone_name: String,
-    pub area_name: String,
+    pub zone_name: LocalisedString,
+    pub area_name: LocalisedString,
     pub flags: [i32; 2],
     pub ambient_multiplier: f32,
     pub continent_id: u16,
@@ -140,7 +141,7 @@ pub struct ArmorLocation {
 #[layout_hash(0x76CF31A8)]
 pub struct Artifact {
     pub id: u32,
-    pub name: String,
+    pub name: LocalisedString,
     pub ui_bar_overlay_color: i32,
     pub ui_bar_background_color: i32,
     pub ui_name_color: i32,
@@ -155,7 +156,7 @@ pub struct Artifact {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xAEED7395)]
 pub struct ArtifactAppearance {
-    pub name: String,
+    pub name: LocalisedString,
     pub ui_swatch_color: i32,
     pub ui_model_saturation: f32,
     pub ui_model_opacity: f32,
@@ -177,8 +178,8 @@ pub struct ArtifactAppearance {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x53DFED74)]
 pub struct ArtifactAppearanceSet {
-    pub name: String,
-    pub description: String,
+    pub name: LocalisedString,
+    pub description: LocalisedString,
     pub ui_camera_id: u16,
     pub alt_hand_ui_camera_id: u16,
     pub display_index: u8,
@@ -273,7 +274,7 @@ pub struct ArtifactUnlock {
 #[layout_hash(0x51CFEEFF)]
 pub struct AuctionHouse {
     pub id:               u32,
-    pub name:             String,
+    pub name:             LocalisedString,
     /// id of faction.dbc for player factions associated with city
     pub faction_id:       u16,
     pub deposit_rate:     u8,
@@ -291,16 +292,16 @@ pub struct BankBagSlotPrices {
 #[layout_hash(0xF779B6E5)]
 pub struct BannedAddons {
     pub id:      u32,
-    pub name:    String,
-    pub version: String,
+    pub name:    LocalisedString,
+    pub version: LocalisedString,
     pub flags:   u8,
 }
 
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x670C71AE)]
 pub struct BarberShopStyle {
-    pub display_name:  String,
-    pub description:   String,
+    pub display_name:  LocalisedString,
+    pub description:   LocalisedString,
     pub cost_modifier: f32,
     /// value 0 -> hair, value 2 -> facialhair
     pub typ:           u8,
@@ -333,8 +334,8 @@ pub struct BattlePetBreedState {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x8A3D97A4)]
 pub struct BattlePetSpecies {
-    pub source_text: String,
-    pub description: String,
+    pub source_text: LocalisedString,
+    pub description: LocalisedString,
     pub creature_id: i32,
     pub icon_file_data_id: i32,
     pub summon_spell_id: i32,
@@ -361,10 +362,10 @@ pub struct BattlePetSpeciesState {
 #[layout_hash(0xD8AAA088)]
 pub struct BattlemasterList {
     pub id: u32,
-    pub name: String,
-    pub game_type: String,
-    pub short_description: String,
-    pub long_description: String,
+    pub name: LocalisedString,
+    pub game_type: LocalisedString,
+    pub short_description: LocalisedString,
+    pub long_description: LocalisedString,
     pub icon_file_data_id: i32,
     pub map_id: [i16; 16],
     pub holiday_world_state: i16,
@@ -384,8 +385,8 @@ pub struct BattlemasterList {
 #[layout_hash(0x51BF0C33)]
 pub struct BroadcastText {
     pub id:               u32,
-    pub text:             String,
-    pub text1:            String,
+    pub text:             LocalisedString,
+    pub text1:            LocalisedString,
     pub emote_id:         [u16; 3],
     pub emote_delay:      [u16; 3],
     pub emotes_id:        u16,
@@ -400,7 +401,7 @@ pub struct BroadcastText {
 #[layout_hash(0x9F4272BF)]
 pub struct Cfg_Regions {
     pub id:                u32,
-    pub tag:               String,
+    pub tag:               LocalisedString,
     /// Date of first raid reset, all other resets are calculated as this date plus interval
     pub raidorigin:        u32,
     pub challenge_origin:  u32,
@@ -460,8 +461,8 @@ pub struct CharStartOutfit {
 #[layout_hash(0x7A58AA5F)]
 pub struct CharTitles {
     pub id:      u32,
-    pub name:    String,
-    pub name1:   String,
+    pub name:    LocalisedString,
+    pub name1:   LocalisedString,
     pub mask_id: i16,
     pub flags:   i8,
 }
@@ -470,8 +471,8 @@ pub struct CharTitles {
 #[layout_hash(0x1A325E80)]
 pub struct ChatChannels {
     pub id:            u32,
-    pub name:          String,
-    pub shortcut:      String,
+    pub name:          LocalisedString,
+    pub shortcut:      LocalisedString,
     pub flags:         i32,
     pub faction_group: i8,
 }
@@ -479,11 +480,11 @@ pub struct ChatChannels {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x6F7AB8E7)]
 pub struct ChrClasses {
-    pub pet_name_token: String,
-    pub name: String,
-    pub name_female: String,
-    pub name_male: String,
-    pub filename: String,
+    pub pet_name_token: LocalisedString,
+    pub name: LocalisedString,
+    pub name_female: LocalisedString,
+    pub name_male: LocalisedString,
+    pub filename: LocalisedString,
     pub create_screen_file_data_id: u32,
     pub select_screen_file_data_id: u32,
     pub low_res_screen_file_data_id: u32,
@@ -514,12 +515,12 @@ pub struct ChrClassesXPowerTypes {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x51C511F9)]
 pub struct ChrRaces {
-    pub client_prefix: String,
-    pub client_file_string: String,
-    pub name: String,
-    pub name_female: String,
-    pub name_lowercase: String,
-    pub name_female_lowercase: String,
+    pub client_prefix: LocalisedString,
+    pub client_file_string: LocalisedString,
+    pub name: LocalisedString,
+    pub name_female: LocalisedString,
+    pub name_lowercase: LocalisedString,
+    pub name_female_lowercase: LocalisedString,
     pub flags: i32,
     pub male_display_id: u32,
     pub female_display_id: u32,
@@ -558,9 +559,9 @@ pub struct ChrRaces {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x3D86B8F7)]
 pub struct ChrSpecialization {
-    pub name:                  String,
-    pub female_name:           String,
-    pub description:           String,
+    pub name:                  LocalisedString,
+    pub female_name:           LocalisedString,
+    pub description:           LocalisedString,
     pub mastery_spell_id:      [i32; 2],
     #[parent]
     pub class_id:              i8,
@@ -669,7 +670,7 @@ pub struct CreatureDisplayInfoExtra {
 #[layout_hash(0xE2DC5126)]
 pub struct CreatureFamily {
     pub id:              u32,
-    pub name:            String,
+    pub name:            LocalisedString,
     pub min_scale:       f32,
     pub max_scale:       f32,
     pub icon_file_id:    i32,
@@ -718,7 +719,7 @@ pub struct CreatureModelData {
 #[layout_hash(0x7BA9D2F8)]
 pub struct CreatureType {
     pub id:    u32,
-    pub name:  String,
+    pub name:  LocalisedString,
     pub flags: u8,
 }
 
@@ -743,7 +744,7 @@ pub struct Criteria {
 #[layout_hash(0x0A1B99C2)]
 pub struct CriteriaTree {
     pub id:          u32,
-    pub description: String,
+    pub description: LocalisedString,
     pub amount:      i32,
     pub flags:       i16,
     pub operator:    i8,
@@ -756,8 +757,8 @@ pub struct CriteriaTree {
 #[layout_hash(0x6CC25CBF)]
 pub struct CurrencyTypes {
     pub id:                     u32,
-    pub name:                   String,
-    pub description:            String,
+    pub name:                   LocalisedString,
+    pub description:            LocalisedString,
     pub max_qty:                u32,
     pub max_earnable_per_week:  u32,
     pub flags:                  u32,
@@ -817,7 +818,7 @@ pub struct DestructibleModelData {
 #[layout_hash(0x92302BB8)]
 pub struct Difficulty {
     pub id: u32,
-    pub name: String,
+    pub name: LocalisedString,
     pub group_size_health_curve_id: u16,
     pub group_size_dmg_curve_id: u16,
     pub group_size_spell_points_curve_id: u16,
@@ -835,7 +836,7 @@ pub struct Difficulty {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xB04A2596)]
 pub struct DungeonEncounter {
-    pub name:                String,
+    pub name:                LocalisedString,
     pub creature_display_id: i32,
     #[parent]
     pub map_id:              i16,
@@ -868,7 +869,7 @@ pub struct DurabilityQuality {
 pub struct Emotes {
     pub id:                    u32,
     pub race_mask:             i64,
-    pub emote_slash_command:   String,
+    pub emote_slash_command:   LocalisedString,
     pub emote_flags:           u32,
     pub spell_visual_kit_id:   u32,
     pub anim_id:               i16,
@@ -882,7 +883,7 @@ pub struct Emotes {
 #[layout_hash(0xE85AFA10)]
 pub struct EmotesText {
     pub id:       u32,
-    pub name:     String,
+    pub name:     LocalisedString,
     pub emote_id: u16,
 }
 
@@ -902,8 +903,8 @@ pub struct EmotesTextSound {
 #[layout_hash(0x6BFE8737)]
 pub struct Faction {
     pub reputation_race_mask:  [i64; 4],
-    pub name:                  String,
-    pub description:           String,
+    pub name:                  LocalisedString,
+    pub description:           LocalisedString,
     #[id]
     pub id:                    u32,
     pub reputation_base:       [i32; 4],
@@ -1022,7 +1023,7 @@ pub struct GameObjectDisplayInfo {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x597E8643)]
 pub struct GameObjects {
-    pub name:            String,
+    pub name:            LocalisedString,
     pub pos:             [f32; 3],
     pub rot:             [f32; 4],
     pub scale:           f32,
@@ -1041,8 +1042,8 @@ pub struct GameObjects {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x5DF95DBD)]
 pub struct GarrAbility {
-    pub name: String,
-    pub description: String,
+    pub name: LocalisedString,
+    pub description: LocalisedString,
     pub icon_file_data_id: i32,
     pub flags: u16,
     pub faction_change_garr_ability_id: u16,
@@ -1056,10 +1057,10 @@ pub struct GarrAbility {
 #[layout_hash(0x200F9858)]
 pub struct GarrBuilding {
     pub id: u32,
-    pub alliance_name: String,
-    pub horde_name: String,
-    pub description: String,
-    pub tooltip: String,
+    pub alliance_name: LocalisedString,
+    pub horde_name: LocalisedString,
+    pub description: LocalisedString,
+    pub tooltip: LocalisedString,
     pub horde_game_object_id: i32,
     pub alliance_game_object_id: i32,
     pub icon_file_data_id: i32,
@@ -1097,9 +1098,9 @@ pub struct GarrBuildingPlotInst {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x194CD478)]
 pub struct GarrClassSpec {
-    pub class_spec: String,
-    pub class_spec_male: String,
-    pub class_spec_female: String,
+    pub class_spec: LocalisedString,
+    pub class_spec_male: LocalisedString,
+    pub class_spec_female: LocalisedString,
     pub ui_texture_atlas_member_id: u16,
     pub garr_foll_item_set_id: u16,
     pub follower_class_limit: u8,
@@ -1111,9 +1112,9 @@ pub struct GarrClassSpec {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xAAB75E04)]
 pub struct GarrFollower {
-    pub horde_source_text: String,
-    pub alliance_source_text: String,
-    pub title_name: String,
+    pub horde_source_text: LocalisedString,
+    pub alliance_source_text: LocalisedString,
+    pub title_name: LocalisedString,
     pub horde_creature_id: i32,
     pub alliance_creature_id: i32,
     pub horde_icon_file_data_id: i32,
@@ -1160,7 +1161,7 @@ pub struct GarrFollowerXAbility {
 #[layout_hash(0xE12049E0)]
 pub struct GarrPlot {
     pub id: u32,
-    pub name: String,
+    pub name: LocalisedString,
     pub alliance_construct_obj_id: i32,
     pub horde_construct_obj_id: i32,
     pub ui_category_id: u8,
@@ -1181,7 +1182,7 @@ pub struct GarrPlotBuilding {
 #[layout_hash(0xB708BB37)]
 pub struct GarrPlotInstance {
     pub id:           u32,
-    pub name:         String,
+    pub name:         LocalisedString,
     pub garr_plot_id: u8,
 }
 
@@ -1285,7 +1286,7 @@ pub struct GuildPerkSpells {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x36887C6F)]
 pub struct Heirloom {
-    pub source_text: String,
+    pub source_text: LocalisedString,
     pub item_id: i32,
     pub legacy_item_id: i32,
     pub legacy_upgraded_item_id: i32,
@@ -1403,7 +1404,7 @@ pub struct ItemArmorTotal {
 #[layout_hash(0x96663ABF)]
 pub struct ItemBagFamily {
     pub id:   u32,
-    pub name: String,
+    pub name: LocalisedString,
 }
 
 #[derive(WDC1, Default, Debug)]
@@ -1450,7 +1451,7 @@ pub struct ItemChildEquipment {
 #[layout_hash(0xA1E4663C)]
 pub struct ItemClass {
     pub id:             u32,
-    pub class_name:     String,
+    pub class_name:     LocalisedString,
     pub price_modifier: f32,
     pub class_id:       i8,
     pub flags:          u8,
@@ -1586,7 +1587,7 @@ pub struct ItemLevelSelectorQualitySet {
 #[layout_hash(0xB6BB188D)]
 pub struct ItemLimitCategory {
     pub id:       u32,
-    pub name:     String,
+    pub name:     LocalisedString,
     pub quantity: u8,
     pub flags:    u8,
 }
@@ -1627,7 +1628,7 @@ pub struct ItemPriceBase {
 #[layout_hash(0xB67375F8)]
 pub struct ItemRandomProperties {
     pub id:          u32,
-    pub name:        String,
+    pub name:        LocalisedString,
     pub enchantment: [u16; 5],
 }
 
@@ -1635,7 +1636,7 @@ pub struct ItemRandomProperties {
 #[layout_hash(0x95CAB825)]
 pub struct ItemRandomSuffix {
     pub id:             u32,
-    pub name:           String,
+    pub name:           LocalisedString,
     pub enchantment:    [u16; 5],
     pub allocation_pct: [u16; 5],
 }
@@ -1644,7 +1645,7 @@ pub struct ItemRandomSuffix {
 #[layout_hash(0x2D4B72FA)]
 pub struct ItemSearchName {
     pub allowable_race:      i64,
-    pub display:             String,
+    pub display:             LocalisedString,
     #[id]
     pub id:                  u32,
     pub flags:               [i32; 3],
@@ -1664,7 +1665,7 @@ pub struct ItemSearchName {
 #[layout_hash(0x847FF58A)]
 pub struct ItemSet {
     pub id:                  u32,
-    pub name:                String,
+    pub name:                LocalisedString,
     pub item_id:             [u32; 17],
     pub required_skill_rank: u16,
     pub required_skill:      u32,
@@ -1687,11 +1688,11 @@ pub struct ItemSetSpell {
 pub struct ItemSparse {
     pub id: u32,
     pub allowable_race: i64,
-    pub display: String,
-    pub display1: String,
-    pub display2: String,
-    pub display3: String,
-    pub description: String,
+    pub display: LocalisedString,
+    pub display1: LocalisedString,
+    pub display2: LocalisedString,
+    pub display3: LocalisedString,
+    pub description: LocalisedString,
     pub flags: [i32; 4],
     pub price_random_value: f32,
     pub price_variance: f32,
@@ -1805,8 +1806,8 @@ pub struct Keychain {
 #[layout_hash(0xF02081A0)]
 pub struct LFGDungeons {
     pub id: u32,
-    pub name: String,
-    pub description: String,
+    pub name: LocalisedString,
+    pub description: LocalisedString,
     pub flags: i32,
     pub min_gear: f32,
     pub max_level: u16,
@@ -1861,8 +1862,8 @@ pub struct Light {
 #[layout_hash(0x3313BBF3)]
 pub struct LiquidType {
     pub id:                   u32,
-    pub name:                 String,
-    pub texture:              [String; 6],
+    pub name:                 LocalisedString,
+    pub texture:              [LocalisedString; 6],
     pub spell_id:             u32,
     pub max_darken_depth:     f32,
     pub fog_darken_intensity: f32,
@@ -1897,21 +1898,21 @@ pub struct Lock {
 #[layout_hash(0x25C8D6CC)]
 pub struct MailTemplate {
     pub id:   u32,
-    pub body: String,
+    pub body: LocalisedString,
 }
 
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xF568DF12)]
 pub struct Map {
     pub id:                     u32,
-    pub directory:              String,
-    pub map_name:               String,
+    pub directory:              LocalisedString,
+    pub map_name:               LocalisedString,
     /// Horde
-    pub map_description0:       String,
+    pub map_description0:       LocalisedString,
     /// Alliance
-    pub map_description1:       String,
-    pub pvp_short_description:  String,
-    pub pvp_long_description:   String,
+    pub map_description1:       LocalisedString,
+    pub pvp_short_description:  LocalisedString,
+    pub pvp_long_description:   LocalisedString,
     pub flags:                  [i32; 2],
     pub minimap_icon_scale:     f32,
     /// entrance coordinates in ghost mode  (in most cases = normal entrance)
@@ -1929,6 +1930,25 @@ pub struct Map {
     pub expansion_id:           u8,
     pub max_players:            u8,
     pub time_offset:            u8,
+}
+
+#[derive(WDC1, Default, Debug)]
+#[layout_hash(0x62BE0340)]
+pub struct LiquidMaterial {
+    pub id:    u32,
+    pub lvf:   i8,
+    pub flags: i8,
+}
+
+#[derive(WDC1, Default, Debug)]
+#[layout_hash(0xACC168A6)]
+pub struct LiquidObject {
+    pub id:             u32,
+    pub flow_direction: f32,
+    pub flow_speed:     f32,
+    pub liquid_type_id: i16,
+    pub fishable:       u8,
+    pub reflection:     u8,
 }
 
 // enum MapTypes                                               // Lua_IsInInstance
@@ -1990,7 +2010,7 @@ pub struct Map {
 pub struct MapDifficulty {
     pub id:                     u32,
     /// m_message_lang (text showed when transfer to map failed)
-    pub message:                String,
+    pub message:                LocalisedString,
     pub difficulty_id:          u8,
     pub reset_interval:         u8,
     pub max_players:            u8,
@@ -2039,9 +2059,9 @@ pub enum MountFlags {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x4D812F19)]
 pub struct Mount {
-    pub name:                  String,
-    pub description:           String,
-    pub source_text:           String,
+    pub name:                  LocalisedString,
+    pub description:           LocalisedString,
+    pub source_text:           LocalisedString,
     pub source_spell_id:       i32,
     pub mount_fly_ride_height: f32,
     pub mount_type_id:         u16,
@@ -2107,7 +2127,7 @@ pub struct Movie {
 #[layout_hash(0x2EF936CD)]
 pub struct NameGen {
     pub id:      u32,
-    pub name:    String,
+    pub name:    LocalisedString,
     pub race_id: u8,
     pub sex:     u8,
 }
@@ -2116,7 +2136,7 @@ pub struct NameGen {
 #[layout_hash(0xDFB56E0E)]
 pub struct NamesProfanity {
     pub id:       u32,
-    pub name:     String,
+    pub name:     LocalisedString,
     pub language: i8,
 }
 
@@ -2124,14 +2144,14 @@ pub struct NamesProfanity {
 #[layout_hash(0xE4923C1F)]
 pub struct NamesReserved {
     pub id:   u32,
-    pub name: String,
+    pub name: LocalisedString,
 }
 
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xC1403093)]
 pub struct NamesReservedLocale {
     pub id:          u32,
-    pub name:        String,
+    pub name:        LocalisedString,
     pub locale_mask: u8,
 }
 
@@ -2164,7 +2184,7 @@ pub struct PhaseXPhaseGroup {
 #[layout_hash(0x5B3DA113)]
 pub struct PlayerCondition {
     pub race_mask: i64,
-    pub failure_description: String,
+    pub failure_description: LocalisedString,
     #[id]
     pub id: u32,
     pub flags: u8,
@@ -2251,7 +2271,7 @@ pub struct PlayerCondition {
 #[layout_hash(0xFD152E5B)]
 pub struct PowerDisplay {
     pub id:                     u32,
-    pub global_string_base_tag: String,
+    pub global_string_base_tag: LocalisedString,
     pub actual_type:            u8,
     pub red:                    u8,
     pub green:                  u8,
@@ -2262,8 +2282,8 @@ pub struct PowerDisplay {
 #[layout_hash(0x0C3844E1)]
 pub struct PowerType {
     pub id: u32,
-    pub name_global_string_tag: String,
-    pub cost_global_string_tag: String,
+    pub name_global_string_tag: LocalisedString,
+    pub cost_global_string_tag: LocalisedString,
     pub regen_peace: f32,
     pub regen_combat: f32,
     pub max_base_power: i16,
@@ -2285,7 +2305,7 @@ enum PrestigeLevelInfoFlags {
 #[layout_hash(0xA7B2D559)]
 pub struct PrestigeLevelInfo {
     pub id: u32,
-    pub name: String,
+    pub name: LocalisedString,
     pub badge_texture_file_data_id: i32,
     pub prestige_level: u8,
     pub flags: u8,
@@ -2331,7 +2351,7 @@ pub struct PvpReward {
 #[layout_hash(0x6EB51740)]
 pub struct PvpTalent {
     pub id:                  u32,
-    pub description:         String,
+    pub description:         LocalisedString,
     pub spell_id:            i32,
     pub overrides_spell_id:  i32,
     pub action_bar_spell_id: i32,
@@ -2380,7 +2400,7 @@ pub struct QuestPackageItem {
 #[layout_hash(0xAD7072C6)]
 pub struct QuestSort {
     pub id:             u32,
-    pub sort_name:      String,
+    pub sort_name:      LocalisedString,
     pub ui_order_index: i8,
 }
 
@@ -2469,7 +2489,7 @@ pub struct ScalingStatDistribution {
 #[layout_hash(0xD052232A)]
 pub struct Scenario {
     pub id:            u32,
-    pub name:          String,
+    pub name:          LocalisedString,
     pub area_table_id: u16,
     pub flags:         u8,
     pub typ:           u8,
@@ -2479,8 +2499,8 @@ pub struct Scenario {
 #[layout_hash(0x201B0EFC)]
 pub struct ScenarioStep {
     pub id:              u32,
-    pub description:     String,
-    pub title:           String,
+    pub description:     LocalisedString,
+    pub title:           LocalisedString,
     #[parent]
     pub scenario_id:     u16,
     /// Used in conjunction with Proving Grounds scenarios, when sequencing steps (Not using step order?)
@@ -2510,32 +2530,32 @@ pub struct SceneScript {
 #[layout_hash(0xB9F8FDF1)]
 pub struct SceneScriptGlobalText {
     pub id:     u32,
-    pub name:   String,
-    pub script: String,
+    pub name:   LocalisedString,
+    pub script: LocalisedString,
 }
 
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x96663ABF)]
 pub struct SceneScriptPackage {
     pub id:   u32,
-    pub name: String,
+    pub name: LocalisedString,
 }
 
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xB9F8FDF1)]
 pub struct SceneScriptText {
     pub id:     u32,
-    pub name:   String,
-    pub script: String,
+    pub name:   LocalisedString,
+    pub script: LocalisedString,
 }
 
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x3F7E88AF)]
 pub struct SkillLine {
     pub id:                   u32,
-    pub display_name:         String,
-    pub description:          String,
-    pub alternate_verb:       String,
+    pub display_name:         LocalisedString,
+    pub description:          LocalisedString,
+    pub alternate_verb:       LocalisedString,
     pub flags:                u16,
     pub category_id:          i8,
     pub can_link:             i8,
@@ -2603,7 +2623,7 @@ pub struct SoundKit {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xAE3436F3)]
 pub struct SpecializationSpells {
-    pub description:        String,
+    pub description:        LocalisedString,
     pub spell_id:           i32,
     pub overrides_spell_id: i32,
     #[parent]
@@ -2617,10 +2637,10 @@ pub struct SpecializationSpells {
 #[layout_hash(0x2273DFFF)]
 pub struct Spell {
     pub id:               u32,
-    pub name:             String,
-    pub name_subtext:     String,
-    pub description:      String,
-    pub aura_description: String,
+    pub name:             LocalisedString,
+    pub name_subtext:     LocalisedString,
+    pub description:      LocalisedString,
+    pub aura_description: LocalisedString,
 }
 
 #[derive(WDC1, Default, Debug)]
@@ -2697,7 +2717,7 @@ pub struct SpellCategories {
 #[layout_hash(0xEA60E384)]
 pub struct SpellCategory {
     pub id:                   u32,
-    pub name:                 String,
+    pub name:                 LocalisedString,
     pub charge_recovery_time: i32,
     pub flags:                i8,
     pub uses_per_week:        u8,
@@ -2787,7 +2807,7 @@ pub struct SpellEquippedItems {
 #[layout_hash(0x96663ABF)]
 pub struct SpellFocusObject {
     pub id:   u32,
-    pub name: String,
+    pub name: LocalisedString,
 }
 
 #[derive(WDC1, Default, Debug)]
@@ -2806,7 +2826,7 @@ pub struct SpellInterrupts {
 #[layout_hash(0x80DEA734)]
 pub struct SpellItemEnchantment {
     pub id: u32,
-    pub name: String,
+    pub name: LocalisedString,
     pub effect_arg: [u32; 3],
     pub effect_scaling_points: [f32; 3],
     pub transmog_cost: u32,
@@ -2944,8 +2964,8 @@ pub struct SpellRadius {
 #[layout_hash(0xDE2E3F8E)]
 pub struct SpellRange {
     pub id:                 u32,
-    pub display_name:       String,
-    pub display_name_short: String,
+    pub display_name:       LocalisedString,
+    pub display_name_short: LocalisedString,
     pub range_min:          [f32; 2],
     pub range_max:          [f32; 2],
     pub flags:              u8,
@@ -2985,7 +3005,7 @@ pub struct SpellShapeshift {
 #[layout_hash(0x130819AF)]
 pub struct SpellShapeshiftForm {
     pub id:                  u32,
-    pub name:                String,
+    pub name:                LocalisedString,
     pub damage_variance:     f32,
     pub flags:               i32,
     pub combat_round_time:   i16,
@@ -3063,7 +3083,7 @@ pub struct TactKey {
 #[layout_hash(0xE8850B48)]
 pub struct Talent {
     pub id:                 u32,
-    pub description:        String,
+    pub description:        LocalisedString,
     pub spell_id:           u32,
     pub overrides_spell_id: u32,
     pub spec_id:            u16,
@@ -3078,7 +3098,7 @@ pub struct Talent {
 #[layout_hash(0xB46C6A8B)]
 pub struct TaxiNodes {
     pub id: u32,
-    pub name: String,
+    pub name: LocalisedString,
     pub pos: [f32; 3],
     pub mount_creature_id: [i32; 2],
     pub map_offset: [f32; 2],
@@ -3123,7 +3143,7 @@ pub struct TaxiPathNode {
 #[layout_hash(0x20B9177A)]
 pub struct TotemCategory {
     pub id:                  u32,
-    pub name:                String,
+    pub name:                LocalisedString,
     pub totem_category_mask: i32,
     pub totem_category_type: u8,
 }
@@ -3131,7 +3151,7 @@ pub struct TotemCategory {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x5409C5EA)]
 pub struct Toy {
-    pub source_text:      String,
+    pub source_text:      LocalisedString,
     pub item_id:          i32,
     pub flags:            u8,
     pub source_type_enum: i8,
@@ -3150,7 +3170,7 @@ pub struct TransmogHoliday {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xBEDFD7D1)]
 pub struct TransmogSet {
-    pub name: String,
+    pub name: LocalisedString,
     #[parent]
     pub parent_transmog_set_id: u16,
     pub ui_order: i16,
@@ -3167,7 +3187,7 @@ pub struct TransmogSet {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xCD072FE5)]
 pub struct TransmogSetGroup {
-    pub name: String,
+    pub name: LocalisedString,
     #[id]
     pub id:   u32,
 }
@@ -3208,10 +3228,10 @@ pub struct TransportRotation {
 #[layout_hash(0x626C94CD)]
 pub struct UnitPowerBar {
     pub id:                  u32,
-    pub name:                String,
-    pub cost:                String,
-    pub out_of_error:        String,
-    pub tool_tip:            String,
+    pub name:                LocalisedString,
+    pub cost:                LocalisedString,
+    pub out_of_error:        LocalisedString,
+    pub tool_tip:            LocalisedString,
     pub regeneration_peace:  f32,
     pub regeneration_combat: f32,
     pub file_data_id:        [i32; 6],
@@ -3335,7 +3355,7 @@ pub struct VehicleSeat {
 // #[derive(Default)]
 #[layout_hash(0x4616C893)]
 pub struct WMOAreaTable {
-    pub area_name: String,
+    pub area_name: LocalisedString,
     ///  used in group WMO
     pub wmo_group_id: i32,
     pub ambience_id: u16,
@@ -3407,7 +3427,7 @@ pub struct WorldEffect {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xC7E90019)]
 pub struct WorldMapArea {
-    pub area_name: String,
+    pub area_name: LocalisedString,
     pub loc_left: f32,
     pub loc_right: f32,
     pub loc_top: f32,
@@ -3430,7 +3450,7 @@ pub struct WorldMapArea {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xDC4B6AF3)]
 pub struct WorldMapOverlay {
-    pub texture_name:        String,
+    pub texture_name:        LocalisedString,
     #[id]
     pub id:                  u32,
     pub texture_width:       u16,
@@ -3470,7 +3490,7 @@ pub struct WorldMapTransforms {
 #[layout_hash(0x605EA8A6)]
 pub struct WorldSafeLocs {
     pub id:        u32,
-    pub area_name: String,
+    pub area_name: LocalisedString,
     pub loc:       [f32; 3],
     pub facing:    f32,
     pub continent: u16,
@@ -5584,28 +5604,6 @@ pub struct WorldSafeLocs {
 //         static char const* types = "siib";
 //         static const: u8,arraySizes[4] = { 1, 1, 1, 1 };
 //         static DB2Meta instance(-1, 4, 0x8817C02C, types, arraySizes, -1);
-//         return &instance;
-//     }
-// };
-
-// struct LiquidMaterialMeta
-// {
-//     static DB2Meta const* Instance()
-//     {
-//         static char const* types = "bb";
-//         static const: u8,arraySizes[2] = { 1, 1 };
-//         static DB2Meta instance(-1, 2, 0x62BE0340, types, arraySizes, -1);
-//         return &instance;
-//     }
-// };
-
-// struct LiquidObjectMeta
-// {
-//     static DB2Meta const* Instance()
-//     {
-//         static char const* types = "ffhbb";
-//         static const: u8,arraySizes[5] = { 1, 1, 1, 1, 1 };
-//         static DB2Meta instance(-1, 5, 0xACC168A6, types, arraySizes, -1);
 //         return &instance;
 //     }
 // };

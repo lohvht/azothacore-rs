@@ -1,9 +1,7 @@
-use std::mem;
-
 use itertools::Itertools;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
-use syn::{parse::ParseStream, spanned::Spanned, Attribute, Data, DeriveInput, Error, Expr, Field, Fields, Index, LitInt, Member, Result, Type, Visibility};
+use syn::{parse::ParseStream, spanned::Spanned, Attribute, Data, DeriveInput, Error, Field, Fields, Index, LitInt, Member, Result, Type, Visibility};
 
 pub fn derive(node: &DeriveInput) -> Result<TokenStream> {
     let input = WDC1Struct::from_syn(node)?;
@@ -226,7 +224,7 @@ impl WDC1Field {
             Type::Path(p) if p.path.is_ident("u16") => WDC1FieldType::Single(WDC1FieldSingleType::U16),
             Type::Path(p) if p.path.is_ident("u8") => WDC1FieldType::Single(WDC1FieldSingleType::U8),
             Type::Path(p) if p.path.is_ident("f32") => WDC1FieldType::Single(WDC1FieldSingleType::F32),
-            Type::Path(p) if p.path.is_ident("String") => WDC1FieldType::Single(WDC1FieldSingleType::String),
+            Type::Path(p) if p.path.is_ident("LocalisedString") => WDC1FieldType::Single(WDC1FieldSingleType::String),
             Type::Array(t) => {
                 if nested {
                     return Err(Error::new_spanned(mem.clone(), "cannot have nested tuple types"));
