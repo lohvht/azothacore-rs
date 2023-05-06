@@ -235,7 +235,7 @@ dependencies = [
  "tracing-subscriber",
  "walkdir",
  "wow-db2",
- "wow-db2-serde",
+ "wow-db2-proc-macros",
 ]
 
 [[package]]
@@ -1584,9 +1584,9 @@ checksum = "dc375e1527247fe1a97d8b7156678dfe7c1af2fc075c9a4db3690ecd2a148068"
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.54"
+version = "1.0.56"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e472a104799c74b514a57226160104aa483546de37e839ec50e3c2e41dd87534"
+checksum = "2b63bdb0cd06f1f4dedf69b254734f9b45af66e4a031e42a7480257d9898b435"
 dependencies = [
  "unicode-ident",
 ]
@@ -2817,10 +2817,22 @@ dependencies = [
 [[package]]
 name = "wow-db2"
 version = "0.1.0"
+dependencies = [
+ "byteorder",
+ "flagset",
+ "itertools",
+ "serde",
+]
 
 [[package]]
-name = "wow-db2-serde"
+name = "wow-db2-proc-macros"
 version = "0.1.0"
+dependencies = [
+ "itertools",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.11",
+]
 
 [[package]]
 name = "zeroize"

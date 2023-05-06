@@ -4,3 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+byteorder = "1.4.3"
+flagset = { version = "0.4.3", features = ["serde"] }
+serde = { version = "1.0.152", features = ["derive"] }
+itertools = "0.10.5"

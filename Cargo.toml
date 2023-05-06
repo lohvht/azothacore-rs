@@ -20,7 +20,7 @@ opt-level = 3
 casclib-sys = { version = "0.1", path = "crates/casclib-sys" }
 azothacore-proc-macros = { version = "0.1", path = "crates/azothacore-proc-macros" }
 wow-db2 = { version = "0.1", path = "crates/wow-db2" }
-wow-db2-serde = { version = "0.1", path = "crates/wow-db2-serde" }
+wow-db2-proc-macros = { version = "0.1", path = "crates/wow-db2-proc-macros" }
 tokio = { version = "1.26.0", features = ["full", "tracing"] }
 parking_lot = { version = "0.12", features = ["nightly", "deadlock_detection"] }
 clap =  { version = "4.1.8", features = ["derive"] }

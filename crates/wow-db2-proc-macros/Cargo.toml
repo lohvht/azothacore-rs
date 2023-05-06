@@ -1,0 +1,13 @@
+[package]
+name = "wow-db2-proc-macros"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+itertools = "0.10.5"
+proc-macro2 = "1.0.56"
+quote = "1.0.24"
+syn = "2.0"
