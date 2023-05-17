@@ -37,7 +37,7 @@ impl DB2FieldType {
 pub type LocalisedString = [String; 12];
 
 pub fn new_localised_string() -> LocalisedString {
-    let ss = [
+    [
         String::from(""),
         String::from(""),
         String::from(""),
@@ -50,8 +50,7 @@ pub fn new_localised_string() -> LocalisedString {
         String::from(""),
         String::from(""),
         String::from(""),
-    ];
-    ss
+    ]
 }
 
 #[derive(Debug, Clone)]

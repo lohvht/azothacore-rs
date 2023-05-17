@@ -931,7 +931,7 @@ where
         if let Some(typ) = W::non_inline_parent_index_type() {
             for RelationshipData { foreign_id, record_index } in &self.relationship_mappings[0].entries {
                 let record_index: usize = (*record_index).try_into().unwrap();
-                let mut record = match res.get_mut(&record_index) {
+                let record = match res.get_mut(&record_index) {
                     None => continue,
                     Some(r) => r,
                 };

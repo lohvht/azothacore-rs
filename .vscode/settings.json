@@ -1,0 +1,11 @@
+{
+  "rust-analyzer.procMacro.attributes.enable": true,
+  "rust-analyzer.procMacro.enable": true,
+  "rust-analyzer.server.extraEnv": {
+    "RA_LOG": "warn;project_model=info"
+  },
+  "rust-analyzer.linkedProjects": [
+    "./Cargo.toml",
+    "./Cargo.toml"
+  ]
+}
