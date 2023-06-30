@@ -30,7 +30,6 @@ use azothacore_rs::{
             shared_defines::{ServerProcessType, ThisServerProcess},
         },
     },
-    short_curcuit_unix_signal_unwrap,
     GenericResult,
     AZOTHA_CORE_CONFIG,
     CONF_DIR,
@@ -47,19 +46,22 @@ use tracing::{error, info, info_span, instrument, Instrument};
 
 #[cfg(target_os = "windows")]
 fn signal_handler() -> JoinHandle<Result<(), std::io::Error>> {
-    task::spawn(async {
-        use tokio::signal::windows::ctrl_break;
-        let mut sig_break = ctrl_break()?;
-        receive_signal_and_run_expr!(
-            S_WORLD.write().stop_now(1),
-            "SIGBREAK" => sig_break
-        );
-    })
-    .instrument(info_span!("signal_handler"))
+    task::spawn(
+        async {
+            use tokio::signal::windows::ctrl_break;
+            let mut sig_break = ctrl_break()?;
+            receive_signal_and_run_expr!(
+                S_WORLD.write().await.stop_now(1),
+                "SIGBREAK" => sig_break
+            );
+            Ok(())
+        }.instrument(info_span!("signal_handler"))
+    )
 }
 
 #[cfg(target_os = "linux")]
 fn signal_handler() -> JoinHandle<Result<(), std::io::Error>> {
+    use azothacore_rs::short_curcuit_unix_signal_unwrap;
     task::spawn(
         async {
             use tokio::signal::unix::SignalKind;
@@ -179,9 +181,9 @@ async fn main() -> GenericResult<()> {
     // //- Initialize the World
     // sSecretMgr->Initialize();
 
-    // // TODO: hirogoro@29/03/2023: Implement set initial world settings
-    // sWorld->SetInitialWorldSettings();
-    S_WORLD.write().await.set_initial_world_settings().await?;
+    // // // TODO: hirogoro@29/03/2023: Implement set initial world settings
+    // // sWorld->SetInitialWorldSettings();
+    // S_WORLD.write().await.set_initial_world_settings().await?;
 
     // Begin shutdown, waiting for signal handler first. Then unload everything else.
     signal_handler.await??;

@@ -108,19 +108,19 @@ pub enum CascStorageInfoClass {
     /// Returns the number of local files in the storage. Note that files
     /// can exist under different names, so the total number of files in the archive
     /// can be higher than the value returned by this info class
-    LocalFileCount = _CASC_STORAGE_INFO_CLASS_CascStorageLocalFileCount,
+    LocalFileCount = _CASC_STORAGE_INFO_CLASS_CascStorageLocalFileCount as u32,
     /// Returns the total file count, including the offline files
-    TotalFileCount = _CASC_STORAGE_INFO_CLASS_CascStorageTotalFileCount,
+    TotalFileCount = _CASC_STORAGE_INFO_CLASS_CascStorageTotalFileCount as u32,
     /// Returns the features flag    
-    Features = _CASC_STORAGE_INFO_CLASS_CascStorageFeatures,
+    Features = _CASC_STORAGE_INFO_CLASS_CascStorageFeatures as u32,
     /// Not supported
-    InstalledLocales = _CASC_STORAGE_INFO_CLASS_CascStorageInstalledLocales,
+    InstalledLocales = _CASC_STORAGE_INFO_CLASS_CascStorageInstalledLocales as u32,
     /// Gives CASC_STORAGE_PRODUCT
-    Product = _CASC_STORAGE_INFO_CLASS_CascStorageProduct,
+    Product = _CASC_STORAGE_INFO_CLASS_CascStorageProduct as u32,
     /// Gives CASC_STORAGE_TAGS structure
-    Tags = _CASC_STORAGE_INFO_CLASS_CascStorageTags,
+    Tags = _CASC_STORAGE_INFO_CLASS_CascStorageTags as u32,
     /// Gives Path:Product into a LPTSTR bufferPathProduct = _CASC_STORAGE_INFO_CLASS_CascStoragePathProduct,
-    InfoClassMax = _CASC_STORAGE_INFO_CLASS_CascStorageInfoClassMax,
+    InfoClassMax = _CASC_STORAGE_INFO_CLASS_CascStorageInfoClassMax as u32,
 }
 
 impl TryFrom<u32> for CascStorageInfoClass {
@@ -164,7 +164,7 @@ impl CascStorageHandle {
     }
 
     pub fn get_product_info(&self) -> Result<CascStorageProduct, CascHandlerError> {
-        let storage_class = CascStorageInfoClass::Product as u32;
+        let storage_class = CascStorageInfoClass::Product as _;
         let mut product_info = _CASC_STORAGE_PRODUCT {
             BuildNumber: 0,
             szCodeName:  [0; 28],
@@ -202,7 +202,7 @@ impl CascStorageHandle {
     }
 
     pub fn get_installed_locales_mask(&self) -> Result<FlagSet<CascLocale>, CascHandlerError> {
-        let storage_class = CascStorageInfoClass::InstalledLocales as u32;
+        let storage_class = CascStorageInfoClass::InstalledLocales as _;
         let mut value: u32 = 0;
         let value_ptr = &mut value as *mut _ as *mut c_void;
 
