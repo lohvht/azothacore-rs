@@ -11,6 +11,7 @@ use thiserror::Error;
 use crate::tools::extractor_common::casc_handles::CascLocale;
 
 pub mod banner;
+pub mod collision;
 pub mod configuration;
 pub mod utils;
 

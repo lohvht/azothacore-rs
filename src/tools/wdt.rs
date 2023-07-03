@@ -1,8 +1,14 @@
-use std::io;
+use std::{collections::HashMap, io, path::Path};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 
-use super::basic_extractor::FileChunk;
+use crate::{
+    tools::{
+        adt::AdtChunkModf,
+        extractor_common::{casc_handles::CascStorageHandle, cstr_bytes_to_string, ChunkedFile, FileChunk},
+    },
+    GenericResult,
+};
 
 pub const WDT_MAP_SIZE: usize = 64;
 
@@ -38,5 +44,49 @@ impl From<FileChunk> for WdtChunkMain {
             size: value.size,
             adt_list,
         }
+    }
+}
+
+pub struct WDTFile {
+    pub wmo_paths: HashMap<usize, String>,
+    pub modf:      Option<AdtChunkModf>,
+}
+
+impl WDTFile {
+    pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, storage_path: P) -> GenericResult<Self> {
+        let file = ChunkedFile::build(storage, &storage_path)?;
+        // .inspect_err(|e| {
+        //     error!("Error opening wdt file at {}, err was {e}", storage_path.as_ref().display());
+        // })?;
+
+        let mut wmo_paths: HashMap<usize, String> = HashMap::new();
+        let mut modf = None;
+
+        for (fourcc, chunk) in file.chunks {
+            match &fourcc {
+                b"MAIN" => {},
+                b"MWMO" => {
+                    let mut offset = 0;
+                    let paths = chunk
+                        .data
+                        .split_inclusive(|b| *b == 0)
+                        .map(|raw| {
+                            // We dont anticipate a panic here as the strings will always be nul-terminated
+                            let s = cstr_bytes_to_string(raw).unwrap();
+                            let r = (offset, s);
+                            offset += 1; // raw.len();
+                            r
+                        })
+                        .collect::<HashMap<_, _>>();
+                    wmo_paths.extend(paths);
+                },
+                b"MODF" => {
+                    // global wmo instance data
+                    modf = Some(AdtChunkModf::from(chunk));
+                },
+                _ => {},
+            }
+        }
+        Ok(Self { wmo_paths, modf })
     }
 }

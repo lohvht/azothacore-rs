@@ -3,7 +3,7 @@
 use std::{
     collections::BTreeMap,
     fs,
-    io,
+    io::{self},
     path::{Path, PathBuf},
 };
 
@@ -28,13 +28,15 @@ use azothacore_rs::{
             ADT_CELL_SIZE,
             ADT_GRID_SIZE,
         },
-        basic_extractor::{ChunkedFile, DB_FILES_CLIENT_LIST},
+        basic_extractor::DB_FILES_CLIENT_LIST,
         extractor_common::{
-            casc_handles::{CascFileHandle, CascHandlerError, CascLocale, CascStorageHandle},
+            casc_handles::{CascFileHandle, CascLocale, CascStorageHandle},
+            ChunkedFile,
             DB2AndMapExtractFlags,
             Db2AndMapExtract,
             ExtractorConfig,
         },
+        vmap4_extractor::main_vmap4_extract,
         wdt::{WdtChunkMain, WDT_MAP_SIZE},
     },
     GenericResult,
@@ -59,7 +61,7 @@ fn main() -> GenericResult<()> {
     old_client_check(&args)?;
 
     // MAP & DB2 EXTRACTOR
-    let installed_locales_mask = get_installed_locales_mask(&args)?;
+    let installed_locales_mask = args.get_installed_locales_mask()?;
     let mut first_installed_locale: Option<Locale> = None;
     let mut build = 0;
 
@@ -70,7 +72,7 @@ fn main() -> GenericResult<()> {
         if (installed_locales_mask & l.to_casc_locales()).bits() == 0 {
             continue;
         }
-        let storage = match get_casc_storage_handler(&args, l) {
+        let storage = match args.get_casc_storage_handler(l) {
             Err(e) => {
                 error!(
                     "error opening casc storage '{}' locale {}, err was {}",
@@ -118,12 +120,9 @@ fn main() -> GenericResult<()> {
     }
 
     // VMAP EXTRACTOR AND ASSEMBLER
+    main_vmap4_extract(&args, first_installed_locale)?;
 
     Ok(())
-}
-
-fn get_casc_storage_handler(args: &ExtractorConfig, locale: Locale) -> Result<CascStorageHandle, CascHandlerError> {
-    CascStorageHandle::build(args.input_storage_data_dir(), locale.to_casc_locales())
 }
 
 fn get_casc_filename_part<P: AsRef<Path>>(casc_path: P) -> PathBuf {
@@ -146,7 +145,7 @@ fn extract_db_files_client(storage: &CascStorageHandle, args: &ExtractorConfig, 
     for file_name in DB_FILES_CLIENT_LIST {
         let mut dbc_file = match storage.open_file(file_name, FlagSet::from(CascLocale::None)) {
             Err(e) => {
-                error!("Unable to open file {} in the archive for locale {}: {}", file_name, locale, e);
+                warn!("Unable to open file {} in the archive for locale {}: {}", file_name, locale, e);
                 continue;
             },
             Ok(r) => r,
@@ -195,7 +194,7 @@ fn extract_file(file_in_archive: &mut CascFileHandle, out_path: PathBuf) -> Gene
 fn extract_camera_files(args: &ExtractorConfig, locale: Locale) -> GenericResult<()> {
     info!("Extracting camera files...");
 
-    let storage = get_casc_storage_handler(args, locale)?;
+    let storage = args.get_casc_storage_handler(locale)?;
     let camera_file_names = read_cinematic_camera_dbc(&storage, locale)?;
 
     let output_path = args.output_camera_path();
@@ -242,7 +241,7 @@ fn read_cinematic_camera_dbc(storage: &CascStorageHandle, locale: Locale) -> Gen
 
 fn extract_game_tables(args: &ExtractorConfig, locale: Locale) -> GenericResult<()> {
     info!("Extracting game tables...");
-    let storage = get_casc_storage_handler(args, locale)?;
+    let storage = args.get_casc_storage_handler(locale)?;
     let output_path = args.output_gametable_path();
 
     fs::create_dir_all(&output_path)?;
@@ -301,7 +300,7 @@ fn extract_game_tables(args: &ExtractorConfig, locale: Locale) -> GenericResult<
 }
 
 fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> GenericResult<()> {
-    let storage = get_casc_storage_handler(args, locale)?;
+    let storage = args.get_casc_storage_handler(locale)?;
 
     info!("Extracting maps...");
     info!("Read Map.db2 file...");
@@ -333,16 +332,16 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> Generi
 
     info!("Convert map files");
     for (z, (map_id, map)) in maps.iter().enumerate() {
-        let map_name = &map.directory[locale as usize];
-        info!("Extract {} ({}/{})", map_name, z + 1, maps.len());
+        let map_name = &map.directory.def_str();
         let storage_path = format!("World/Maps/{map_name}/{map_name}.wdt");
         let wdt = match ChunkedFile::build(&storage, &storage_path) {
-            Err(e) => {
-                error!("Error opening wdt file at {storage_path}, err was {e}");
+            Err(_e) => {
+                // error!("Error opening wdt file at {storage_path}, err was {e}");
                 continue;
             },
             Ok(f) => f,
         };
+        let mut has_already_extracted = false;
         // We expect MAIN chunk to always exist
         let chunk = wdt.chunks.get(b"MAIN").unwrap();
         let chunk = WdtChunkMain::from(chunk.clone());
@@ -356,6 +355,10 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> Generi
                 let output_file_name = output_path.join(format!("{map_id:04}_{y:02}_{x:02}.map"));
                 if output_file_name.exists() {
                     continue;
+                }
+                if !has_already_extracted {
+                    has_already_extracted = true;
+                    info!("Extract {} ({}/{})", map_name, z + 1, maps.len());
                 }
                 // TODO: Verify if the indices are correct? seems to be reversed here
                 let ignore_deep_water = map.is_deep_water_ignored(y, x);
@@ -675,12 +678,6 @@ fn convert_adt(
     map_file.pack(args.allow_height_limit, liquid_show, map_liquid_height, args.use_min_height, &mut f)?;
 
     Ok(())
-}
-
-fn get_installed_locales_mask(args: &ExtractorConfig) -> GenericResult<FlagSet<CascLocale>> {
-    let storage = get_casc_storage_handler(args, Locale::none)?;
-
-    Ok(storage.get_installed_locales_mask()?)
 }
 
 /// old_client_check checks if there are any MPQ files in the Data directory

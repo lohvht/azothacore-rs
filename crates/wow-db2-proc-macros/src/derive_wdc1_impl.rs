@@ -123,6 +123,8 @@ impl WDC1FieldAttrs {
 enum WDC1FieldType {
     Single(WDC1FieldSingleType),
     Array { arity: usize, typ: WDC1FieldSingleType },
+    Vector3 { typ: WDC1FieldSingleType },
+    Vector4 { typ: WDC1FieldSingleType },
 }
 
 impl WDC1FieldType {
@@ -130,14 +132,18 @@ impl WDC1FieldType {
         match self {
             WDC1FieldType::Single(typ) => (1, typ.token()),
             WDC1FieldType::Array { arity, typ } => (*arity, typ.token()),
+            WDC1FieldType::Vector3 { typ, .. } => (3, typ.token()),
+            WDC1FieldType::Vector4 { typ, .. } => (4, typ.token()),
         }
     }
 
     /// Returns the token type for field values and whether or not the value is single or an array
-    fn value_token(&self) -> (bool, TokenStream) {
+    fn value_token(&self) -> TokenStream {
         match self {
-            WDC1FieldType::Single(typ) => (true, typ.value_token()),
-            WDC1FieldType::Array { typ, .. } => (false, typ.value_token()),
+            WDC1FieldType::Single(typ) => typ.value_token(),
+            WDC1FieldType::Array { typ, .. } => typ.value_token(),
+            WDC1FieldType::Vector3 { typ } => typ.value_token(),
+            WDC1FieldType::Vector4 { typ } => typ.value_token(),
         }
     }
 }
@@ -225,6 +231,70 @@ impl WDC1Field {
             Type::Path(p) if p.path.is_ident("u8") => WDC1FieldType::Single(WDC1FieldSingleType::U8),
             Type::Path(p) if p.path.is_ident("f32") => WDC1FieldType::Single(WDC1FieldSingleType::F32),
             Type::Path(p) if p.path.is_ident("LocalisedString") => WDC1FieldType::Single(WDC1FieldSingleType::String),
+            Type::Path(p) if !p.path.segments.is_empty() && p.path.segments[0].ident == "Vector3" => {
+                if nested {
+                    return Err(Error::new_spanned(mem.clone(), "cannot have nested vectors"));
+                }
+                let seg = &p.path.segments[0];
+                let args_typ = match &seg.arguments {
+                    syn::PathArguments::AngleBracketed(args) => {
+                        if args.args.is_empty() {
+                            return Err(Error::new_spanned(mem.clone(), "Vector3 should at least one type defined in angled brackets"));
+                        }
+                        match &args.args[0] {
+                            syn::GenericArgument::Type(t) => Self::validate_ty(mem, t, true)?,
+                            ga => {
+                                return Err(Error::new_spanned(mem.clone(), format!("Vector3 args should be types, got ga {ga:?}")));
+                            },
+                        }
+                    },
+                    p => {
+                        return Err(Error::new_spanned(
+                            mem.clone(),
+                            format!("Vector3 should have type info in angled brackets, got p {p:?}"),
+                        ));
+                    },
+                };
+
+                let args_typ = if let WDC1FieldType::Single(r) = args_typ {
+                    r
+                } else {
+                    return Err(Error::new_spanned(mem.clone(), format!("typ isnt a single type: typ {args_typ:?}")));
+                };
+                WDC1FieldType::Vector3 { typ: args_typ }
+            },
+            Type::Path(p) if !p.path.segments.is_empty() && p.path.segments[0].ident == "Vector4" => {
+                if nested {
+                    return Err(Error::new_spanned(mem.clone(), "cannot have nested vectors"));
+                }
+                let seg = &p.path.segments[0];
+                let args_typ = match &seg.arguments {
+                    syn::PathArguments::AngleBracketed(args) => {
+                        if args.args.is_empty() {
+                            return Err(Error::new_spanned(mem.clone(), "Vector4 should at least one type defined in angled brackets"));
+                        }
+                        match &args.args[0] {
+                            syn::GenericArgument::Type(t) => Self::validate_ty(mem, t, true)?,
+                            ga => {
+                                return Err(Error::new_spanned(mem.clone(), format!("Vector4 args should be types, got ga {ga:?}")));
+                            },
+                        }
+                    },
+                    p => {
+                        return Err(Error::new_spanned(
+                            mem.clone(),
+                            format!("Vector4 should have type info in angled brackets, got p {p:?}"),
+                        ));
+                    },
+                };
+
+                let args_typ = if let WDC1FieldType::Single(r) = args_typ {
+                    r
+                } else {
+                    return Err(Error::new_spanned(mem.clone(), format!("typ isnt a single type: typ {args_typ:?}")));
+                };
+                WDC1FieldType::Vector4 { typ: args_typ }
+            },
             Type::Array(t) => {
                 if nested {
                     return Err(Error::new_spanned(mem.clone(), "cannot have nested tuple types"));
@@ -242,11 +312,11 @@ impl WDC1Field {
                 let typ = if let WDC1FieldType::Single(r) = typ {
                     r
                 } else {
-                    return Err(Error::new_spanned(mem.clone(), format!("typ isnt a single type: typ {:?}", typ)));
+                    return Err(Error::new_spanned(mem.clone(), format!("typ isnt a single type: typ {typ:?}")));
                 };
                 WDC1FieldType::Array { arity, typ }
             },
-            _ => return Err(Error::new_spanned(mem.clone(), "type not supported for the following field")),
+            p => return Err(Error::new_spanned(mem.clone(), format!("type {p:?} not supported for the following field"))),
         };
         Ok(res)
     }
@@ -397,7 +467,7 @@ impl WDC1Struct {
             let has_inlined_parent = pf.attrs.parent.unwrap();
             if !has_inlined_parent {
                 let (_, t) = pf.get_concrete_type().token();
-                let (_, v) = pf.get_concrete_type().value_token();
+                let v = pf.get_concrete_type().value_token();
 
                 parent_field_typ_token = Some(t);
                 parent_field_val = Some((&pf.member, v));
@@ -471,13 +541,15 @@ impl WDC1Struct {
             .iter()
             .map(|(fi, f)| {
                 let fi = LitInt::new(&fi.to_string(), f.member.span());
-                let fmem = &f.member;
-                let (is_single, val_token) = f.get_concrete_type().value_token();
+                let fmem: &Member = &f.member;
+                let concrete_typ = f.get_concrete_type();
+                let val_token = concrete_typ.value_token();
 
-                let assigned_value = if is_single {
-                    quote!(v[0].clone())
-                } else {
-                    quote!(v.clone().try_into().unwrap())
+                let assigned_value = match concrete_typ {
+                    WDC1FieldType::Single(_) => quote!(v[0].clone()),
+                    WDC1FieldType::Array { .. } => quote!(v.clone().try_into().unwrap()),
+                    WDC1FieldType::Vector3 { .. } => quote!(nalgebra::Vector3::new(v[0].clone(), v[1].clone(), v[2].clone())),
+                    WDC1FieldType::Vector4 { .. } => quote!(nalgebra::Vector4::new(v[0].clone(), v[1].clone(), v[2].clone(), v[3].clone())),
                 };
                 quote! {
                     if let Some(#val_token(v)) = value.fields.get(&#fi) {
@@ -512,7 +584,8 @@ impl WDC1Struct {
         };
 
         let wdc1_trait = self.spanned_wdbc1_trait();
-        quote! {
+
+        let res = quote! {
             impl #wdc1_trait for #ty {
                 #layout_method
                 #id_index_method
@@ -522,6 +595,8 @@ impl WDC1Struct {
                 // #provide_method
             }
             #from_raw_to_ty_impl
-        }
+        };
+        // println!("OUTPUT: {res}");
+        res
     }
 }

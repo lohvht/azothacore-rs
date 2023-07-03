@@ -34,23 +34,48 @@ impl DB2FieldType {
     }
 }
 
-pub type LocalisedString = [String; 12];
+#[derive(Debug, Clone, Default)]
+pub struct LocalisedString {
+    strings:        [String; 12],
+    default_locale: Option<usize>,
+}
+
+impl LocalisedString {
+    pub fn set_by_locale_as_num(&mut self, locale_as_number: usize, str: String) {
+        if self.default_locale.is_none() {
+            self.default_locale = Some(locale_as_number)
+        }
+        self.strings[locale_as_number] = str
+    }
+
+    pub fn def_str(&self) -> String {
+        let idx = if let Some(idx) = self.default_locale { idx } else { 0 };
+        self.str(idx)
+    }
+
+    pub fn str(&self, locale_as_number: usize) -> String {
+        self.strings[locale_as_number].clone()
+    }
+}
 
 pub fn new_localised_string() -> LocalisedString {
-    [
-        String::from(""),
-        String::from(""),
-        String::from(""),
-        String::from(""),
-        String::from(""),
-        String::from(""),
-        String::from(""),
-        String::from(""),
-        String::from(""),
-        String::from(""),
-        String::from(""),
-        String::from(""),
-    ]
+    LocalisedString {
+        default_locale: None,
+        strings:        [
+            String::from(""),
+            String::from(""),
+            String::from(""),
+            String::from(""),
+            String::from(""),
+            String::from(""),
+            String::from(""),
+            String::from(""),
+            String::from(""),
+            String::from(""),
+            String::from(""),
+            String::from(""),
+        ],
+    }
 }
 
 #[derive(Debug, Clone)]

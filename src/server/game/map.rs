@@ -2,6 +2,7 @@ use std::{io, iter};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 use flagset::{flags, FlagSet};
+use nalgebra::Matrix3;
 
 use crate::{
     tools::adt::{ADT_CELLS_PER_GRID, ADT_GRID_SIZE},
@@ -53,7 +54,7 @@ pub struct MapFile {
     pub map_height_V9: [[f32; ADT_GRID_SIZE + 1]; ADT_GRID_SIZE + 1],
     pub map_height_V8: [[f32; ADT_GRID_SIZE]; ADT_GRID_SIZE],
     #[allow(clippy::type_complexity)]
-    pub map_height_flight_box_max_min: Option<([[i16; 3]; 3], [[i16; 3]; 3])>,
+    pub map_height_flight_box_max_min: Option<(Matrix3<i16>, Matrix3<i16>)>,
     // Map Liquid
     map_liquid_header_fourcc: [u8; 4],
     map_liquid_header_flags: FlagSet<MapLiquidHeaderFlag>,
@@ -152,9 +153,29 @@ macro_rules! twod_little_endian_write {
     }};
 }
 
+macro_rules! matrix_little_endian_write {
+    ( $twod:expr, $out:expr ) => {{
+        for row in $twod.row_iter() {
+            for v in row.iter() {
+                $out.write_all(&v.to_le_bytes())?;
+            }
+        }
+    }};
+}
+
 macro_rules! twod_little_endian_read {
     ( $twod:expr, $rdr:expr, $method:ident ) => {{
         for row in $twod.iter_mut() {
+            for v in row.iter_mut() {
+                *v = $rdr.$method::<LittleEndian>()?;
+            }
+        }
+    }};
+}
+
+macro_rules! matrix_little_endian_read {
+    ( $twod:expr, $rdr:expr, $method:ident ) => {{
+        for mut row in $twod.row_iter_mut() {
             for v in row.iter_mut() {
                 *v = $rdr.$method::<LittleEndian>()?;
             }
@@ -276,10 +297,10 @@ impl MapFile {
         }
         let mut map_height_flight_box_max_min = None;
         if map_height_header_flags.contains(MapHeightFlag::HasFlightBounds) {
-            let mut fb_max = [[0i16; 3]; 3];
-            let mut fb_min = [[0i16; 3]; 3];
-            twod_little_endian_read!(fb_max, rdr, read_i16);
-            twod_little_endian_read!(fb_min, rdr, read_i16);
+            let mut fb_max = Matrix3::zeros();
+            let mut fb_min = Matrix3::zeros();
+            matrix_little_endian_read!(fb_max, rdr, read_i16);
+            matrix_little_endian_read!(fb_min, rdr, read_i16);
             map_height_flight_box_max_min = Some((fb_max, fb_min))
         }
         let mut map_liquid_header_fourcc = [0u8; 4];
@@ -671,8 +692,8 @@ impl MapFile {
             twod_little_endian_write!(self.map_height_V8, out);
         }
         if let Some((fb_max, fb_min)) = self.map_height_flight_box_max_min {
-            twod_little_endian_write!(fb_max, out);
-            twod_little_endian_write!(fb_min, out);
+            matrix_little_endian_write!(fb_max, out);
+            matrix_little_endian_write!(fb_min, out);
         }
         let current: u32 = out.stream_position()?.try_into()?;
         self.map_height_map_size = current - self.map_height_map_offset;

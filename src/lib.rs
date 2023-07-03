@@ -7,6 +7,7 @@
 #![feature(async_closure)]
 #![feature(impl_trait_in_fn_trait_return)]
 #![feature(async_fn_in_trait)]
+#![feature(cursor_remaining)]
 
 pub mod common;
 pub mod compile_options;

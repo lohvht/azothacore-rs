@@ -1,3 +1,4 @@
+use nalgebra::{Vector3, Vector4};
 use wow_db2::LocalisedString;
 use wow_db2_proc_macros::WDC1;
 
@@ -107,7 +108,7 @@ impl AreaTable {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x378573E8)]
 pub struct AreaTrigger {
-    pub pos: [f32; 3],
+    pub pos: Vector3<f32>,
     pub radius: f32,
     pub box_length: f32,
     pub box_width: f32,
@@ -589,7 +590,7 @@ pub struct CinematicCamera {
     /// Sound ID       (voiceover for cinematic)
     pub sound_id:      u32,
     /// Position in map used for basis for M2 co-ordinates
-    pub origin:        [f32; 3],
+    pub origin:        Vector3<f32>,
     /// Orientation in map used for basis for M2 co-
     pub origin_facing: f32,
     /// Model
@@ -662,7 +663,7 @@ pub struct CreatureDisplayInfoExtra {
     pub hair_style_id: i8,
     pub hair_color_id: i8,
     pub facial_hair_id: i8,
-    pub custom_display_option: [u8; 3],
+    pub custom_display_option: Vector3<u8>,
     pub flags: i8,
 }
 
@@ -1024,8 +1025,8 @@ pub struct GameObjectDisplayInfo {
 #[layout_hash(0x597E8643)]
 pub struct GameObjects {
     pub name:            LocalisedString,
-    pub pos:             [f32; 3],
-    pub rot:             [f32; 4],
+    pub pos:             Vector3<f32>,
+    pub rot:             Vector4<f32>,
     pub scale:           f32,
     pub prop_value:      [i32; 8],
     #[parent]
@@ -1291,8 +1292,8 @@ pub struct Heirloom {
     pub legacy_item_id: i32,
     pub legacy_upgraded_item_id: i32,
     pub static_upgraded_item_id: i32,
-    pub upgrade_item_id: [i32; 3],
-    pub upgrade_item_bonus_list_id: [u16; 3],
+    pub upgrade_item_id: Vector3<i32>,
+    pub upgrade_item_bonus_list_id: Vector3<u16>,
     pub flags: u8,
     pub source_type_enum: i8,
     #[id]
@@ -1315,7 +1316,7 @@ pub struct Holidays {
     pub flags:                  u8,
     pub holiday_name_id:        u32,
     pub holiday_description_id: u32,
-    pub texture_file_data_id:   [i32; 3],
+    pub texture_file_data_id:   Vector3<i32>,
 }
 
 #[derive(WDC1, Default, Debug)]
@@ -1411,7 +1412,7 @@ pub struct ItemBagFamily {
 #[layout_hash(0xE12FB1A0)]
 pub struct ItemBonus {
     pub id: u32,
-    pub value: [i32; 3],
+    pub value: Vector3<i32>,
     pub parent_item_bonus_list_id: u16,
     pub typ: u8,
     pub order_index: u8,
@@ -1648,7 +1649,7 @@ pub struct ItemSearchName {
     pub display:             LocalisedString,
     #[id]
     pub id:                  u32,
-    pub flags:               [i32; 3],
+    pub flags:               Vector3<i32>,
     pub item_level:          u16,
     pub overall_quality_id:  u8,
     pub expansion_id:        u8,
@@ -1746,7 +1747,7 @@ pub struct ItemSparse {
     pub page_material_id: u8,
     pub material: u8,
     pub sheathe_type: u8,
-    pub socket_type: [u8; 3],
+    pub socket_type: Vector3<u8>,
     pub spell_weight_category: u8,
     pub spell_weight: u8,
     pub artifact_id: u8,
@@ -1851,7 +1852,7 @@ impl LFGDungeons {
 #[layout_hash(0x25025A13)]
 pub struct Light {
     pub id:                 u32,
-    pub game_coords:        [f32; 3],
+    pub game_coords:        Vector3<f32>,
     pub game_falloff_start: f32,
     pub game_falloff_end:   f32,
     pub continent_id:       i16,
@@ -1945,7 +1946,7 @@ impl Map {
             //GRID(46, 18) || GRID(46, 19) || GRID(46, 20) || GRID(46, 21) || GRID(46, 22) || GRID(46, 23) || GRID(46, 24) || GRID(46, 25) || GRID(46, 26)
 
             // Vashj'ir grids completely ignore fatigue
-            return (x >= 39 && x <= 40 && y >= 24 && y <= 26) || (x >= 41 && x <= 46 && y >= 18 && y <= 26);
+            return ((39..=40).contains(&x) && (24..=26).contains(&y)) || ((41..=46).contains(&x) && (18..=26).contains(&y));
         }
         if self.id == 1 {
             // GRID(43, 39) || GRID(43, 40)
@@ -2268,8 +2269,8 @@ pub struct PlayerCondition {
     pub skill_id: [u16; 4],
     pub min_skill: [u16; 4],
     pub max_skill: [u16; 4],
-    pub min_faction_id: [u32; 3],
-    pub min_reputation: [u8; 3],
+    pub min_faction_id: Vector3<u32>,
+    pub min_reputation: Vector3<u8>,
     pub prev_quest_id: [u16; 4],
     pub curr_quest_id: [u16; 4],
     pub current_completed_quest_id: [u16; 4],
@@ -2839,9 +2840,9 @@ pub struct SpellFocusObject {
 pub struct SpellInterrupts {
     pub id: u32,
     pub difficulty_id: u8,
-    pub interrupt_flags: i16,
-    pub aura_interrupt_flags: [i32; 2],
-    pub channel_interrupt_flags: [i32; 2],
+    pub interrupt_flags: u16,
+    pub aura_interrupt_flags: [u32; 2],
+    pub channel_interrupt_flags: [u32; 2],
     #[parent]
     pub spell_id: i32,
 }
@@ -2851,18 +2852,18 @@ pub struct SpellInterrupts {
 pub struct SpellItemEnchantment {
     pub id: u32,
     pub name: LocalisedString,
-    pub effect_arg: [u32; 3],
-    pub effect_scaling_points: [f32; 3],
+    pub effect_arg: Vector3<u32>,
+    pub effect_scaling_points: Vector3<f32>,
     pub transmog_cost: u32,
     pub icon_file_data_id: u32,
-    pub effect_points_min: [i16; 3],
+    pub effect_points_min: Vector3<i16>,
     pub item_visual: u16,
     pub flags: u16,
     pub required_skill_id: u16,
     pub required_skill_rank: u16,
     pub item_level: u16,
     pub charges: u8,
-    pub effect: [u8; 3],
+    pub effect: Vector3<u8>,
     pub condition_id: u8,
     pub min_level: u8,
     pub max_level: u8,
@@ -2913,14 +2914,14 @@ pub struct SpellMisc {
     pub duration_index: u16,
     pub range_index: u16,
     pub school_mask: u8,
-    pub spell_icon_file_data_id: i32,
+    pub spell_icon_file_data_id: u32,
     pub speed: f32,
-    pub active_icon_file_data_id: i32,
+    pub active_icon_file_data_id: u32,
     pub launch_delay: f32,
     pub difficulty_id: u8,
-    pub attributes: [i32; 14],
+    pub attributes: [u32; 14],
     #[parent]
-    pub spell_id: i32,
+    pub spell_id: u32,
 }
 
 #[derive(WDC1, Default, Debug)]
@@ -3123,7 +3124,7 @@ pub struct Talent {
 pub struct TaxiNodes {
     pub id: u32,
     pub name: LocalisedString,
-    pub pos: [f32; 3],
+    pub pos: Vector3<f32>,
     pub mount_creature_id: [i32; 2],
     pub map_offset: [f32; 2],
     pub facing: f32,
@@ -3150,7 +3151,7 @@ pub struct TaxiPath {
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0xD38E8C01)]
 pub struct TaxiPathNode {
-    pub loc:                [f32; 3],
+    pub loc:                Vector3<f32>,
     #[parent]
     pub path_id:            u16,
     pub continent_id:       u16,
@@ -3232,7 +3233,7 @@ pub struct TransmogSetItem {
 pub struct TransportAnimation {
     pub id:           u32,
     pub time_index:   u32,
-    pub pos:          [f32; 3],
+    pub pos:          Vector3<f32>,
     pub sequence_id:  u8,
     #[parent]
     pub transport_id: i32,
@@ -3243,7 +3244,7 @@ pub struct TransportAnimation {
 pub struct TransportRotation {
     pub id:              u32,
     pub time_index:      u32,
-    pub rot:             [f32; 4],
+    pub rot:             Vector4<f32>,
     #[parent]
     pub game_objects_id: i32,
 }
@@ -3288,7 +3289,7 @@ pub struct Vehicle {
     pub camera_yaw_offset: f32,
     pub seat_id: [u16; 8],
     pub vehicle_ui_indicator_id: u16,
-    pub power_display_id: [u16; 3],
+    pub power_display_id: Vector3<u16>,
     pub flags_b: u8,
     pub ui_locomotion_type: u8,
     pub missile_targeting_id: i32,
@@ -3301,7 +3302,7 @@ pub struct VehicleSeat {
     pub flags: i32,
     pub flags_b: i32,
     pub flags_c: i32,
-    pub attachment_offset: [f32; 3],
+    pub attachment_offset: Vector3<f32>,
     pub enter_pre_delay: f32,
     pub enter_speed: f32,
     pub enter_gravity: f32,
@@ -3325,7 +3326,7 @@ pub struct VehicleSeat {
     pub camera_entering_duration: f32,
     pub camera_exiting_delay: f32,
     pub camera_exiting_duration: f32,
-    pub camera_offset: [f32; 3],
+    pub camera_offset: Vector3<f32>,
     pub camera_pos_chase_rate: f32,
     pub camera_facing_chase_rate: f32,
     pub camera_entering_zoom: f32,
@@ -3515,7 +3516,7 @@ pub struct WorldMapTransforms {
 pub struct WorldSafeLocs {
     pub id:        u32,
     pub area_name: LocalisedString,
-    pub loc:       [f32; 3],
+    pub loc:       Vector3<f32>,
     pub facing:    f32,
     pub continent: u16,
 }

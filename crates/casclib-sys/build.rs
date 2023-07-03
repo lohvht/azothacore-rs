@@ -27,8 +27,8 @@ fn main() {
 fn setup_casc_build() {
     // Run cmake to build lib
     let dst = Config::new("CascLib")
-        .define("CASC_BUILD_SHARED_LIB", "ON")
-        .define("CASC_BUILD_STATIC_LIB", "OFF")
+        .define("CASC_BUILD_SHARED_LIB", "OFF")
+        .define("CASC_BUILD_STATIC_LIB", "ON")
         .uses_cxx11()
         .very_verbose(true)
         .build();
@@ -40,8 +40,10 @@ fn setup_casc_build() {
     // That contains output from cmake
     println!("cargo:rustc-link-search=native={}", dst.join("lib").display());
     // Tell rustc to use CascLib dync library
-    println!("cargo:rustc-link-lib=dylib=casc");
+    // println!("cargo:rustc-link-lib=dylib=casc");
+    println!("cargo:rustc-link-lib=static=casc");
     println!("cargo:rerun-if-changed={}", wrapper_header);
+    println!("cargo:rustc-link-lib=dylib=stdc++");
 
     let bindings = bindgen::Builder::default()
         .header(wrapper_header)

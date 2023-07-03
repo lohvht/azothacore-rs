@@ -1,8 +1,18 @@
-use std::io::{self, Read};
+use std::{
+    collections::HashMap,
+    io::{self, Read},
+    path::Path,
+};
 
 use byteorder::{LittleEndian, ReadBytesExt};
+use nalgebra::{Matrix3, Vector3};
 
-use crate::tools::basic_extractor::FileChunk;
+use super::extractor_common::cstr_bytes_to_string;
+use crate::{
+    read_le_unwrap,
+    tools::extractor_common::{casc_handles::CascStorageHandle, ChunkedFile, FileChunk},
+    GenericResult,
+};
 
 pub const ADT_CELLS_PER_GRID: usize = 16;
 pub const ADT_CELL_SIZE: usize = 8;
@@ -258,8 +268,8 @@ impl AdtChunkMh2o {
 pub struct AdtChunkMfbo {
     pub fcc:  [u8; 4],
     pub size: u32,
-    pub max:  [[i16; 3]; 3],
-    pub min:  [[i16; 3]; 3],
+    pub max:  Matrix3<i16>,
+    pub min:  Matrix3<i16>,
 }
 
 impl From<FileChunk> for AdtChunkMfbo {
@@ -268,14 +278,14 @@ impl From<FileChunk> for AdtChunkMfbo {
             panic!("value.fcc must be MFBO, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
         }
         let mut cursor = io::Cursor::new(value.data);
-        let mut max = [[0; 3]; 3];
-        for row in max.iter_mut() {
+        let mut max = Matrix3::zeros();
+        for mut row in max.row_iter_mut() {
             for v in row.iter_mut() {
                 *v = cursor.read_i16::<LittleEndian>().unwrap();
             }
         }
-        let mut min = [[0; 3]; 3];
-        for row in min.iter_mut() {
+        let mut min = Matrix3::zeros();
+        for mut row in min.row_iter_mut() {
             for v in row.iter_mut() {
                 *v = cursor.read_i16::<LittleEndian>().unwrap();
             }
@@ -391,5 +401,172 @@ impl AdtChunkMcnk {
 
     pub fn iy(&self) -> usize {
         self.iy as usize
+    }
+}
+
+#[derive(Debug)]
+pub struct AdtChunkModf {
+    pub map_object_defs: Vec<AdtMapObjectDefs>,
+}
+
+#[derive(Debug)]
+pub struct AdtMapObjectDefs {
+    pub id:         u32,
+    pub unique_id:  u32,
+    pub position:   Vector3<f32>,
+    pub rotation:   Vector3<f32>,
+    pub bounds:     [Vector3<f32>; 2],
+    pub flags:      u16,
+    /// can be larger than number of doodad sets in WMO
+    pub doodad_set: u16,
+    pub name_set:   u16,
+    pub scale:      u16,
+}
+
+impl From<FileChunk> for AdtChunkModf {
+    fn from(value: FileChunk) -> Self {
+        if value.fcc != *b"MODF" {
+            panic!("value.fcc must be MODF, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
+        }
+        let mut cursor = io::Cursor::new(value.data);
+        let mut map_object_defs = Vec::new();
+        while !cursor.is_empty() {
+            let id = read_le_unwrap!(cursor, u32);
+            let unique_id = read_le_unwrap!(cursor, u32);
+            let position = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
+            let rotation = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
+            let bounds = [
+                Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32)),
+                Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32)),
+            ];
+            let flags = read_le_unwrap!(cursor, u16);
+            let doodad_set = read_le_unwrap!(cursor, u16);
+            let name_set = read_le_unwrap!(cursor, u16);
+            let scale = read_le_unwrap!(cursor, u16);
+            map_object_defs.push(AdtMapObjectDefs {
+                id,
+                unique_id,
+                position,
+                rotation,
+                bounds,
+                flags,
+                doodad_set,
+                name_set,
+                scale,
+            });
+        }
+        Self { map_object_defs }
+    }
+}
+
+pub struct AdtChunkMddf {
+    pub doodad_defs: Vec<AdtDoodadDef>,
+}
+
+#[derive(Debug)]
+pub struct AdtDoodadDef {
+    pub id:        u32,
+    pub unique_id: u32,
+    pub position:  Vector3<f32>,
+    pub rotation:  Vector3<f32>,
+    pub scale:     u16,
+    pub flags:     u16,
+}
+
+impl From<FileChunk> for AdtChunkMddf {
+    fn from(value: FileChunk) -> Self {
+        if value.fcc != *b"MDDF" {
+            panic!("value.fcc must be MDDF, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
+        }
+        let mut cursor = io::Cursor::new(value.data);
+        let mut doodad_defs = Vec::new();
+        while !cursor.is_empty() {
+            let id = read_le_unwrap!(cursor, u32);
+            let unique_id = read_le_unwrap!(cursor, u32);
+            let position = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
+            let rotation = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
+            let scale = read_le_unwrap!(cursor, u16);
+            let flags = read_le_unwrap!(cursor, u16);
+            doodad_defs.push(AdtDoodadDef {
+                id,
+                unique_id,
+                position,
+                rotation,
+                scale,
+                flags,
+            });
+        }
+        Self { doodad_defs }
+    }
+}
+
+pub struct ADTFile {
+    pub mddf:        Option<AdtChunkMddf>,
+    pub modf:        Option<AdtChunkModf>,
+    pub model_paths: HashMap<usize, String>,
+    pub wmo_paths:   HashMap<usize, String>,
+}
+
+impl ADTFile {
+    pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, storage_path: P) -> GenericResult<Self> {
+        let file = ChunkedFile::build(storage, &storage_path)?;
+        // .inspect_err(|e| {
+        //     error!("Error opening adt file at {}, err was {e}", storage_path.as_ref().display());
+        // })?;
+        let mut mddf = None;
+        let mut modf = None;
+        let mut model_paths = HashMap::new();
+        let mut wmo_paths = HashMap::new();
+
+        for (fourcc, chunk) in file.chunks {
+            match &fourcc {
+                b"MCIN" => {},
+                b"MTEX" => {},
+                b"MMDX" => {
+                    let mut offset = 0;
+                    let paths = chunk
+                        .data
+                        .split_inclusive(|b| *b == 0)
+                        .map(|raw| {
+                            // We dont anticipate a panic here as the strings will always be nul-terminated
+                            let s = cstr_bytes_to_string(raw).unwrap();
+                            let r = (offset, s);
+                            offset += 1; // raw.len();
+                            r
+                        })
+                        .collect::<HashMap<_, _>>();
+                    model_paths.extend(paths);
+                },
+                b"MWMO" => {
+                    let mut offset = 0;
+                    let paths = chunk
+                        .data
+                        .split_inclusive(|b| *b == 0)
+                        .map(|raw| {
+                            // We dont anticipate a panic here as the strings will always be nul-terminated
+                            let s = cstr_bytes_to_string(raw).unwrap();
+                            let r = (offset, s);
+                            offset += 1; // raw.len();
+                            r
+                        })
+                        .collect::<HashMap<_, _>>();
+                    wmo_paths.extend(paths);
+                },
+                //======================
+                b"MDDF" => {
+                    mddf = Some(AdtChunkMddf::from(chunk));
+                },
+                b"MODF" => {
+                    modf = Some(AdtChunkModf::from(chunk));
+                },
+                _ => {},
+            }
+        }
+        Ok(Self {
+            mddf,
+            modf,
+            model_paths,
+            wmo_paths,
+        })
     }
 }

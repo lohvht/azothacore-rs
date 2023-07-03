@@ -911,8 +911,10 @@ where
                         let mut vs = vec![];
                         for array_idx in 0..*arity {
                             let mut s = new_localised_string();
-                            s[self.locale as usize] =
-                                self.record_get_string(raw_record, &offset_map_field_and_array_offsets, record_number, *field_idx, array_idx)?;
+                            s.set_by_locale_as_num(
+                                self.locale as usize,
+                                self.record_get_string(raw_record, &offset_map_field_and_array_offsets, record_number, *field_idx, array_idx)?,
+                            );
                             vs.push(s);
                         }
                         DB2Field::String(vs)

@@ -102,6 +102,7 @@ pub enum CascHandlerError {
     CascLibParseError { typ: String, got: u32 },
 }
 
+#[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Clone, FromPrimitive)]
 #[repr(u32)]
 pub enum CascStorageInfoClass {
@@ -152,7 +153,7 @@ impl CascStorageHandle {
 
         if !res {
             let last_error = CascError::try_from(unsafe { GetCascError() })?;
-            error!("Error opening casc storage {}: {}", path.as_ref().to_string_lossy().to_string(), last_error);
+            // error!("Error opening casc storage {}: {}", path.as_ref().to_string_lossy().to_string(), last_error);
             unsafe {
                 CascCloseStorage(handle);
                 SetCascError(last_error as u32);
@@ -229,11 +230,11 @@ impl CascStorageHandle {
 
         if !res {
             let last_error = CascError::try_from(unsafe { GetCascError() })?;
-            error!(
-                "Failed to open file {} in CASC storage: {}",
-                file_name.as_ref().to_string_lossy().to_string(),
-                last_error
-            );
+            // error!(
+            //     "Failed to open file {} in CASC storage: {}",
+            //     file_name.as_ref().to_string_lossy().to_string(),
+            //     last_error
+            // );
             unsafe {
                 CascCloseFile(handle);
                 SetCascError(last_error as u32);
@@ -264,7 +265,7 @@ impl CascFileHandle {
         let res = unsafe { CascGetFileSize64(self.h, value_ptr) };
         if !res {
             let last_error = CascError::try_from(unsafe { GetCascError() })?;
-            error!("Failed to get filesize: err is {}", last_error);
+            // error!("Failed to get filesize: err is {}", last_error);
             return Err(CascHandlerError::CascLibError(last_error));
         };
         Ok(value)
