@@ -214,18 +214,6 @@ impl GroupModel_Raw {
             }
         }
 
-        let mut buf_remain = vec![];
-        input.read_to_end(&mut buf_remain)?;
-        if !buf_remain.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "SANITY_CHECK: somehow file isn't fully consumed. please check again! {} bytes left",
-                    buf_remain.len(),
-                ),
-            ));
-        }
-
         Ok(Self {
             mogp_flags,
             group_wmo_id,

@@ -166,7 +166,7 @@ impl VmapExtractor {
         Ok(())
     }
 
-    pub fn extract_single_model(&mut self, storage: &CascStorageHandle, file_name: &str) -> GenericResult<()> {
+    fn extract_single_model(&mut self, storage: &CascStorageHandle, file_name: &str) -> GenericResult<()> {
         if file_name.len() < 4 {
             return Err(Box::new(io::Error::new(
                 io::ErrorKind::Other,
@@ -301,7 +301,7 @@ impl VmapExtractor {
                 .get(&(map.parent_map_id as u32))
                 .and_then(|m| self.get_or_extract_wdt(m, storage, &mut wdts).map(|_w| map.parent_map_id as u32));
 
-            let map_name = map.map_name.def_str();
+            let map_name = map.directory.def_str();
             // After populating, then process ADTs
             info!("Processing Map file {map_id} - {map_name}");
             for x in 0..WDT_MAP_SIZE {
