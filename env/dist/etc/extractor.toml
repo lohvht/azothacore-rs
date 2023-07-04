@@ -4,3 +4,7 @@ output_path = "/PATH/TO/AZOTHACORE/SERVER/DATA/DIR"
 
 [db2_and_map_extract]
 extract_flags = 15
+
+[vmap_extract_and_generate]
+precise_vector_data = false
+override_cached = true

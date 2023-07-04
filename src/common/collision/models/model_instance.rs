@@ -1,7 +1,7 @@
 use flagset::{flags, FlagSet};
 use nalgebra::Vector3;
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize)]
 pub struct VmapModelSpawn {
     pub map_num: u32,
     pub flags:   FlagSet<ModelFlags>,

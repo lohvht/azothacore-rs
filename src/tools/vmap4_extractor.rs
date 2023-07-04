@@ -60,13 +60,35 @@ pub fn main_vmap4_extract(args: &ExtractorConfig, first_installed_locale: Locale
         args: args.clone(),
         ..VmapExtractor::default()
     };
+
+    let model_spawns_tmp = args.output_vmap_sz_work_dir_wmo_dir_bin();
+    let gameobject_models_tmp = args.output_vmap_sz_work_dir_wmo_tmp_gameobject_models();
+    if model_spawns_tmp.exists() && gameobject_models_tmp.exists() && !args.vmap_extract_and_generate.override_cached {
+        // if not override cache, when these 2 files exist, we go ahead load from them instead. It is assumed that
+        // if these 2 files are available, the rest of the map / vmap files + doodads etc are extracted too.
+        vmap_extract.model_spawns_data = bincode::deserialize_from(fs::File::open(model_spawns_tmp)?)?;
+        vmap_extract.temp_gameobject_models = bincode::deserialize_from(fs::File::open(gameobject_models_tmp)?)?;
+        info!("Extract VMAP skipped due to no override cached!");
+        return Ok(vmap_extract);
+    }
+
     let storage = args.get_casc_storage_handler(first_installed_locale)?;
     vmap_extract.extract_game_object_models(&storage, first_installed_locale)?;
     vmap_extract.parse_map_files(first_installed_locale, &storage)?;
+
+    bincode::serialize_into(fs::File::create(model_spawns_tmp)?, &vmap_extract.model_spawns_data)?;
+    bincode::serialize_into(fs::File::create(gameobject_models_tmp)?, &vmap_extract.temp_gameobject_models)?;
+
+    // TODO: hirogoro@04jul2023 - VMAP extraction caching (i.e. how not to do more work)
+    // 1. save model_spawns_data and temp_gameobject_models to files (similar to
+    // `dir_bin` and `temp_gameobject_models` resp in TC),
+    // use them as indications that the files are extracted
+    // 2. Open via existing map files if possible? - dont rely on CASC storage too much. can probably extract adt and wdt files
+    info!("Extract VMAP done!");
     Ok(vmap_extract)
 }
 
-#[derive(Debug)]
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct TempGameObjectModel {
     pub id:        u32,
     pub is_wmo:    bool,

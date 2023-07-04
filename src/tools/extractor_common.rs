@@ -97,6 +97,8 @@ structstruck::strike! {
         pub vmap_extract_and_generate: struct {
             #[serde_inline_default(false)]
             pub precise_vector_data: bool,
+            #[serde_inline_default(false)]
+            pub override_cached: bool,
         },
     }
 }
@@ -157,7 +159,11 @@ impl ExtractorConfig {
     }
 
     pub fn output_vmap_sz_work_dir_wmo_dir_bin(&self) -> PathBuf {
-        Path::new(self.output_path.as_str()).join("dir_bin")
+        self.output_vmap_sz_work_dir_wmo().join("dir_bin")
+    }
+
+    pub fn output_vmap_sz_work_dir_wmo_tmp_gameobject_models(&self) -> PathBuf {
+        self.output_vmap_sz_work_dir_wmo().join("temp_gameobject_models")
     }
 }
 
