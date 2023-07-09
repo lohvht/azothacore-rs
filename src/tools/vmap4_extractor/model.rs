@@ -67,8 +67,8 @@ struct M2Array {
 impl M2Array {
     fn read<R: io::Read>(input: &mut R) -> io::Result<Self> {
         Ok(Self {
-            number:          read_le!(input, u32),
-            offset_elements: read_le!(input, u32),
+            number:          read_le!(input, u32)?,
+            offset_elements: read_le!(input, u32)?,
         })
     }
 }
@@ -83,7 +83,7 @@ impl Model {
         let md21 = f.chunks.get(b"12DM").expect("MD21 chunk should exist in this version of WoW");
         let mut md20data = io::Cursor::new(md21.data.clone());
 
-        let id = read_buf!(md20data, 4);
+        let id = read_buf!(md20data, 4)?;
         if &id != b"MD20" {
             return Err(Box::new(io::Error::new(
                 io::ErrorKind::Other,
@@ -94,16 +94,16 @@ impl Model {
                 ),
             )));
         }
-        let version = read_buf!(md20data, 4);
+        let version = read_buf!(md20data, 4)?;
         let names = M2Array::read(&mut md20data)?;
-        let type_ = read_le!(md20data, u32);
+        let type_ = read_le!(md20data, u32)?;
         let global_sequences = M2Array::read(&mut md20data)?;
         let animations = M2Array::read(&mut md20data)?;
         let animation_lookup = M2Array::read(&mut md20data)?;
         let bones = M2Array::read(&mut md20data)?;
         let key_bone_lookup = M2Array::read(&mut md20data)?;
         let vertices = M2Array::read(&mut md20data)?;
-        let n_views = read_le!(md20data, u32);
+        let n_views = read_le!(md20data, u32)?;
         let colors = M2Array::read(&mut md20data)?;
         let textures = M2Array::read(&mut md20data)?;
         let transparency = M2Array::read(&mut md20data)?;
@@ -115,12 +115,12 @@ impl Model {
         let tex_units = M2Array::read(&mut md20data)?;
         let trans_lookup = M2Array::read(&mut md20data)?;
         let tex_anim_lookup = M2Array::read(&mut md20data)?;
-        let bounding_box_min = Vector3::new(read_le!(md20data, f32), read_le!(md20data, f32), read_le!(md20data, f32));
-        let bounding_box_max = Vector3::new(read_le!(md20data, f32), read_le!(md20data, f32), read_le!(md20data, f32));
-        let bounding_sphere_radius = read_le!(md20data, f32);
-        let collision_box_min = Vector3::new(read_le!(md20data, f32), read_le!(md20data, f32), read_le!(md20data, f32));
-        let collision_box_max = Vector3::new(read_le!(md20data, f32), read_le!(md20data, f32), read_le!(md20data, f32));
-        let collision_sphere_radius = read_le!(md20data, f32);
+        let bounding_box_min = Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?);
+        let bounding_box_max = Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?);
+        let bounding_sphere_radius = read_le!(md20data, f32)?;
+        let collision_box_min = Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?);
+        let collision_box_max = Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?);
+        let collision_sphere_radius = read_le!(md20data, f32)?;
         let bounding_triangles = M2Array::read(&mut md20data)?;
         let bounding_vertices = M2Array::read(&mut md20data)?;
         let bounding_normals = M2Array::read(&mut md20data)?;
@@ -137,16 +137,16 @@ impl Model {
         md20data.set_position(bounding_vertices.offset_elements.into());
         for _ in 0..bounding_vertices.number {
             val_vertices.push(fix_coord_system(Vector3::new(
-                read_le!(md20data, f32),
-                read_le!(md20data, f32),
-                read_le!(md20data, f32),
+                read_le!(md20data, f32)?,
+                read_le!(md20data, f32)?,
+                read_le!(md20data, f32)?,
             )));
         }
 
         let mut val_indices = Vec::with_capacity(bounding_triangles.number as usize);
         md20data.set_position(bounding_triangles.offset_elements.into());
         for _ in 0..bounding_triangles.number {
-            val_indices.push(read_le!(md20data, u16));
+            val_indices.push(read_le!(md20data, u16)?);
         }
         Ok(Self {
             id,

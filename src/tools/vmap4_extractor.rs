@@ -10,10 +10,12 @@ use tracing::{error, info, warn};
 use wow_db2::wdc1;
 
 use crate::{
+    cmp_or_return,
     common::{
         collision::{
             maps::tile_assembler::WorldModel_Raw,
             models::model_instance::{ModelFlags, VmapModelSpawn},
+            vmap_definitions::RAW_VMAP_MAGIC,
         },
         Locale,
     },
@@ -38,14 +40,23 @@ use crate::{
 mod model;
 pub mod wmo;
 
-#[derive(Default)]
-pub struct VmapExtractor {
-    args: ExtractorConfig,
+pub struct VmapExtractor<'a> {
+    args: &'a ExtractorConfig,
     wmo_doodads: BTreeMap<String, WmoDoodadData>,
     /// Mapping of map_id to spawn ID to its spawn.
     pub model_spawns_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>>,
     pub temp_gameobject_models: Vec<TempGameObjectModel>,
     unique_object_id: HashMap<(u32, u16), u32>,
+}
+
+pub fn load_cached<R: io::Read, T: for<'a> serde::Deserialize<'a>>(r: &mut R) -> GenericResult<T> {
+    cmp_or_return!(r, RAW_VMAP_MAGIC)?;
+    Ok(bincode::deserialize_from(r)?)
+}
+
+pub fn save_cached<W: io::Write, T: serde::Serialize>(w: &mut W, t: &T) -> GenericResult<()> {
+    w.write_all(RAW_VMAP_MAGIC)?;
+    Ok(bincode::serialize_into(w, t)?)
 }
 
 pub fn main_vmap4_extract(args: &ExtractorConfig, first_installed_locale: Locale) -> GenericResult<VmapExtractor> {
@@ -57,8 +68,11 @@ pub fn main_vmap4_extract(args: &ExtractorConfig, first_installed_locale: Locale
     fs::create_dir_all(args.output_vmap_sz_work_dir_wmo())?;
 
     let mut vmap_extract = VmapExtractor {
-        args: args.clone(),
-        ..VmapExtractor::default()
+        args,
+        wmo_doodads: BTreeMap::new(),
+        model_spawns_data: BTreeMap::new(),
+        temp_gameobject_models: Vec::new(),
+        unique_object_id: HashMap::new(),
     };
 
     let model_spawns_tmp = args.output_vmap_sz_work_dir_wmo_dir_bin();
@@ -66,8 +80,8 @@ pub fn main_vmap4_extract(args: &ExtractorConfig, first_installed_locale: Locale
     if model_spawns_tmp.exists() && gameobject_models_tmp.exists() && !args.vmap_extract_and_generate.override_cached {
         // if not override cache, when these 2 files exist, we go ahead load from them instead. It is assumed that
         // if these 2 files are available, the rest of the map / vmap files + doodads etc are extracted too.
-        vmap_extract.model_spawns_data = bincode::deserialize_from(fs::File::open(model_spawns_tmp)?)?;
-        vmap_extract.temp_gameobject_models = bincode::deserialize_from(fs::File::open(gameobject_models_tmp)?)?;
+        vmap_extract.model_spawns_data = load_cached(&mut fs::File::open(model_spawns_tmp)?)?;
+        vmap_extract.temp_gameobject_models = load_cached(&mut fs::File::open(gameobject_models_tmp)?)?;
         info!("Extract VMAP skipped due to no override cached!");
         return Ok(vmap_extract);
     }
@@ -76,8 +90,8 @@ pub fn main_vmap4_extract(args: &ExtractorConfig, first_installed_locale: Locale
     vmap_extract.extract_game_object_models(&storage, first_installed_locale)?;
     vmap_extract.parse_map_files(first_installed_locale, &storage)?;
 
-    bincode::serialize_into(fs::File::create(model_spawns_tmp)?, &vmap_extract.model_spawns_data)?;
-    bincode::serialize_into(fs::File::create(gameobject_models_tmp)?, &vmap_extract.temp_gameobject_models)?;
+    save_cached(&mut fs::File::create(model_spawns_tmp)?, &vmap_extract.model_spawns_data)?;
+    save_cached(&mut fs::File::create(gameobject_models_tmp)?, &vmap_extract.temp_gameobject_models)?;
 
     // TODO: hirogoro@04jul2023 - VMAP extraction caching (i.e. how not to do more work)
     // 1. save model_spawns_data and temp_gameobject_models to files (similar to
@@ -105,7 +119,7 @@ struct AdtWithDirFileCache {
     dir_file_cache: Vec<VmapModelSpawn>,
 }
 
-impl VmapExtractor {
+impl VmapExtractor<'_> {
     fn extract_game_object_models(&mut self, storage: &CascStorageHandle, locale: Locale) -> GenericResult<()> {
         info!("Extracting GameObject models...");
 
@@ -397,17 +411,17 @@ impl VmapExtractor {
         }
 
         //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, Bound_lo, Bound_hi, name
-        let m = VmapModelSpawn {
-            map_num: map_id,
+        let m = VmapModelSpawn::new(
+            map_id,
             flags,
-            adt_id: map_obj_def.name_set,
-            id: unique_id,
-            i_pos: position,
-            i_rot: map_obj_def.rotation,
-            i_scale: scale,
-            bound: Some(bounds),
-            name: wmo_inst_name.to_string(),
-        };
+            map_obj_def.name_set,
+            unique_id,
+            position,
+            map_obj_def.rotation,
+            scale,
+            Some(bounds),
+            wmo_inst_name.to_string(),
+        );
         dir_file_cache.push(m);
         Ok(())
     }
@@ -501,17 +515,17 @@ impl VmapExtractor {
             }
 
             //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, name
-            let m = VmapModelSpawn {
-                map_num: map_id,
-                flags:   tcflags,
-                adt_id:  name_set, // not used for models
-                id:      unique_id,
-                i_pos:   position,
-                i_rot:   rotation,
-                i_scale: doodad.scale,
-                bound:   None,
-                name:    model_inst_name,
-            };
+            let m = VmapModelSpawn::new(
+                map_id,
+                tcflags,
+                name_set, // not used for models
+                unique_id,
+                position,
+                rotation,
+                doodad.scale,
+                None,
+                model_inst_name,
+            );
             dir_file_cache.push(m);
         }
         Ok(())
@@ -541,17 +555,17 @@ impl VmapExtractor {
             flags |= ModelFlags::ModParentSpawn;
         }
         //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, name
-        let m = VmapModelSpawn {
-            map_num: map_id,
+        let m = VmapModelSpawn::new(
+            map_id,
             flags,
-            adt_id: 0, // not used for models
-            id: self.generate_unique_object_id(doodad_def.unique_id, 0),
-            i_pos: position,
-            i_rot: doodad_def.rotation,
-            i_scale: sc,
-            bound: None,
-            name: model_inst_name.to_string(),
-        };
+            0, // not used for models
+            self.generate_unique_object_id(doodad_def.unique_id, 0),
+            position,
+            doodad_def.rotation,
+            sc,
+            None,
+            model_inst_name.to_string(),
+        );
         dir_file_cache.push(m);
         Ok(())
     }

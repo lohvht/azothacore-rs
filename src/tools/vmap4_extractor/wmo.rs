@@ -250,7 +250,7 @@ impl WmoRoot {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 pub struct WMOLiquidHeader {
     pub xverts:   i32,
     pub yverts:   i32,
@@ -506,6 +506,16 @@ impl WmoGroup {
         // SANITY CHECK
         if s.mopy.len() == s.movi.len() {
             Ok(s)
+        } else if s.hlq.xverts != s.hlq.xtiles + 1 {
+            Err(Box::new(io::Error::new(
+                io::ErrorKind::Other,
+                format!("SANITY CHECK, xverts {} must be 1 more than xtiles {}", s.hlq.xverts, s.hlq.xtiles),
+            )))
+        } else if s.hlq.yverts != s.hlq.ytiles + 1 {
+            Err(Box::new(io::Error::new(
+                io::ErrorKind::Other,
+                format!("SANITY CHECK, yverts {} must be 1 more than ytiles {}", s.hlq.yverts, s.hlq.ytiles),
+            )))
         } else {
             Err(Box::new(io::Error::new(
                 io::ErrorKind::Other,

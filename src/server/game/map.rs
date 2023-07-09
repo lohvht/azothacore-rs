@@ -5,6 +5,7 @@ use flagset::{flags, FlagSet};
 use nalgebra::Matrix3;
 
 use crate::{
+    sanity_check_read_all_bytes_from_reader,
     tools::adt::{ADT_CELLS_PER_GRID, ADT_GRID_SIZE},
     GenericResult,
 };
@@ -383,17 +384,7 @@ impl MapFile {
 
             map_holes = Some(holes);
         }
-        let mut buf_remain = vec![];
-        rdr.read_to_end(&mut buf_remain)?;
-        if !buf_remain.is_empty() {
-            return Err(Box::new(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "SANITY_CHECK: somehow file isn't fully consumed. please check again! {} bytes left",
-                    buf_remain.len(),
-                ),
-            )));
-        }
+        sanity_check_read_all_bytes_from_reader!(rdr)?;
         Ok(Self {
             map_magic,
             map_version_magic,

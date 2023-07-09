@@ -36,6 +36,7 @@ use azothacore_rs::{
             Db2AndMapExtract,
             ExtractorConfig,
         },
+        vmap4_assembler::main_vmap4_assemble,
         vmap4_extractor::main_vmap4_extract,
         wdt::{WdtChunkMain, WDT_MAP_SIZE},
     },
@@ -52,7 +53,7 @@ fn main() -> GenericResult<()> {
     let mut f = fs::File::open("env/dist/etc/extractor.toml")?;
     let args = ExtractorConfig::from_toml(&mut f)?;
 
-    banner::azotha_banner_show("DBC, Maps, VMaps & MMaps Extractor", || {
+    banner::azotha_banner_show("DBC, Maps, VMaps & MMaps Extractor and Assembler", || {
         info!("Client directory: {}", args.input_path);
         info!("Data directory:   {}", args.output_path);
         info!("rest of config: {:?}", args);
@@ -60,7 +61,7 @@ fn main() -> GenericResult<()> {
 
     old_client_check(&args)?;
 
-    // MAP & DB2 EXTRACTOR
+    // MAP & DB2 EXTRACTOR // TODO: extract map and DB2 extractor to its own module
     let installed_locales_mask = args.get_installed_locales_mask()?;
     let mut first_installed_locale: Option<Locale> = None;
     let mut build = 0;
@@ -119,8 +120,11 @@ fn main() -> GenericResult<()> {
         extract_maps(&args, first_installed_locale, build)?;
     }
 
-    // VMAP EXTRACTOR AND ASSEMBLER
-    main_vmap4_extract(&args, first_installed_locale)?;
+    // VMAP EXTRACTOR
+    let vmap4_extractor_res = main_vmap4_extract(&args, first_installed_locale)?;
+
+    // VMAP ASSEMBLER
+    main_vmap4_assemble(&args, vmap4_extractor_res.model_spawns_data, vmap4_extractor_res.temp_gameobject_models)?;
 
     Ok(())
 }

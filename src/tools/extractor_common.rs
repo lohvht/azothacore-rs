@@ -165,6 +165,10 @@ impl ExtractorConfig {
     pub fn output_vmap_sz_work_dir_wmo_tmp_gameobject_models(&self) -> PathBuf {
         self.output_vmap_sz_work_dir_wmo().join("temp_gameobject_models")
     }
+
+    pub fn output_vmap_output_path(&self) -> PathBuf {
+        Path::new(self.output_path.as_str()).join("vmaps")
+    }
 }
 
 #[derive(Clone)]
