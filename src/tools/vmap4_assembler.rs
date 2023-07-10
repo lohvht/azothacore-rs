@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, fs};
 
 use tracing::{error, info};
 
@@ -19,6 +19,8 @@ pub fn main_vmap4_assemble(
     let src_display = src.display();
     let dst_display = dst.display();
     info!("using {src_display} as source directory and writing output to {dst_display}");
+
+    fs::create_dir_all(&dst)?;
 
     tile_assembler_convert_world2(dst, src, model_spawns_data, temp_gameobject_models).inspect_err(|e| {
         error!("TileAssembler exit with errors: {e}");

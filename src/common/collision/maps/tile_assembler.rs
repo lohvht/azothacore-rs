@@ -1,15 +1,14 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    io::{self},
-    mem::{size_of, size_of_val},
+    io,
     path::{Path, PathBuf},
 };
 
 use bvh::{aabb::AABB, bvh::BVH};
 use flagset::FlagSet;
 use nalgebra::{Matrix3, Rotation, Vector2, Vector3};
-use tracing::{info, warn};
+use tracing::{error, info, warn};
 
 use crate::{
     cmp_or_return,
@@ -24,7 +23,10 @@ use crate::{
     },
     read_le,
     sanity_check_read_all_bytes_from_reader,
-    tools::vmap4_extractor::{wmo::WMOLiquidHeader, TempGameObjectModel},
+    tools::{
+        extractor_common::{bincode_deserialise, bincode_serialise},
+        vmap4_extractor::{wmo::WMOLiquidHeader, TempGameObjectModel},
+    },
     GenericResult,
 };
 
@@ -37,32 +39,34 @@ pub fn tile_assembler_convert_world2(
     let inv_tile_size = 3f32 / 1600f32;
 
     let mut spawned_model_files = BTreeSet::new();
-    // tile entries => packedTileId to set of tilespawns
-    let mut tile_entries = BTreeMap::new();
-    let mut parent_tile_entries = BTreeMap::new();
+    let mut map_data = map_data;
 
     // export Map data
-    for (map_id, mut data) in map_data {
+    while let Some((map_id, mut data)) = map_data.pop_first() {
+        // tile entries => packedTileId to set of tilespawns
+        let mut tile_entries = BTreeMap::new();
+        let mut parent_tile_entries = BTreeMap::new();
         // build global map tree
         let mut map_spawns = Vec::with_capacity(data.len());
         info!("Calculating model bounds for map {map_id}...");
         for (_spawn_id, entry) in data.iter_mut() {
             // M2 models don't have a bound set in WDT/ADT placement data, i still think they're not used for LoS at all on retail
-            if !(entry.flags & ModelFlags::ModM2).is_empty() && calculate_transformed_bound(&i_src_dir, entry).is_err() {
+            if entry.flags.contains(ModelFlags::ModM2) && calculate_transformed_bound(&i_src_dir, entry).is_err() {
                 continue;
             }
 
-            let entry_tile_entries = if !(entry.flags & ModelFlags::ModParentSpawn).is_empty() {
+            let entry_tile_entries = if entry.flags.contains(ModelFlags::ModParentSpawn) {
                 &mut parent_tile_entries
             } else {
                 &mut tile_entries
             };
             let bounds = entry.bound.expect("By here bounds should never be unset");
-            let low = Vector2::new((bounds[0].x * inv_tile_size).round() as u16, (bounds[0].y * inv_tile_size).round() as u16);
-            let high = Vector2::new((bounds[1].x * inv_tile_size).round() as u16, (bounds[1].y * inv_tile_size).round() as u16);
+            let bounds = AABB::with_bounds(bounds[0].into(), bounds[1].into());
+            let low = Vector2::new((bounds.min.x * inv_tile_size).round() as u16, (bounds.min.y * inv_tile_size).round() as u16);
+            let high = Vector2::new((bounds.max.x * inv_tile_size).round() as u16, (bounds.max.y * inv_tile_size).round() as u16);
 
-            for x in low.x..high.x {
-                for y in low.y..high.y {
+            for x in low.x..=high.x {
+                for y in low.y..=high.y {
                     entry_tile_entries
                         .entry(StaticMapTree::pack_tile_id(x, y))
                         .or_insert(BTreeSet::new())
@@ -76,7 +80,7 @@ pub fn tile_assembler_convert_world2(
             map_spawns.push(entry);
         }
 
-        info!("Creating map tree for map {map_id}...");
+        info!("Creating map tree for map {map_id}. map_spawns len is {}...", map_spawns.len());
         let ptree = BVH::build(&mut map_spawns);
         // unborrow map_spawns
         let map_spawns = map_spawns.into_iter().map(|m| &*m).collect::<Vec<_>>();
@@ -94,7 +98,10 @@ pub fn tile_assembler_convert_world2(
                 for spawn in te {
                     let model_spawn = match data.get(&spawn.id) {
                         None => {
-                            warn!("tile_entries model spawn does not exist in map data for {map_id} for some reason. should not happen");
+                            warn!(
+                                "tile_entries model spawn does not exist in map data for {map_id} for ID {} some reason. should not happen",
+                                spawn.id,
+                            );
                             continue;
                         },
                         Some(ms) => ms,
@@ -130,8 +137,12 @@ fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpaw
 
     let model_position = ModelPosition::new(spawn.i_rot, spawn.i_scale);
 
-    let mut input = fs::File::open(&model_filename)?;
-    let raw_model = WorldModel_Raw::read(&mut input)?;
+    let mut input = fs::File::open(&model_filename).inspect_err(|e| {
+        error!("ERROR: Can't open raw model file: {} - err {e}", model_filename.display());
+    })?;
+    let raw_model = WorldModel_Raw::read(&mut input).inspect_err(|e| {
+        error!("ERROR: read raw world model error: {} - err {e}", model_filename.display());
+    })?;
 
     let groups = raw_model.groups.len();
     if groups != 1 {
@@ -326,42 +337,48 @@ pub struct WorldModel_Raw {
 
 impl WorldModel_Raw {
     pub fn write<W: io::Write>(&self, out: &mut W) -> io::Result<()> {
+        let mut out = out;
         out.write_all(RAW_VMAP_MAGIC)?;
         out.write_all(&(self.n_vectors as u32).to_le_bytes())?;
-        out.write_all(&(self.groups.len() as u32).to_le_bytes())?;
         out.write_all(&self.root_wmo_id.to_le_bytes())?;
-        for g in self.groups.iter() {
-            g.write(out)?;
-        }
+        bincode_serialise(&mut out, &self.groups).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("BINCODE WRITE ERR: {e}")))?;
         Ok(())
     }
 
-    pub fn read_world_model_raw_header<R: io::Read>(input: &mut R) -> io::Result<(usize, usize, u32)> {
+    pub fn read_world_model_raw_header<R: io::Read>(input: &mut R) -> io::Result<(usize, u32)> {
         cmp_or_return!(input, RAW_VMAP_MAGIC)?;
         let n_vectors = read_le!(input, u32)? as usize;
-        let n_groups = read_le!(input, u32)? as usize;
         let root_wmo_id = read_le!(input, u32)?;
-        Ok((n_vectors, n_groups, root_wmo_id))
+        Ok((n_vectors, root_wmo_id))
     }
 
     pub fn read<R: io::Read>(input: &mut R) -> io::Result<WorldModel_Raw> {
-        let (n_vectors, n_groups, root_wmo_id) = Self::read_world_model_raw_header(input)?;
-        let mut groups = Vec::with_capacity(n_groups);
-        for _ in 0..n_groups {
-            groups.push(GroupModel_Raw::read(input)?);
-        }
+        let mut input = input;
+        let (n_vectors, root_wmo_id) = Self::read_world_model_raw_header(input)?;
+        let groups = bincode_deserialise(&mut input).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("BINCODE READ ERR: {e}")))?;
 
         sanity_check_read_all_bytes_from_reader!(input)?;
-
-        Ok(Self {
+        let s = Self {
             root_wmo_id,
             n_vectors,
             groups,
-        })
+        };
+        for g in s.groups.iter() {
+            if let Some(GroupModel_Liquid_Raw { header: hlq, .. }) = &g.liquid {
+                if hlq.xverts != hlq.xtiles + 1 {
+                    panic!("SANITY CHECK, xverts {} must be 1 more than xtiles {}", hlq.xverts, hlq.xtiles);
+                }
+                if hlq.yverts != hlq.ytiles + 1 {
+                    panic!("SANITY CHECK, yverts {} must be 1 more than ytiles {}", hlq.yverts, hlq.ytiles);
+                }
+            }
+        }
+        Ok(s)
     }
 }
 
 #[allow(non_camel_case_types)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct GroupModel_Raw {
     pub mogp_flags:            u32,
     pub group_wmo_id:          u32,
@@ -379,164 +396,8 @@ pub struct GroupModel_Raw {
     pub liquid:                Option<GroupModel_Liquid_Raw>,
 }
 
-macro_rules! vec_block_size {
-    ( $collection:expr ) => {{
-        if $collection.len() > 0 {
-            $collection.len() * size_of_val(&$collection[0])
-        } else {
-            0
-        }
-    }};
-}
-
-macro_rules! vec_block_write {
-    ( $out:expr, $collection:expr ) => {{
-        for i in $collection.iter() {
-            $out.write_all(&i.to_le_bytes())?;
-        }
-    }};
-}
-
-impl GroupModel_Raw {
-    pub fn write<W: io::Write>(&self, out: &mut W) -> io::Result<()> {
-        out.write_all(&self.mogp_flags.to_le_bytes())?;
-        out.write_all(&self.group_wmo_id.to_le_bytes())?;
-        vec_block_write!(out, self.bbcorn1);
-        vec_block_write!(out, self.bbcorn2);
-        out.write_all(&self.liquidflags.to_le_bytes())?;
-        // GRP section
-        out.write_all(b"GRP ")?;
-        let block_size = size_of::<u32>() + vec_block_size!(self.n_bounding_triangles);
-        out.write_all(&(block_size as u32).to_le_bytes())?;
-        vec_block_write!(out, self.n_bounding_triangles);
-        // INDX section
-        out.write_all(b"INDX")?;
-        let flat_triangle_indices = self.mesh_triangle_indices.iter().flat_map(|v| [v.x, v.y, v.z]).collect::<Vec<_>>();
-        let block_size = size_of::<u32>() + vec_block_size!(flat_triangle_indices);
-        out.write_all(&(block_size as u32).to_le_bytes())?;
-        vec_block_write!(out, flat_triangle_indices);
-        // VERT section
-        out.write_all(b"VERT")?;
-        let flat_vert_chunks = self.vertices_chunks.iter().flat_map(|v| [v.x, v.y, v.z]).collect::<Vec<_>>();
-        let block_size = size_of::<u32>() + vec_block_size!(flat_vert_chunks);
-        out.write_all(&(block_size as u32).to_le_bytes())?;
-        vec_block_write!(out, flat_vert_chunks);
-        // LIQU section
-        if (self.liquidflags & 3) > 0 {
-            let mut liqu_total_size = size_of::<u32>();
-            if let Some(liq) = &self.liquid {
-                liqu_total_size += liq.header.raw_size_of() + vec_block_size!(liq.liquid_heights) + vec_block_size!(liq.liquid_flags);
-            }
-            out.write_all(b"LIQU")?;
-            out.write_all(&(liqu_total_size as u32).to_le_bytes())?;
-            out.write_all(&self.liquid_type.to_le_bytes())?;
-            if let Some(liq) = &self.liquid {
-                out.write_all(&liq.header.xverts.to_le_bytes())?;
-                out.write_all(&liq.header.yverts.to_le_bytes())?;
-                out.write_all(&liq.header.xtiles.to_le_bytes())?;
-                out.write_all(&liq.header.ytiles.to_le_bytes())?;
-                out.write_all(&liq.header.pos_x.to_le_bytes())?;
-                out.write_all(&liq.header.pos_y.to_le_bytes())?;
-                out.write_all(&liq.header.pos_z.to_le_bytes())?;
-                out.write_all(&liq.header.material.to_le_bytes())?;
-                vec_block_write!(out, liq.liquid_heights);
-                vec_block_write!(out, liq.liquid_flags);
-            }
-        }
-        Ok(())
-    }
-
-    fn read<R: io::Read>(input: &mut R) -> io::Result<GroupModel_Raw> {
-        let mogp_flags = read_le!(input, u32)?;
-        let group_wmo_id = read_le!(input, u32)?;
-        let bbcorn1 = Vector3::new(read_le!(input, f32)?, read_le!(input, f32)?, read_le!(input, f32)?);
-        let bbcorn2 = Vector3::new(read_le!(input, f32)?, read_le!(input, f32)?, read_le!(input, f32)?);
-        let liquidflags = read_le!(input, u32)?;
-
-        // will this ever be used? what is it good for anyway??
-        cmp_or_return!(input, b"GRP ")?;
-        let _block_size = read_le!(input, u32)?;
-        let branches = read_le!(input, u32)?;
-        let mut n_bounding_triangles = Vec::with_capacity(branches as usize);
-        for _ in 0..branches {
-            n_bounding_triangles.push(read_le!(input, u16)?);
-        }
-        // ---- indexes
-        cmp_or_return!(input, b"INDX")?;
-        let _block_size = read_le!(input, u32)?;
-        let mut nindexes = read_le!(input, u32)?;
-        let mut mesh_triangle_indices = Vec::with_capacity((nindexes / 3) as usize);
-        while nindexes > 0 {
-            mesh_triangle_indices.push(Vector3::new(read_le!(input, u16)?, read_le!(input, u16)?, read_le!(input, u16)?));
-            nindexes -= 3;
-        }
-        // ---- vectors
-        cmp_or_return!(input, b"VERT")?;
-        let _block_size = read_le!(input, u32)?;
-        let mut nvectors = read_le!(input, u32)?;
-        let mut vertices_chunks = Vec::with_capacity((nvectors / 3) as usize);
-        while nvectors > 0 {
-            vertices_chunks.push(Vector3::new(read_le!(input, f32)?, read_le!(input, f32)?, read_le!(input, f32)?));
-            nvectors -= 3;
-        }
-        let mut liquid_type = 0;
-        let mut liquid = None;
-        if (liquidflags & 3) > 0 {
-            cmp_or_return!(input, b"LIQU")?;
-            let _block_size = read_le!(input, u32)?;
-            liquid_type = read_le!(input, u32)?;
-            if (liquidflags & 1) > 0 {
-                let hlq = WMOLiquidHeader {
-                    xverts:   read_le!(input, i32)?,
-                    yverts:   read_le!(input, i32)?,
-                    xtiles:   read_le!(input, i32)?,
-                    ytiles:   read_le!(input, i32)?,
-                    pos_x:    read_le!(input, f32)?,
-                    pos_y:    read_le!(input, f32)?,
-                    pos_z:    read_le!(input, f32)?,
-                    material: read_le!(input, i16)?,
-                };
-                if hlq.xverts != hlq.xtiles + 1 {
-                    panic!("SANITY CHECK, xverts {} must be 1 more than xtiles {}", hlq.xverts, hlq.xtiles);
-                }
-                if hlq.yverts != hlq.ytiles + 1 {
-                    panic!("SANITY CHECK, yverts {} must be 1 more than ytiles {}", hlq.yverts, hlq.ytiles);
-                }
-
-                let size = (hlq.xverts * hlq.yverts) as usize;
-                let mut liquid_heights = Vec::with_capacity(size);
-                for _ in 0..size {
-                    liquid_heights.push(read_le!(input, f32)?);
-                }
-                let size = (hlq.xtiles * hlq.ytiles) as usize;
-                let mut liquid_flags = Vec::with_capacity(size);
-                for _ in 0..size {
-                    liquid_flags.push(read_le!(input, u8)?);
-                }
-                liquid = Some(GroupModel_Liquid_Raw {
-                    header: hlq,
-                    liquid_heights,
-                    liquid_flags,
-                })
-            }
-        }
-
-        Ok(Self {
-            mogp_flags,
-            group_wmo_id,
-            bbcorn1,
-            bbcorn2,
-            liquidflags,
-            n_bounding_triangles,
-            mesh_triangle_indices,
-            vertices_chunks,
-            liquid_type,
-            liquid,
-        })
-    }
-}
-
 #[allow(non_camel_case_types)]
+#[derive(serde::Deserialize, serde::Serialize)]
 pub struct GroupModel_Liquid_Raw {
     pub header:         WMOLiquidHeader,
     pub liquid_heights: Vec<f32>,

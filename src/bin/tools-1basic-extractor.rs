@@ -27,6 +27,7 @@ use azothacore_rs::{
             ADT_CELLS_PER_GRID,
             ADT_CELL_SIZE,
             ADT_GRID_SIZE,
+            ADT_GRID_SIZE_PLUS_ONE,
         },
         basic_extractor::DB_FILES_CLIENT_LIST,
         extractor_common::{
@@ -44,6 +45,7 @@ use azothacore_rs::{
 };
 use byteorder::{LittleEndian, ReadBytesExt};
 use flagset::FlagSet;
+use nalgebra::SMatrix;
 use tracing::{error, info, warn};
 use walkdir::WalkDir;
 use wow_db2::wdc1;
@@ -459,7 +461,7 @@ fn get_liquid_height(
     }
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, non_snake_case)]
 fn convert_adt(
     args: &Db2AndMapExtract,
     storage: &CascStorageHandle,
@@ -472,8 +474,14 @@ fn convert_adt(
 ) -> GenericResult<()> {
     let adt = ChunkedFile::build(storage, input_path)?;
     // Prepare map header
-    let mut map_file = MapFile::default();
-    map_file.map_build_magic = build_no;
+    let map_build_magic = build_no;
+    let mut map_area_ids = [[0; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
+    let mut map_height_V9 = SMatrix::<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>::zeros();
+    let mut map_height_V8 = SMatrix::<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>::zeros();
+    let mut map_liquid_flags: [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID] = [[None.into(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
+    let mut map_liquid_entry = [[0; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
+    let mut map_holes = None;
+    let mut map_height_flight_box_max_min = None;
 
     let mut liquid_show = [[false; ADT_GRID_SIZE]; ADT_GRID_SIZE];
     let mut map_liquid_height = [[args.use_min_height; ADT_GRID_SIZE + 1]; ADT_GRID_SIZE + 1];
@@ -481,20 +489,20 @@ fn convert_adt(
     for (_fcc, chunk) in adt.chunks.iter().filter(|(fcc, _)| *fcc == b"MCNK") {
         let mcnk = AdtChunkMcnk::from(chunk.clone());
         // Area data
-        map_file.map_area_ids[mcnk.iy()][mcnk.ix()] = mcnk.areaid.try_into().unwrap();
+        map_area_ids[mcnk.iy()][mcnk.ix()] = mcnk.areaid.try_into().unwrap();
         // Set map height as grid height
         for y in 0..ADT_CELL_SIZE + 1 {
             let cy = mcnk.iy() * ADT_CELL_SIZE + y;
             for x in 0..ADT_CELL_SIZE + 1 {
                 let cx = mcnk.ix() * ADT_CELL_SIZE + x;
-                map_file.map_height_V9[cy][cx] = mcnk.ypos;
+                map_height_V9[(cy, cx)] = mcnk.ypos;
             }
         }
         for y in 0..ADT_CELL_SIZE {
             let cy = mcnk.iy() * ADT_CELL_SIZE + y;
             for x in 0..ADT_CELL_SIZE {
                 let cx = mcnk.ix() * ADT_CELL_SIZE + x;
-                map_file.map_height_V8[cy][cx] = mcnk.ypos;
+                map_height_V8[(cy, cx)] = mcnk.ypos;
             }
         }
         // Get custom height
@@ -505,7 +513,7 @@ fn convert_adt(
                 let cy = mcnk.iy() * ADT_CELL_SIZE + y;
                 for x in 0..ADT_CELL_SIZE + 1 {
                     let cx = mcnk.ix() * ADT_CELL_SIZE + x;
-                    map_file.map_height_V9[cy][cx] += mcvt.height_map[y * (ADT_CELL_SIZE * 2 + 1) + x];
+                    map_height_V9[(cy, cx)] += mcvt.height_map[y * (ADT_CELL_SIZE * 2 + 1) + x];
                 }
             }
             // get V8 height map
@@ -513,7 +521,7 @@ fn convert_adt(
                 let cy = mcnk.iy() * ADT_CELL_SIZE + y;
                 for x in 0..ADT_CELL_SIZE {
                     let cx = mcnk.ix() * ADT_CELL_SIZE + x;
-                    map_file.map_height_V8[cy][cx] += mcvt.height_map[y * (ADT_CELL_SIZE * 2 + 1) + ADT_CELL_SIZE + 1 + x];
+                    map_height_V8[(cy, cx)] += mcvt.height_map[y * (ADT_CELL_SIZE * 2 + 1) + ADT_CELL_SIZE + 1 + x];
                 }
             }
         }
@@ -530,7 +538,7 @@ fn convert_adt(
                         if liquid.flags[y][x] != 0x0F {
                             liquid_show[cy][cx] = true;
                             if !ignore_deep_water && (liquid.flags[y][x] & (1 << 7) == (1 << 7)) {
-                                map_file.map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::DarkWater;
+                                map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::DarkWater;
                             }
                             count += 1;
                         }
@@ -540,21 +548,21 @@ fn convert_adt(
                 let c_flag = mcnk.flags;
                 if c_flag & (1 << 2) == (1 << 2) {
                     // water
-                    map_file.map_liquid_entry[mcnk.iy()][mcnk.ix()] = 1;
-                    map_file.map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Water;
+                    map_liquid_entry[mcnk.iy()][mcnk.ix()] = 1;
+                    map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Water;
                 }
                 if c_flag & (1 << 3) == (1 << 3) {
                     // ocean
-                    map_file.map_liquid_entry[mcnk.iy()][mcnk.ix()] = 2;
-                    map_file.map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Ocean;
+                    map_liquid_entry[mcnk.iy()][mcnk.ix()] = 2;
+                    map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Ocean;
                 }
                 if c_flag & (1 << 4) == (1 << 4) {
                     // magma/slime
-                    map_file.map_liquid_entry[mcnk.iy()][mcnk.ix()] = 3;
-                    map_file.map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Magma;
+                    map_liquid_entry[mcnk.iy()][mcnk.ix()] = 3;
+                    map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Magma;
                 }
 
-                if count == 0 && map_file.map_liquid_flags[mcnk.iy()][mcnk.ix()].bits() > 0 {
+                if count == 0 && map_liquid_flags[mcnk.iy()][mcnk.ix()].bits() > 0 {
                     error!("Wrong liquid detect in MCLQ chunk");
                 }
                 for y in 0..ADT_CELL_SIZE + 1 {
@@ -566,8 +574,8 @@ fn convert_adt(
                 }
             }
         }
-        // map_file.map_holes[mcnk.iy()][mcnk.ix()]
-        // &mut map_file.map_holes[mcnk.iy()][mcnk.ix()]
+        // map_holes[mcnk.iy()][mcnk.ix()]
+        // &mut map_holes[mcnk.iy()][mcnk.ix()]
         // u64::from_le_bytes() != 0;
 
         // [[[0u8; 8]; 16]; 16]
@@ -589,10 +597,10 @@ fn convert_adt(
 
         match chunk_holes {
             Some(h) if u64::from_le_bytes(h) != 0 => {
-                if map_file.map_holes.is_none() {
-                    map_file.map_holes = Some([[[0u8; 8]; 16]; 16]);
+                if map_holes.is_none() {
+                    map_holes = Some([[[0u8; 8]; 16]; 16]);
                 }
-                let map_file_holes = &mut map_file.map_holes.unwrap();
+                let map_file_holes = &mut map_holes.unwrap();
                 map_file_holes[mcnk.iy()][mcnk.ix()] = h;
             },
             _ => {},
@@ -622,26 +630,20 @@ fn convert_adt(
                         exists_mask >>= 1;
                     }
                 }
-                map_file.map_liquid_entry[i][j] = get_liquid_type(h, liquid_types_db2, liquid_materials_db2);
-                match liquid_types_db2.get(&(map_file.map_liquid_entry[i][j] as u32)) {
+                map_liquid_entry[i][j] = get_liquid_type(h, liquid_types_db2, liquid_materials_db2);
+                match liquid_types_db2.get(&(map_liquid_entry[i][j] as u32)) {
                     None => {
-                        warn!("can't find liquid_type of ID {}", &(map_file.map_liquid_entry[i][j] as u32));
+                        warn!("can't find liquid_type of ID {}", &(map_liquid_entry[i][j] as u32));
                     },
-                    Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Water as u8 => {
-                        map_file.map_liquid_flags[i][j] |= MapLiquidTypeFlag::Water
-                    },
+                    Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Water as u8 => map_liquid_flags[i][j] |= MapLiquidTypeFlag::Water,
                     Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Ocean as u8 => {
-                        map_file.map_liquid_flags[i][j] |= MapLiquidTypeFlag::Ocean;
+                        map_liquid_flags[i][j] |= MapLiquidTypeFlag::Ocean;
                         if !ignore_deep_water && attrs.deep > 0 {
-                            map_file.map_liquid_flags[i][j] |= MapLiquidTypeFlag::DarkWater;
+                            map_liquid_flags[i][j] |= MapLiquidTypeFlag::DarkWater;
                         }
                     },
-                    Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Magma as u8 => {
-                        map_file.map_liquid_flags[i][j] |= MapLiquidTypeFlag::Magma
-                    },
-                    Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Slime as u8 => {
-                        map_file.map_liquid_flags[i][j] |= MapLiquidTypeFlag::Slime
-                    },
+                    Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Magma as u8 => map_liquid_flags[i][j] |= MapLiquidTypeFlag::Magma,
+                    Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Slime as u8 => map_liquid_flags[i][j] |= MapLiquidTypeFlag::Slime,
                     _ => {
                         warn!(
                             "\nCan't find Liquid type {} for map {}\nchunk {},{}\n",
@@ -653,10 +655,10 @@ fn convert_adt(
                     },
                 };
 
-                if count == 0 && map_file.map_liquid_flags[i][j].bits() > 0 {
+                if count == 0 && map_liquid_flags[i][j].bits() > 0 {
                     warn!(
                         "Wrong liquid detect in MH2O chunk, count was {count}, liq flags were: {:?}",
-                        map_file.map_liquid_flags[i][j],
+                        map_liquid_flags[i][j],
                     );
                 }
 
@@ -675,11 +677,26 @@ fn convert_adt(
 
     if let Some(chunk) = adt.chunks.get(b"MFBO") {
         let mfbo = AdtChunkMfbo::from(chunk.clone());
-        map_file.map_height_flight_box_max_min = Some((mfbo.max, mfbo.min));
+        map_height_flight_box_max_min = Some((mfbo.max, mfbo.min));
     }
     let mut f = fs::File::create(output_path)?;
 
-    map_file.pack(args.allow_height_limit, liquid_show, map_liquid_height, args.use_min_height, &mut f)?;
+    let map_file = MapFile::new(
+        map_build_magic,
+        map_area_ids,
+        map_height_V9,
+        map_height_V8,
+        map_liquid_flags,
+        map_liquid_entry,
+        map_holes,
+        map_height_flight_box_max_min,
+        args.allow_height_limit,
+        liquid_show,
+        map_liquid_height,
+        args.use_min_height,
+    );
+
+    map_file.write(&mut f)?;
 
     Ok(())
 }

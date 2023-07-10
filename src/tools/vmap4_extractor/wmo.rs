@@ -250,7 +250,7 @@ impl WmoRoot {
     }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, serde::Deserialize, serde::Serialize)]
 pub struct WMOLiquidHeader {
     pub xverts:   i32,
     pub yverts:   i32,

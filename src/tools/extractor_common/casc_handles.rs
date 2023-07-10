@@ -241,7 +241,10 @@ impl CascStorageHandle {
             };
             return Err(CascHandlerError::CascLibError(last_error));
         };
-        Ok(CascFileHandle { h: handle })
+        Ok(CascFileHandle {
+            h:           handle,
+            current_pos: 0,
+        })
     }
 }
 
@@ -255,7 +258,8 @@ impl Drop for CascStorageHandle {
 }
 
 pub struct CascFileHandle {
-    h: HANDLE,
+    h:           HANDLE,
+    current_pos: u64,
 }
 
 impl CascFileHandle {
@@ -269,6 +273,14 @@ impl CascFileHandle {
             return Err(CascHandlerError::CascLibError(last_error));
         };
         Ok(value)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        let file_size = match self.get_file_size() {
+            Err(_e) => return true,
+            Ok(s) => s,
+        };
+        self.current_pos >= file_size
     }
 }
 
@@ -284,17 +296,35 @@ impl Drop for CascFileHandle {
 impl io::Read for CascFileHandle {
     fn read(&mut self, buf: &mut [u8]) -> io::Result<usize> {
         let len_to_read = buf.len();
-        let mut len_read: u32 = 0;
-        let len_read_ptr = &mut len_read as *mut _;
+        let mut len_read = 0;
 
         let buf_ptr = buf as *mut _ as *mut c_void;
 
-        let res = unsafe { CascReadFile(self.h, buf_ptr, len_to_read as u32, len_read_ptr) };
+        let res = unsafe { CascReadFile(self.h, buf_ptr, len_to_read as u32, &mut len_read) };
         if !res {
             let last_error = CascError::try_from(unsafe { GetCascError() })
                 .map_or_else(|e| io::Error::new(io::ErrorKind::Other, e), |e| io::Error::new(io::ErrorKind::Other, e));
             return Err(last_error);
         }
+        self.current_pos += u64::from(len_read);
         Ok(len_read as usize)
+    }
+}
+
+impl io::Seek for CascFileHandle {
+    fn seek(&mut self, pos: io::SeekFrom) -> io::Result<u64> {
+        let (method, to_move) = match pos {
+            io::SeekFrom::Start(c) => (FILE_BEGIN, c as i64),
+            io::SeekFrom::Current(c) => (FILE_CURRENT, c),
+            io::SeekFrom::End(c) => (FILE_END, c),
+        };
+
+        let res = unsafe { CascSetFilePointer64(self.h, to_move, &mut self.current_pos, method) };
+        if !res {
+            let last_error = CascError::try_from(unsafe { GetCascError() })
+                .map_or_else(|e| io::Error::new(io::ErrorKind::Other, e), |e| io::Error::new(io::ErrorKind::Other, e));
+            return Err(last_error);
+        }
+        Ok(self.current_pos)
     }
 }

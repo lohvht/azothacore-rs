@@ -6,6 +6,7 @@ use crate::{
     cmp_or_return,
     common::collision::vmap_definitions::{GAMEOBJECT_MODELS, VMAP_MAGIC},
     sanity_check_read_all_bytes_from_reader,
+    tools::extractor_common::{bincode_deserialise, bincode_serialise},
     GenericResult,
 };
 
@@ -27,7 +28,7 @@ impl GameObjectModelData {
         let mut w = w;
 
         w.write_all(VMAP_MAGIC)?;
-        bincode::serialize_into(&mut w, &model_list)?;
+        bincode_serialise(&mut w, &model_list)?;
         Ok(())
     }
 
@@ -35,7 +36,7 @@ impl GameObjectModelData {
         let mut r = r;
 
         cmp_or_return!(r, VMAP_MAGIC)?;
-        let res = bincode::deserialize_from(&mut r)?;
+        let res = bincode_deserialise(&mut r)?;
 
         sanity_check_read_all_bytes_from_reader!(r)?;
 

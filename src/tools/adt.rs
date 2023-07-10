@@ -7,16 +7,16 @@ use std::{
 use byteorder::{LittleEndian, ReadBytesExt};
 use nalgebra::{Matrix3, Vector3};
 
-use super::extractor_common::cstr_bytes_to_string;
 use crate::{
     read_le_unwrap,
-    tools::extractor_common::{casc_handles::CascStorageHandle, ChunkedFile, FileChunk},
+    tools::extractor_common::{casc_handles::CascStorageHandle, cstr_bytes_to_string, ChunkedFile, FileChunk},
     GenericResult,
 };
 
 pub const ADT_CELLS_PER_GRID: usize = 16;
 pub const ADT_CELL_SIZE: usize = 8;
 pub const ADT_GRID_SIZE: usize = ADT_CELLS_PER_GRID * ADT_CELL_SIZE;
+pub const ADT_GRID_SIZE_PLUS_ONE: usize = ADT_GRID_SIZE + 1;
 
 pub struct AdtChunkMcnkSubchunkMcvt {
     pub fcc:        [u8; 4],

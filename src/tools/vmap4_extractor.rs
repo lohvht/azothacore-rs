@@ -23,6 +23,8 @@ use crate::{
     tools::{
         adt::{ADTFile, AdtDoodadDef, AdtMapObjectDefs},
         extractor_common::{
+            bincode_deserialise,
+            bincode_serialise,
             casc_handles::{CascLocale, CascStorageHandle},
             get_fixed_plain_name,
             ExtractorConfig,
@@ -51,12 +53,12 @@ pub struct VmapExtractor<'a> {
 
 pub fn load_cached<R: io::Read, T: for<'a> serde::Deserialize<'a>>(r: &mut R) -> GenericResult<T> {
     cmp_or_return!(r, RAW_VMAP_MAGIC)?;
-    Ok(bincode::deserialize_from(r)?)
+    Ok(bincode_deserialise(r)?)
 }
 
 pub fn save_cached<W: io::Write, T: serde::Serialize>(w: &mut W, t: &T) -> GenericResult<()> {
     w.write_all(RAW_VMAP_MAGIC)?;
-    Ok(bincode::serialize_into(w, t)?)
+    Ok(bincode_serialise(w, t)?)
 }
 
 pub fn main_vmap4_extract(args: &ExtractorConfig, first_installed_locale: Locale) -> GenericResult<VmapExtractor> {
@@ -111,12 +113,7 @@ pub struct TempGameObjectModel {
 
 struct WdtWithAdts {
     _wdt:      WDTFile,
-    adt_cache: Vec<Vec<Option<AdtWithDirFileCache>>>,
-}
-
-struct AdtWithDirFileCache {
-    adt:            ADTFile,
-    dir_file_cache: Vec<VmapModelSpawn>,
+    adt_cache: Vec<Vec<Option<ADTFile>>>,
 }
 
 impl VmapExtractor<'_> {
@@ -266,7 +263,6 @@ impl VmapExtractor<'_> {
                 continue;
             }
         }
-        let mut dir_file_cache = Vec::new();
         // global wmo instance data
         if let Some(modf) = &wdt.modf {
             for map_obj_def in &modf.map_object_defs {
@@ -274,38 +270,27 @@ impl VmapExtractor<'_> {
                     let name = wmo_names
                         .get(&(map_obj_def.id as usize))
                         .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", map_obj_def.id, wmo_names));
-                    _ = self
-                        .mapobject_extract(map_obj_def, name, true, map.id, map.id, &mut dir_file_cache)
-                        .inspect_err(|e| {
-                            warn!("get_or_extract_wdt mapobject_extract err for name {name} due to err: {e}");
-                        });
-                    _ = self
-                        .doodad_extractset(name, map_obj_def, true, map.id, map.id, &mut dir_file_cache)
-                        .inspect_err(|e| {
-                            warn!("get_or_extract_wdt doodad_extractset err for name {name} due to err: {e}");
-                        });
+                    _ = self.mapobject_extract(map_obj_def, name, true, map.id, map.id).inspect_err(|e| {
+                        warn!("get_or_extract_wdt mapobject_extract err for name {name} due to err: {e}");
+                    });
+                    _ = self.doodad_extractset(name, map_obj_def, true, map.id, map.id).inspect_err(|e| {
+                        warn!("get_or_extract_wdt doodad_extractset err for name {name} due to err: {e}");
+                    });
                 } else {
                     let fid = map_obj_def.id;
                     let filename = format!("FILE{fid:08X}.xxx");
                     _ = self.extract_single_wmo(storage, &filename).inspect_err(|e| {
                         warn!("get_or_extract_wdt extract_single_wmo err for fid {filename} due to err: {e}");
                     });
-                    _ = self
-                        .mapobject_extract(map_obj_def, &filename, true, map.id, map.id, &mut dir_file_cache)
-                        .inspect_err(|e| {
-                            warn!("get_or_extract_wdt doodad_extractset err for fid {filename} due to err: {e}");
-                        });
-                    _ = self
-                        .doodad_extractset(&filename, map_obj_def, true, map.id, map.id, &mut dir_file_cache)
-                        .inspect_err(|e| {
-                            warn!("get_or_extract_wdt doodad_extractset err for fid {filename} due to err: {e}");
-                        });
+                    _ = self.mapobject_extract(map_obj_def, &filename, true, map.id, map.id).inspect_err(|e| {
+                        warn!("get_or_extract_wdt doodad_extractset err for fid {filename} due to err: {e}");
+                    });
+                    _ = self.doodad_extractset(&filename, map_obj_def, true, map.id, map.id).inspect_err(|e| {
+                        warn!("get_or_extract_wdt doodad_extractset err for fid {filename} due to err: {e}");
+                    });
                 }
             }
         };
-        for m in dir_file_cache {
-            self.model_spawns_data.entry(m.map_num).or_insert(BTreeMap::new()).entry(m.id).or_insert(m);
-        }
 
         let mut adt_cache = Vec::new();
         adt_cache.resize_with(WDT_MAP_SIZE, || {
@@ -342,7 +327,7 @@ impl VmapExtractor<'_> {
             info!("Processing Map file {map_id} - {map_name}");
             for x in 0..WDT_MAP_SIZE {
                 for y in 0..WDT_MAP_SIZE {
-                    let adt = if let Some(r) = self.store_adt_in_wdt(storage, &map_name, map_id, map_id, x, y, &mut wdts) {
+                    if let Some(r) = self.store_adt_in_wdt(storage, &map_name, map_id, map_id, x, y, &mut wdts) {
                         r
                     } else if let Some(r) =
                         parent_map_id.and_then(|original_map_id| self.store_adt_in_wdt(storage, &map_name, map_id, original_map_id, x, y, &mut wdts))
@@ -351,13 +336,6 @@ impl VmapExtractor<'_> {
                     } else {
                         continue;
                     };
-                    for m in adt.dir_file_cache.iter() {
-                        self.model_spawns_data
-                            .entry(m.map_num)
-                            .or_insert(BTreeMap::new())
-                            .entry(m.id)
-                            .or_insert(m.clone());
-                    }
                 }
             }
         }
@@ -376,7 +354,6 @@ impl VmapExtractor<'_> {
         is_global_wmo: bool,
         map_id: u32,
         original_map_id: u32,
-        dir_file_cache: &mut Vec<VmapModelSpawn>,
     ) -> GenericResult<()> {
         // destructible wmo, do not dump. we can handle the vmap for these
         // in dynamic tree (gameobject vmaps)
@@ -387,7 +364,7 @@ impl VmapExtractor<'_> {
         //-----------add_in _dir_file----------------
         let tempname = self.args.output_vmap_sz_work_dir_wmo().join(wmo_inst_name);
         let mut input = fs::File::open(tempname)?;
-        let (n_vertices, _, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
+        let (n_vertices, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
         if n_vertices == 0 {
             return Ok(());
         }
@@ -422,19 +399,11 @@ impl VmapExtractor<'_> {
             Some(bounds),
             wmo_inst_name.to_string(),
         );
-        dir_file_cache.push(m);
+        self.model_spawns_data.entry(m.map_num).or_insert(BTreeMap::new()).entry(m.id).or_insert(m);
         Ok(())
     }
 
-    fn doodad_extractset(
-        &mut self,
-        wmo_inst_name: &str,
-        wmo: &AdtMapObjectDefs,
-        is_global_wmo: bool,
-        map_id: u32,
-        original_map_id: u32,
-        dir_file_cache: &mut Vec<VmapModelSpawn>,
-    ) -> GenericResult<()> {
+    fn doodad_extractset(&mut self, wmo_inst_name: &str, wmo: &AdtMapObjectDefs, is_global_wmo: bool, map_id: u32, original_map_id: u32) -> GenericResult<()> {
         // Hacky fix for now, we clone this data just for use here.
         //
         // In theory we should be able to get away without cloning but Rust's
@@ -485,7 +454,7 @@ impl VmapExtractor<'_> {
                 .unwrap_or_else(|| panic!("doodad.name_index {} should exist in {:?}", doodad.name_index, doodad_data.paths));
             let tempname = self.args.output_vmap_sz_work_dir_wmo().join(&model_inst_name);
             let mut input = fs::File::open(tempname)?;
-            let (n_vertices, _, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
+            let (n_vertices, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
             if n_vertices == 0 {
                 continue;
             }
@@ -526,22 +495,15 @@ impl VmapExtractor<'_> {
                 None,
                 model_inst_name,
             );
-            dir_file_cache.push(m);
+            self.model_spawns_data.entry(m.map_num).or_insert(BTreeMap::new()).entry(m.id).or_insert(m);
         }
         Ok(())
     }
 
-    fn doodad_extract(
-        &mut self,
-        doodad_def: &AdtDoodadDef,
-        model_inst_name: &str,
-        map_id: u32,
-        original_map_id: u32,
-        dir_file_cache: &mut Vec<VmapModelSpawn>,
-    ) -> GenericResult<()> {
+    fn doodad_extract(&mut self, doodad_def: &AdtDoodadDef, model_inst_name: &str, map_id: u32, original_map_id: u32) -> GenericResult<()> {
         let tempname = self.args.output_vmap_sz_work_dir_wmo().join(model_inst_name);
         let mut input = fs::File::open(tempname)?;
-        let (n_vertices, _, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
+        let (n_vertices, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
         if n_vertices == 0 {
             return Ok(());
         }
@@ -566,7 +528,7 @@ impl VmapExtractor<'_> {
             None,
             model_inst_name.to_string(),
         );
-        dir_file_cache.push(m);
+        self.model_spawns_data.entry(m.map_num).or_insert(BTreeMap::new()).entry(m.id).or_insert(m);
         Ok(())
     }
 
@@ -580,7 +542,7 @@ impl VmapExtractor<'_> {
         x: usize,
         y: usize,
         wdts: &'a mut HashMap<u32, WdtWithAdts>,
-    ) -> Option<&'a mut AdtWithDirFileCache> {
+    ) -> Option<&'a mut ADTFile> {
         let wdt = match wdts.get_mut(&original_map_id) {
             None => return None,
             Some(wdt) => wdt,
@@ -592,8 +554,7 @@ impl VmapExtractor<'_> {
                 // .inspect_err(|e| {
                 //     warn!("Unable to get ADT file {storage_path} with warn: {e}, moving on");
                 // })
-                .ok()
-                .map(|adt| AdtWithDirFileCache { adt, dir_file_cache: vec![] });
+                .ok();
             // The first time see this ADT. Do some extraction
             is_first_set = true;
         }
@@ -601,59 +562,55 @@ impl VmapExtractor<'_> {
         if is_first_set {
             if let Some(adt) = wdt.adt_cache[x][y].as_mut() {
                 // Do some extraction here as well.
-                let mut model_instance_names = HashMap::with_capacity(adt.adt.model_paths.len());
-                let mut wmo_instance_names = HashMap::with_capacity(adt.adt.wmo_paths.len());
-                for (off, path) in adt.adt.model_paths.iter() {
+                let mut model_instance_names = HashMap::with_capacity(adt.model_paths.len());
+                let mut wmo_instance_names = HashMap::with_capacity(adt.wmo_paths.len());
+                for (off, path) in adt.model_paths.iter() {
                     model_instance_names.entry(*off).or_insert(get_fixed_plain_name(path));
                     _ = self.extract_single_model(storage, path).inspect_err(|e| {
                         warn!("store_adt_in_wdt extract_single_model err for path {path} due to err: {e}");
                     });
                 }
-                for (off, path) in adt.adt.wmo_paths.iter() {
+                for (off, path) in adt.wmo_paths.iter() {
                     wmo_instance_names.entry(*off).or_insert(get_fixed_plain_name(path));
                     _ = self.extract_single_wmo(storage, path).inspect_err(|e| {
                         warn!("store_adt_in_wdt extract_single_wmo err for path {path} due to err: {e}");
                     });
                 }
 
-                if let Some(mddf) = &adt.adt.mddf {
+                if let Some(mddf) = &adt.mddf {
                     for doodad_def in mddf.doodad_defs.iter() {
                         if doodad_def.flags & 0x40 == 0 {
                             let name = model_instance_names
                                 .get(&(doodad_def.id as usize))
                                 .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", doodad_def.id, model_instance_names,));
-                            _ = self
-                                .doodad_extract(doodad_def, name, map_id, original_map_id, &mut adt.dir_file_cache)
-                                .inspect_err(|e| {
-                                    warn!("store_adt_in_wdt doodad_extract err for name {name} due to err: {e}");
-                                });
+                            _ = self.doodad_extract(doodad_def, name, map_id, original_map_id).inspect_err(|e| {
+                                warn!("store_adt_in_wdt doodad_extract err for name {name} due to err: {e}");
+                            });
                         } else {
                             let fid = doodad_def.id;
                             let filename = format!("FILE{fid:08X}.xxx");
                             _ = self.extract_single_model(storage, &filename).inspect_err(|e| {
                                 warn!("store_adt_in_wdt extract_single_model err for fid {filename} due to err: {e}");
                             });
-                            _ = self
-                                .doodad_extract(doodad_def, &filename, map_id, original_map_id, &mut adt.dir_file_cache)
-                                .inspect_err(|e| {
-                                    warn!("store_adt_in_wdt doodad_extract err for fid {filename} due to err: {e}");
-                                });
+                            _ = self.doodad_extract(doodad_def, &filename, map_id, original_map_id).inspect_err(|e| {
+                                warn!("store_adt_in_wdt doodad_extract err for fid {filename} due to err: {e}");
+                            });
                         }
                     }
                 }
-                if let Some(modf) = &adt.adt.modf {
+                if let Some(modf) = &adt.modf {
                     for map_obj_def in modf.map_object_defs.iter() {
                         if map_obj_def.flags & 0x8 == 0 {
                             let wmo_inst_name = wmo_instance_names
                                 .get(&(map_obj_def.id as usize))
                                 .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", map_obj_def.id, model_instance_names));
                             _ = self
-                                .mapobject_extract(map_obj_def, wmo_inst_name, false, map_id, original_map_id, &mut adt.dir_file_cache)
+                                .mapobject_extract(map_obj_def, wmo_inst_name, false, map_id, original_map_id)
                                 .inspect_err(|e| {
                                     warn!("store_adt_in_wdt mapobject_extract err for wmo_inst_name {wmo_inst_name} due to err: {e}");
                                 });
                             _ = self
-                                .doodad_extractset(wmo_inst_name, map_obj_def, false, map_id, original_map_id, &mut adt.dir_file_cache)
+                                .doodad_extractset(wmo_inst_name, map_obj_def, false, map_id, original_map_id)
                                 .inspect_err(|e| {
                                     warn!("store_adt_in_wdt doodad_extractset err for wmo_inst_name {wmo_inst_name} due to err: {e}");
                                 });
@@ -663,16 +620,12 @@ impl VmapExtractor<'_> {
                             _ = self.extract_single_wmo(storage, &filename).inspect_err(|e| {
                                 warn!("store_adt_in_wdt extract_single_wmo err for fid {filename} due to err: {e}");
                             });
-                            _ = self
-                                .mapobject_extract(map_obj_def, &filename, false, map_id, original_map_id, &mut adt.dir_file_cache)
-                                .inspect_err(|e| {
-                                    warn!("store_adt_in_wdt mapobject_extract err for fid {filename} due to err: {e}");
-                                });
-                            _ = self
-                                .doodad_extractset(&filename, map_obj_def, false, map_id, original_map_id, &mut adt.dir_file_cache)
-                                .inspect_err(|e| {
-                                    warn!("store_adt_in_wdt doodad_extractset err for fid {filename} due to err: {e}");
-                                });
+                            _ = self.mapobject_extract(map_obj_def, &filename, false, map_id, original_map_id).inspect_err(|e| {
+                                warn!("store_adt_in_wdt mapobject_extract err for fid {filename} due to err: {e}");
+                            });
+                            _ = self.doodad_extractset(&filename, map_obj_def, false, map_id, original_map_id).inspect_err(|e| {
+                                warn!("store_adt_in_wdt doodad_extractset err for fid {filename} due to err: {e}");
+                            });
                         }
                     }
                 }

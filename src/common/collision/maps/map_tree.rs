@@ -14,6 +14,7 @@ use crate::{
     cmp_or_return,
     common::collision::{models::model_instance::VmapModelSpawn, vmap_definitions::VMAP_MAGIC},
     sanity_check_read_all_bytes_from_reader,
+    tools::extractor_common::{bincode_deserialise, bincode_serialise},
     GenericResult,
 };
 
@@ -67,13 +68,13 @@ impl StaticMapTree {
         // Nodes
         w.write_all(b"NODE")?;
 
-        bincode::serialize_into(&mut w, ptree)?;
+        bincode_serialise(&mut w, ptree)?;
 
         // spawn id to index map
         // uint32 map_spawnsSize = map_spawns.size();
         w.write_all(b"SIDX")?;
         let map_spawn_id_to_bvh_id = model_spawns_used.iter().map(|m| (m.id, m.bh_node_index())).collect::<HashMap<_, _>>();
-        bincode::serialize_into(w, &map_spawn_id_to_bvh_id)?;
+        bincode_serialise(w, &map_spawn_id_to_bvh_id)?;
         Ok(())
     }
 
@@ -82,9 +83,9 @@ impl StaticMapTree {
 
         cmp_or_return!(r, VMAP_MAGIC)?;
         cmp_or_return!(r, b"NODE")?;
-        let tree = bincode::deserialize_from(&mut r)?;
+        let tree = bincode_deserialise(&mut r)?;
         cmp_or_return!(r, b"SIDX")?;
-        let map_spawn_id_to_bvh_id = bincode::deserialize_from(&mut r)?;
+        let map_spawn_id_to_bvh_id = bincode_deserialise(&mut r)?;
 
         sanity_check_read_all_bytes_from_reader!(r)?;
 
@@ -107,7 +108,7 @@ impl StaticMapTree {
         let mut w = w;
 
         w.write_all(VMAP_MAGIC)?;
-        bincode::serialize_into(&mut w, &model_spawns)?;
+        bincode_serialise(&mut w, &model_spawns)?;
         Ok(())
     }
 
@@ -115,7 +116,7 @@ impl StaticMapTree {
         let mut r = r;
 
         cmp_or_return!(r, VMAP_MAGIC)?;
-        let res = bincode::deserialize_from(&mut r)?;
+        let res = bincode_deserialise(&mut r)?;
 
         sanity_check_read_all_bytes_from_reader!(r)?;
 

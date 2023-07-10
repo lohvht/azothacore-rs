@@ -7,7 +7,13 @@ use bvh::{
 };
 use nalgebra::{DMatrix, Vector3};
 
-use crate::{cmp_or_return, common::collision::vmap_definitions::VMAP_MAGIC, read_le, GenericResult};
+use crate::{
+    cmp_or_return,
+    common::collision::vmap_definitions::VMAP_MAGIC,
+    read_le,
+    tools::extractor_common::{bincode_deserialise, bincode_serialise},
+    GenericResult,
+};
 
 /// Holds a model (converted M2 or WMO) in its original coordinate space
 pub struct WorldModel {
@@ -48,7 +54,7 @@ impl WorldModel {
             }
             // write group BIH
             out.write_all(b"GBIH")?;
-            bincode::serialize_into(&mut out, &self.group_tree)?;
+            bincode_serialise(&mut out, &self.group_tree)?;
         }
 
         Ok(())
@@ -76,7 +82,7 @@ impl WorldModel {
                 }
                 // Read group BIH
                 cmp_or_return!(r, b"GBIH")?;
-                let gt = bincode::deserialize_from(&mut r)?;
+                let gt = bincode_deserialise(&mut r)?;
                 (gm, gt)
             },
         };
@@ -198,21 +204,21 @@ impl GroupModel {
         let mut out = out;
 
         let vert = self.vertices.iter().collect::<Vec<_>>();
-        bincode::serialize_into(&mut out, &vert)?;
+        bincode_serialise(&mut out, &vert)?;
 
         let trim = self.triangles.iter().map(|t| &t.inner).collect::<Vec<_>>();
-        bincode::serialize_into(&mut out, &trim)?;
+        bincode_serialise(&mut out, &trim)?;
 
-        bincode::serialize_into(&mut out, &self.inner)?;
+        bincode_serialise(&mut out, &self.inner)?;
         Ok(())
     }
 
     fn read_from_file<R: io::Read>(r: &mut R) -> GenericResult<Self> {
         let mut r = r;
         // Do all the reading first
-        let vertices: Vec<Vector3<f32>> = bincode::deserialize_from(&mut r)?;
-        let triangle_inner: Vec<MeshTriangleInner> = bincode::deserialize_from(&mut r)?;
-        let inner = bincode::deserialize_from(&mut r)?;
+        let vertices: Vec<Vector3<f32>> = bincode_deserialise(&mut r)?;
+        let triangle_inner: Vec<MeshTriangleInner> = bincode_deserialise(&mut r)?;
+        let inner = bincode_deserialise(&mut r)?;
 
         // Re-form Group
         let vertices = Arc::new(vertices);

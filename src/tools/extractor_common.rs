@@ -8,6 +8,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use bincode::Options;
 use byteorder::{LittleEndian, ReadBytesExt};
 use flagset::{flags, FlagSet};
 use ordered_multimap::ListOrderedMultimap;
@@ -119,7 +120,7 @@ impl VmapExtractAndGenerate {
 
 impl Db2AndMapExtract {
     pub fn should_extract(&self, f: DB2AndMapExtractFlags) -> bool {
-        !(self.extract_flags & f).is_empty()
+        self.extract_flags.contains(f)
     }
 }
 
@@ -169,6 +170,24 @@ impl ExtractorConfig {
     pub fn output_vmap_output_path(&self) -> PathBuf {
         Path::new(self.output_path.as_str()).join("vmaps")
     }
+}
+
+macro_rules! bincode_cfg {
+    () => {{
+        bincode::DefaultOptions::new()
+            .with_no_limit()
+            .with_little_endian()
+            .with_varint_encoding()
+            .allow_trailing_bytes()
+    }};
+}
+
+pub fn bincode_serialise<W: io::Write, T: ?Sized + serde::Serialize>(w: &mut W, t: &T) -> bincode::Result<()> {
+    bincode_cfg!().serialize_into(w, t)
+}
+
+pub fn bincode_deserialise<R: io::Read, T: ?Sized + serde::de::DeserializeOwned>(r: &mut R) -> bincode::Result<T> {
+    bincode_cfg!().deserialize_from(r)
 }
 
 #[derive(Clone)]
