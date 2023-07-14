@@ -159,7 +159,11 @@ impl VmapExtractor<'_> {
                 },
                 Ok(b) => b,
             };
-            self.temp_gameobject_models.push(TempGameObjectModel { id: rec.id, is_wmo, file_name });
+            self.temp_gameobject_models.push(TempGameObjectModel {
+                id: rec.id,
+                is_wmo,
+                file_name: get_fixed_plain_name(&file_name),
+            });
         }
         info!("Done!");
 

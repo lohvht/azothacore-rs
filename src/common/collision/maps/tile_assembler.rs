@@ -24,7 +24,7 @@ use crate::{
     read_le,
     sanity_check_read_all_bytes_from_reader,
     tools::{
-        extractor_common::{bincode_deserialise, bincode_serialise},
+        extractor_common::{bincode_deserialise, bincode_serialise, get_fixed_plain_name},
         vmap4_extractor::{wmo::WMOLiquidHeader, TempGameObjectModel},
     },
     GenericResult,
@@ -62,8 +62,8 @@ pub fn tile_assembler_convert_world2(
             };
             let bounds = entry.bound.expect("By here bounds should never be unset");
             let bounds = AABB::with_bounds(bounds[0].into(), bounds[1].into());
-            let low = Vector2::new((bounds.min.x * inv_tile_size).round() as u16, (bounds.min.y * inv_tile_size).round() as u16);
-            let high = Vector2::new((bounds.max.x * inv_tile_size).round() as u16, (bounds.max.y * inv_tile_size).round() as u16);
+            let low = Vector2::new((bounds.min.x * inv_tile_size).floor() as u16, (bounds.min.y * inv_tile_size).floor() as u16);
+            let high = Vector2::new((bounds.max.x * inv_tile_size).ceil() as u16, (bounds.max.y * inv_tile_size).ceil() as u16);
 
             for x in low.x..=high.x {
                 for y in low.y..=high.y {
@@ -114,6 +114,7 @@ pub fn tile_assembler_convert_world2(
     }
 
     // add an object models, listed in temp_gameobject_models file
+    info!("Exporting game object models");
     export_gameobject_models(&i_src_dir, &i_dest_dir, temp_gameobject_models, &mut spawned_model_files)?;
     // export objects
     info!("Converting Model Files");
@@ -165,7 +166,14 @@ fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpaw
 
 fn convert_raw_file<P: AsRef<Path>>(i_src_dir: P, i_dest_dir: P, p_model_filename: &str) -> GenericResult<()> {
     let filename = i_src_dir.as_ref().join(p_model_filename);
-    let raw_model = WorldModel_Raw::read(&mut fs::File::open(filename)?)?;
+
+    let mut raw_model_file = fs::File::open(&filename).inspect_err(|e| {
+        error!("convert_raw_file err: {}; err was {e}", filename.display());
+    })?;
+
+    let raw_model = WorldModel_Raw::read(&mut raw_model_file).inspect_err(|e| {
+        error!("read raw_world_model err: {}; err was {e}", filename.display());
+    })?;
 
     let groups = raw_model
         .groups
@@ -203,7 +211,9 @@ fn convert_raw_file<P: AsRef<Path>>(i_src_dir: P, i_dest_dir: P, p_model_filenam
 
     let model = WorldModel::new(raw_model.root_wmo_id, groups);
 
-    let mut outfile = fs::File::open(i_dest_dir.as_ref().join(format!("{p_model_filename}.vmo")))?;
+    let mut outfile = fs::File::create(i_dest_dir.as_ref().join(format!("{p_model_filename}.vmo"))).inspect_err(|e| {
+        error!("create new  vmofile err: {}; err was {e}", filename.display());
+    })?;
     model.write_file(&mut outfile)?;
     Ok(())
 }
@@ -215,6 +225,8 @@ fn export_gameobject_models<P: AsRef<Path>>(
     spawned_model_files: &mut BTreeSet<String>,
 ) -> GenericResult<()> {
     let mut model_list = BTreeMap::new();
+    let mut success_count = 0;
+    let total_count = temp_gameobject_models.len();
     for tmp in temp_gameobject_models {
         let TempGameObjectModel {
             id: display_id,
@@ -222,7 +234,7 @@ fn export_gameobject_models<P: AsRef<Path>>(
             file_name: model_name,
         } = tmp;
 
-        let raw_model_file_path = i_src_dir.as_ref().join(&model_name);
+        let raw_model_file_path = i_src_dir.as_ref().join(get_fixed_plain_name(&model_name));
         let mut raw_model_file = match fs::File::open(&raw_model_file_path) {
             Err(e) => {
                 warn!("cannot open raw file for some reason: path: {}, err {e}", raw_model_file_path.display());
@@ -249,9 +261,10 @@ fn export_gameobject_models<P: AsRef<Path>>(
             }
         }
         if bounds.is_empty() {
-            warn!("\nModel {model_name} has empty bounding box or has an invalid bounding box");
+            warn!("Model {model_name} has empty bounding box or has an invalid bounding box");
             continue;
         }
+        success_count += 1;
         model_list.insert(
             display_id,
             GameObjectModelData {
@@ -263,6 +276,7 @@ fn export_gameobject_models<P: AsRef<Path>>(
         );
     }
     GameObjectModelData::write_to_file(i_dest_dir, &model_list)?;
+    info!("GameObjectModels written: {success_count} / {total_count}");
 
     Ok(())
 }

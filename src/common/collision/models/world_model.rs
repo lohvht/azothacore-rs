@@ -29,7 +29,9 @@ impl WorldModel {
             group_models,
             group_tree: BVH { nodes: vec![] },
         };
-        s.group_tree = BVH::build(&mut s.group_models);
+        if !s.group_models.is_empty() {
+            s.group_tree = BVH::build(&mut s.group_models);
+        }
 
         s
     }
@@ -69,8 +71,8 @@ impl WorldModel {
 
         let (group_models, group_tree) = match cmp_or_return!(r, b"GMOD") {
             Err(e) if matches!(e.kind(), io::ErrorKind::UnexpectedEof) => {
-                let mut gm = vec![];
-                let gt = BVH::build(&mut gm);
+                let gm = vec![];
+                let gt = BVH { nodes: vec![] };
                 (gm, gt)
             },
             Err(e) => return Err(Box::new(e)),
@@ -195,7 +197,9 @@ impl GroupModel {
                 vertices: s.vertices.clone(),
             });
         }
-        s.inner.mesh_tree = BVH::build(&mut s.triangles);
+        if !s.triangles.is_empty() {
+            s.inner.mesh_tree = BVH::build(&mut s.triangles);
+        }
 
         s
     }
