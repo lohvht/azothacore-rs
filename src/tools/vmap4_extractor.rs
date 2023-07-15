@@ -564,7 +564,7 @@ impl VmapExtractor<'_> {
         }
 
         if is_first_set {
-            if let Some(adt) = wdt.adt_cache[x][y].as_mut() {
+            if let Some(adt) = &wdt.adt_cache[x][y] {
                 // Do some extraction here as well.
                 let mut model_instance_names = HashMap::with_capacity(adt.model_paths.len());
                 let mut wmo_instance_names = HashMap::with_capacity(adt.wmo_paths.len());

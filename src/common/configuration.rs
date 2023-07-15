@@ -3,6 +3,7 @@ use std::{collections::BTreeSet, fs, io, path::Path};
 use tokio::sync::RwLock;
 use tracing::{error, info, instrument};
 
+#[allow(non_snake_case)]
 mod structs;
 
 pub use structs::*;

@@ -5,6 +5,7 @@ use std::{
     fs,
     io::{self},
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 use azothacore_rs::{
@@ -45,6 +46,7 @@ use azothacore_rs::{
 };
 use byteorder::{LittleEndian, ReadBytesExt};
 use flagset::FlagSet;
+use futures::future;
 use nalgebra::SMatrix;
 use tracing::{error, info, warn};
 use walkdir::WalkDir;
@@ -333,10 +335,16 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> Generi
     let liquid_types = db2.produce_data()?;
     info!("Done! ({} LiquidTypes loaded)", liquid_types.len());
 
+    let liquid_types = Arc::new(liquid_types);
+    let liquid_materials = Arc::new(liquid_materials);
+
     let output_path = args.output_map_path();
     fs::create_dir_all(&output_path)?;
 
     info!("Convert map files");
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().max_blocking_threads(50).build()?;
+    let mut jhs = vec![];
+
     for (z, (map_id, map)) in maps.iter().enumerate() {
         let map_name = &map.directory.def_str();
         let storage_path = format!("World/Maps/{map_name}/{map_name}.wdt");
@@ -347,7 +355,7 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> Generi
             },
             Ok(f) => f,
         };
-        let mut has_already_extracted = false;
+        info!("Extract {} ({}/{})", map_name, z + 1, maps.len());
         // We expect MAIN chunk to always exist
         let chunk = wdt.chunks.get(b"MAIN").unwrap();
         let chunk = WdtChunkMain::from(chunk.clone());
@@ -362,31 +370,39 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> Generi
                 if output_file_name.exists() {
                     continue;
                 }
-                if !has_already_extracted {
-                    has_already_extracted = true;
-                    info!("Extract {} ({}/{})", map_name, z + 1, maps.len());
-                }
                 // TODO: Verify if the indices are correct? seems to be reversed here
                 let ignore_deep_water = map.is_deep_water_ignored(y, x);
-                let _ = convert_adt(
-                    &args.db2_and_map_extract,
-                    &storage,
-                    storage_path.as_ref(),
-                    output_file_name.as_ref(),
-                    build_no,
-                    ignore_deep_water,
-                    &liquid_types,
-                    &liquid_materials,
-                )
-                .inspect_err(|e| {
-                    let output_file_name_display = output_file_name.display();
-                    error!("error converting {storage_path} ADT to map {output_file_name_display} due to err: {e}");
-                });
+                let adt = ChunkedFile::build(&storage, &storage_path)?;
+                let args = args.db2_and_map_extract.clone();
+                let liquid_types = liquid_types.clone();
+                let liquid_materials = liquid_materials.clone();
+                jhs.push(rt.spawn_blocking(move || {
+                    let _ = convert_adt(
+                        &args,
+                        adt,
+                        output_file_name.as_ref(),
+                        build_no,
+                        ignore_deep_water,
+                        liquid_types,
+                        liquid_materials,
+                    )
+                    .inspect_err(|e| {
+                        let output_file_name_display = output_file_name.display();
+                        error!("error converting {storage_path} ADT to map {output_file_name_display} due to err: {e}");
+                    });
+                }));
             }
             // // draw progress bar
             // info!("Processing........................{}%\r", (100 * (y + 1)) / WDT_MAP_SIZE);
         }
     }
+    rt.block_on(async {
+        for r in future::join_all(jhs).await {
+            if let Err(e) = r {
+                warn!("join error while converting: err {e}");
+            }
+        }
+    });
     Ok(())
 }
 
@@ -405,8 +421,8 @@ fn transform_to_high_res(low_res_holes: u16) -> [u8; 8] {
 
 fn get_liquid_vertex_format(
     liquid_instance: &AdtChunkMh2oLiquidInstance,
-    liquid_types_db2: &BTreeMap<u32, LiquidType>,
-    liquid_materials_db2: &BTreeMap<u32, LiquidMaterial>,
+    liquid_types_db2: Arc<BTreeMap<u32, LiquidType>>,
+    liquid_materials_db2: Arc<BTreeMap<u32, LiquidMaterial>>,
 ) -> Option<u16> {
     if liquid_instance.liquid_vertex_format < 42 {
         return Some(liquid_instance.liquid_vertex_format);
@@ -423,7 +439,11 @@ fn get_liquid_vertex_format(
     None
 }
 
-fn get_liquid_type(h: &AdtChunkMh2oLiquidInstance, liquid_types_db2: &BTreeMap<u32, LiquidType>, liquid_materials_db2: &BTreeMap<u32, LiquidMaterial>) -> u16 {
+fn get_liquid_type(
+    h: &AdtChunkMh2oLiquidInstance,
+    liquid_types_db2: Arc<BTreeMap<u32, LiquidType>>,
+    liquid_materials_db2: Arc<BTreeMap<u32, LiquidMaterial>>,
+) -> u16 {
     match get_liquid_vertex_format(h, liquid_types_db2, liquid_materials_db2) {
         Some(t) if t == LiquidVertexFormatType::Depth as u16 => 2,
         _ => h.liquid_type,
@@ -434,8 +454,8 @@ fn get_liquid_height(
     mh20_raw_data: &mut io::Cursor<Vec<u8>>,
     h: &AdtChunkMh2oLiquidInstance,
     pos: usize,
-    liquid_types_db2: &BTreeMap<u32, LiquidType>,
-    liquid_materials_db2: &BTreeMap<u32, LiquidMaterial>,
+    liquid_types_db2: Arc<BTreeMap<u32, LiquidType>>,
+    liquid_materials_db2: Arc<BTreeMap<u32, LiquidMaterial>>,
 ) -> f32 {
     if h.offset_vertex_data == 0 {
         return 0.0;
@@ -464,15 +484,13 @@ fn get_liquid_height(
 #[allow(clippy::too_many_arguments, non_snake_case)]
 fn convert_adt(
     args: &Db2AndMapExtract,
-    storage: &CascStorageHandle,
-    input_path: &Path,
+    adt: ChunkedFile,
     output_path: &Path,
     build_no: u32,
     ignore_deep_water: bool,
-    liquid_types_db2: &BTreeMap<u32, LiquidType>,
-    liquid_materials_db2: &BTreeMap<u32, LiquidMaterial>,
+    liquid_types_db2: Arc<BTreeMap<u32, LiquidType>>,
+    liquid_materials_db2: Arc<BTreeMap<u32, LiquidMaterial>>,
 ) -> GenericResult<()> {
-    let adt = ChunkedFile::build(storage, input_path)?;
     // Prepare map header
     let map_build_magic = build_no;
     let mut map_area_ids = [[0; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
@@ -630,7 +648,7 @@ fn convert_adt(
                         exists_mask >>= 1;
                     }
                 }
-                map_liquid_entry[i][j] = get_liquid_type(h, liquid_types_db2, liquid_materials_db2);
+                map_liquid_entry[i][j] = get_liquid_type(h, liquid_types_db2.clone(), liquid_materials_db2.clone());
                 match liquid_types_db2.get(&(map_liquid_entry[i][j] as u32)) {
                     None => {
                         warn!("can't find liquid_type of ID {}", &(map_liquid_entry[i][j] as u32));
@@ -648,7 +666,7 @@ fn convert_adt(
                         warn!(
                             "\nCan't find Liquid type {} for map {}\nchunk {},{}\n",
                             h.liquid_type,
-                            input_path.display(),
+                            adt.filename.display(),
                             i,
                             j
                         );
@@ -667,7 +685,7 @@ fn convert_adt(
                     let cy = i * ADT_CELL_SIZE + y + h.get_offset_y();
                     for x in 0..h.get_width() {
                         let cx = j * ADT_CELL_SIZE + x + h.get_offset_x();
-                        map_liquid_height[cy][cx] = get_liquid_height(&mut h2o.raw_data, h, pos, liquid_types_db2, liquid_materials_db2);
+                        map_liquid_height[cy][cx] = get_liquid_height(&mut h2o.raw_data, h, pos, liquid_types_db2.clone(), liquid_materials_db2.clone());
                         pos += 1;
                     }
                 }

@@ -77,6 +77,10 @@ structstruck::strike! {
     #[strikethrough[serde_inline_default]]
     #[strikethrough[derive(Deserialize, DefaultFromSerde, Serialize, Clone, Debug,  PartialEq)]]
     pub struct ExtractorConfig {
+        /// Validate the extracted files as we go
+        /// THIS WILL INCREASE THE WRITE TIMES SO DO AT YOUR OWN RISK
+        #[serde_inline_default(false)]
+        pub debug_validation: bool,
         #[serde_inline_default(env::current_dir().unwrap().to_string_lossy().to_string())]
         pub input_path: String,
         #[serde_inline_default(env::current_dir().unwrap().to_string_lossy().to_string())]
@@ -177,7 +181,7 @@ macro_rules! bincode_cfg {
         bincode::DefaultOptions::new()
             .with_no_limit()
             .with_little_endian()
-            .with_varint_encoding()
+            .with_fixint_encoding()
             .allow_trailing_bytes()
     }};
 }
@@ -246,7 +250,8 @@ impl FileChunk {
 }
 
 pub struct ChunkedFile {
-    pub chunks: ListOrderedMultimap<[u8; 4], FileChunk>,
+    pub filename: PathBuf,
+    pub chunks:   ListOrderedMultimap<[u8; 4], FileChunk>,
 }
 
 const INTERESTING_CHUNKS: [&[u8; 4]; 18] = [
@@ -282,7 +287,8 @@ impl ChunkedFile {
         let mut ptr = io::Cursor::new(buf);
 
         let mut s = Self {
-            chunks: ListOrderedMultimap::new(),
+            filename: filename.as_ref().to_owned(),
+            chunks:   ListOrderedMultimap::new(),
         };
         while !ptr.is_empty() {
             let mut fcc = [0u8; 4];

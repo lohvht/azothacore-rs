@@ -59,7 +59,7 @@ impl WDTFile {
         //     error!("Error opening wdt file at {}, err was {e}", storage_path.as_ref().display());
         // })?;
 
-        let mut wmo_paths: HashMap<usize, String> = HashMap::new();
+        let mut wmo_paths = HashMap::new();
         let mut modf = None;
 
         for (fourcc, chunk) in file.chunks {

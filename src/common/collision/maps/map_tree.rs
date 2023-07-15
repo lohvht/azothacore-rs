@@ -73,7 +73,7 @@ impl StaticMapTree {
         // spawn id to index map
         // uint32 map_spawnsSize = map_spawns.size();
         w.write_all(b"SIDX")?;
-        let map_spawn_id_to_bvh_id = model_spawns_used.iter().map(|m| (m.id, m.bh_node_index())).collect::<HashMap<_, _>>();
+        let map_spawn_id_to_bvh_id = model_spawns_used.iter().map(|m| (m.id, m.bh_node_index())).collect::<Vec<_>>();
         bincode_serialise(w, &map_spawn_id_to_bvh_id)?;
         Ok(())
     }
@@ -85,7 +85,9 @@ impl StaticMapTree {
         cmp_or_return!(r, b"NODE")?;
         let tree = bincode_deserialise(&mut r)?;
         cmp_or_return!(r, b"SIDX")?;
-        let map_spawn_id_to_bvh_id = bincode_deserialise(&mut r)?;
+        let map_spawn_id_to_bvh_id: Vec<(u32, usize)> = bincode_deserialise(&mut r)?;
+
+        let map_spawn_id_to_bvh_id = map_spawn_id_to_bvh_id.into_iter().collect();
 
         sanity_check_read_all_bytes_from_reader!(r)?;
 

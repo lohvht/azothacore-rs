@@ -1,3 +1,4 @@
+debug_validation = false
 input_path = "/PATH/TO/YOUR/WOW/CLIENT/ROOT"
 output_path = "/PATH/TO/AZOTHACORE/SERVER/DATA/DIR"
 # locales = 0

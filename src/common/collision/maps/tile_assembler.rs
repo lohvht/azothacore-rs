@@ -1,13 +1,16 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     io,
-    path::{Path, PathBuf},
+    path::Path,
+    sync::mpsc::channel,
 };
 
-use bvh::{aabb::AABB, bvh::BVH};
+use bvh::{aabb::AABB, bounding_hierarchy::BHShape, bvh::BVH};
 use flagset::FlagSet;
+use futures::future;
 use nalgebra::{Matrix3, Rotation, Vector2, Vector3};
+use rayon::prelude::*;
 use tracing::{error, info, warn};
 
 use crate::{
@@ -24,25 +27,32 @@ use crate::{
     read_le,
     sanity_check_read_all_bytes_from_reader,
     tools::{
-        extractor_common::{bincode_deserialise, bincode_serialise, get_fixed_plain_name},
+        extractor_common::{bincode_deserialise, bincode_serialise, get_fixed_plain_name, ExtractorConfig},
         vmap4_extractor::{wmo::WMOLiquidHeader, TempGameObjectModel},
     },
     GenericResult,
 };
 
 pub fn tile_assembler_convert_world2(
-    i_dest_dir: PathBuf,
-    i_src_dir: PathBuf,
+    args: &ExtractorConfig,
     map_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>>,
     temp_gameobject_models: Vec<TempGameObjectModel>,
 ) -> GenericResult<()> {
+    let src = args.output_vmap_sz_work_dir_wmo();
+    let dst = args.output_vmap_output_path();
+
+    let src_display = src.display();
+    let dst_display = dst.display();
+    info!("using {src_display} as source directory and writing output to {dst_display}");
+
+    fs::create_dir_all(&dst)?;
+
     let inv_tile_size = 3f32 / 1600f32;
 
-    let mut spawned_model_files = BTreeSet::new();
-    let mut map_data = map_data;
+    let (sender, receiver) = channel();
 
     // export Map data
-    while let Some((map_id, mut data)) = map_data.pop_first() {
+    map_data.into_par_iter().try_for_each_with(sender, |s, (map_id, mut data)| {
         // tile entries => packedTileId to set of tilespawns
         let mut tile_entries = BTreeMap::new();
         let mut parent_tile_entries = BTreeMap::new();
@@ -51,7 +61,7 @@ pub fn tile_assembler_convert_world2(
         info!("Calculating model bounds for map {map_id}...");
         for (_spawn_id, entry) in data.iter_mut() {
             // M2 models don't have a bound set in WDT/ADT placement data, i still think they're not used for LoS at all on retail
-            if entry.flags.contains(ModelFlags::ModM2) && calculate_transformed_bound(&i_src_dir, entry).is_err() {
+            if entry.flags.contains(ModelFlags::ModM2) && calculate_transformed_bound(&src, entry).is_err() {
                 continue;
             }
 
@@ -76,7 +86,8 @@ pub fn tile_assembler_convert_world2(
                         });
                 }
             }
-            spawned_model_files.insert(entry.name.clone());
+            s.send(entry.name.clone())
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("send fail, err: {e}")))?;
             map_spawns.push(entry);
         }
 
@@ -86,7 +97,65 @@ pub fn tile_assembler_convert_world2(
         let map_spawns = map_spawns.into_iter().map(|m| &*m).collect::<Vec<_>>();
 
         // write map tree file
-        StaticMapTree::write_map_tree_to_file(&i_dest_dir, map_id, &ptree, &map_spawns)?;
+        StaticMapTree::write_map_tree_to_file(&dst, map_id, &ptree, &map_spawns)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("write map tree to file err: {e}")))?;
+
+        if args.debug_validation {
+            info!("Debug validating map tree {map_id}");
+            let mapfilename = StaticMapTree::map_file_name(&dst, map_id);
+            let mut mapfile = fs::File::open(&mapfilename).inspect_err(|e| {
+                error!("cannot open {}, err was: {e}", mapfilename.display());
+            })?;
+            let (r_bvh, r_spawn_id_to_bvh_id) =
+                StaticMapTree::read_map_tree(&mut mapfile).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("read map tree to file err: {e}")))?;
+
+            if r_bvh.nodes.len() != ptree.nodes.len() {
+                error!(
+                    "NODES FOR MAP BVH SHOULD MATCH IN LEN, CALCULATED: {}, READ: {}",
+                    ptree.nodes.len(),
+                    r_bvh.nodes.len()
+                )
+            }
+            if map_spawns.len() != r_spawn_id_to_bvh_id.len() {
+                error!(
+                    "SPAWN IDS FOR MAP SHOULD MATCH IN LEN, CALCULATED: {}, READ: {}",
+                    map_spawns.len(),
+                    r_spawn_id_to_bvh_id.len()
+                )
+            }
+            for m in map_spawns.iter() {
+                match r_spawn_id_to_bvh_id.get(&m.id) {
+                    None => {
+                        error!("CALCULATED SPAWN ID SHOULD BE IN READ SPAWN ID, CALCULATED: ID: {}", m.id)
+                    },
+                    Some(bvh_id) if *bvh_id != m.bh_node_index() => {
+                        error!("CALCULATED SPAWN ID MISMATCH, CALCULATED: ID: {}, READ ID: {}", m.bh_node_index(), bvh_id)
+                    },
+                    _ => {},
+                }
+            }
+            let calc_spawn_id_to_bvh_id = map_spawns.iter().map(|v| (v.id, v.bh_node_index())).collect::<HashMap<_, _>>();
+            if r_spawn_id_to_bvh_id != calc_spawn_id_to_bvh_id {
+                error!(
+                    "SPAWN IDS FOR MAP SHOULD MATCH IN LEN, CALCULATED: {}, READ: {}",
+                    calc_spawn_id_to_bvh_id.len(),
+                    r_spawn_id_to_bvh_id.len()
+                )
+            }
+            for (spawn_id, r_bh_id) in r_spawn_id_to_bvh_id.iter() {
+                let has_r_bh_id = r_bvh.nodes.iter().any(|n| match n {
+                    bvh::bvh::BVHNode::Leaf { shape_index, .. } => *shape_index == *r_bh_id,
+                    bvh::bvh::BVHNode::Node {
+                        child_l_index, child_r_index, ..
+                    } => *child_l_index == *r_bh_id || *child_r_index == *r_bh_id,
+                    _ => false,
+                });
+                if !has_r_bh_id {
+                    error!("Spawn ID may be invalid as its respective BH ID isnt found. spawn_id {spawn_id}, bh_id: {r_bh_id}");
+                }
+            }
+            info!("Debug validating map tree done {map_id}")
+        }
 
         // write map tile files, similar to ADT files, only with extra BVH tree node info
         for (tile_id, tile_entries) in tile_entries.iter() {
@@ -109,22 +178,68 @@ pub fn tile_assembler_convert_world2(
                     all_tile_entries.push(model_spawn);
                 }
             }
-            StaticMapTree::write_map_tile_spawns_file(&i_dest_dir, map_id, y, x, &all_tile_entries)?;
+            StaticMapTree::write_map_tile_spawns_file(&dst, map_id, y, x, &all_tile_entries)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("write_map_tile_spawns_file err: {e}")))?;
+            if args.debug_validation {
+                let tilefilename = StaticMapTree::get_tile_file_name(&dst, map_id, y, x);
+                let mut tilefile = fs::File::open(&tilefilename).inspect_err(|e| {
+                    error!("cannot open {}, err was: {e}", tilefilename.display());
+                })?;
+                let r_spawns = StaticMapTree::read_map_tile_spawns(&mut tilefile)
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("read map tree to file err: {e}")))?;
+
+                if r_spawns.len() != all_tile_entries.len() {
+                    error!(
+                        "SPAWNS FOR MAP TILE SHOULD MATCH IN LEN, CALCULATED: {}, READ: {}",
+                        all_tile_entries.len(),
+                        r_spawns.len(),
+                    )
+                }
+
+                for (i, te) in all_tile_entries.iter().enumerate() {
+                    if te.id != r_spawns[i].id {
+                        error!(
+                            "SPAWNS FOR MAP TILE SHOULD IN ID AND POS, CALCULATED: {}, READ: {}",
+                            all_tile_entries.len(),
+                            r_spawns.len(),
+                        )
+                    }
+                }
+            }
         }
-    }
+        io::Result::Ok(())
+    })?;
+
+    let mut spawned_model_files: BTreeSet<_> = receiver.iter().collect();
 
     // add an object models, listed in temp_gameobject_models file
     info!("Exporting game object models");
-    export_gameobject_models(&i_src_dir, &i_dest_dir, temp_gameobject_models, &mut spawned_model_files)?;
+    export_gameobject_models(&src, &dst, temp_gameobject_models, &mut spawned_model_files)?;
     // export objects
     info!("Converting Model Files");
-    for mfile_name in spawned_model_files.iter() {
-        info!("Converting {mfile_name}");
-        if let Err(e) = convert_raw_file(&i_src_dir, &i_dest_dir, mfile_name) {
-            warn!("error converting {mfile_name}: err {e}");
-            break;
-        }
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().max_blocking_threads(50).build()?;
+    let mut jhs = Vec::with_capacity(spawned_model_files.len());
+    for mfile_name in spawned_model_files {
+        let src = src.clone();
+        let dest = dst.clone();
+        jhs.push(rt.spawn_blocking(|| {
+            info!("Converting {mfile_name}");
+            convert_raw_file(src, dest, mfile_name.into())
+        }))
     }
+    rt.block_on(async {
+        for r in future::join_all(jhs).await {
+            match r {
+                Err(e) => {
+                    warn!("join error while converting: err {e}");
+                },
+                Ok(Err(e)) => {
+                    warn!("error converting: err {e}");
+                },
+                _ => {},
+            }
+        }
+    });
 
     Ok(())
 }
@@ -164,8 +279,12 @@ fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpaw
     Ok(())
 }
 
-fn convert_raw_file<P: AsRef<Path>>(i_src_dir: P, i_dest_dir: P, p_model_filename: &str) -> GenericResult<()> {
-    let filename = i_src_dir.as_ref().join(p_model_filename);
+fn convert_raw_file<P: AsRef<Path>>(src: P, dst: P, p_model_filename: P) -> io::Result<()> {
+    let filename = src.as_ref().join(p_model_filename.as_ref());
+    let out = dst.as_ref().join(format!("{}.vmo", p_model_filename.as_ref().display()));
+    if out.try_exists()? {
+        return Ok(());
+    }
 
     let mut raw_model_file = fs::File::open(&filename).inspect_err(|e| {
         error!("convert_raw_file err: {}; err was {e}", filename.display());
@@ -211,71 +330,82 @@ fn convert_raw_file<P: AsRef<Path>>(i_src_dir: P, i_dest_dir: P, p_model_filenam
 
     let model = WorldModel::new(raw_model.root_wmo_id, groups);
 
-    let mut outfile = fs::File::create(i_dest_dir.as_ref().join(format!("{p_model_filename}.vmo"))).inspect_err(|e| {
+    let mut outfile = fs::File::create(out).inspect_err(|e| {
         error!("create new  vmofile err: {}; err was {e}", filename.display());
     })?;
-    model.write_file(&mut outfile)?;
+    model
+        .write_file(&mut outfile)
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("MODEL RAW VMO WRITE ERR: {e}")))?;
     Ok(())
 }
 
-fn export_gameobject_models<P: AsRef<Path>>(
-    i_src_dir: P,
-    i_dest_dir: P,
+fn export_gameobject_models<P: AsRef<Path> + std::marker::Sync>(
+    src: P,
+    dst: P,
     temp_gameobject_models: Vec<TempGameObjectModel>,
     spawned_model_files: &mut BTreeSet<String>,
 ) -> GenericResult<()> {
-    let mut model_list = BTreeMap::new();
-    let mut success_count = 0;
     let total_count = temp_gameobject_models.len();
-    for tmp in temp_gameobject_models {
-        let TempGameObjectModel {
-            id: display_id,
-            is_wmo,
-            file_name: model_name,
-        } = tmp;
+    let (model_file_send, model_file_receive) = channel();
+    let (model_list_send, model_list_receive) = channel();
 
-        let raw_model_file_path = i_src_dir.as_ref().join(get_fixed_plain_name(&model_name));
-        let mut raw_model_file = match fs::File::open(&raw_model_file_path) {
-            Err(e) => {
-                warn!("cannot open raw file for some reason: path: {}, err {e}", raw_model_file_path.display());
-                continue;
-            },
-            Ok(f) => f,
-        };
-        let raw_model = match WorldModel_Raw::read(&mut raw_model_file) {
-            Err(e) => {
-                warn!(
-                    "read raw file model file failed for some reason: path: {}, err {e}",
-                    raw_model_file_path.display()
-                );
-                continue;
-            },
-            Ok(m) => m,
-        };
-
-        spawned_model_files.insert(model_name.clone());
-        let mut bounds = AABB::empty();
-        for grp in raw_model.groups {
-            for v in grp.vertices_chunks {
-                bounds.grow_mut(&v.into());
-            }
-        }
-        if bounds.is_empty() {
-            warn!("Model {model_name} has empty bounding box or has an invalid bounding box");
-            continue;
-        }
-        success_count += 1;
-        model_list.insert(
-            display_id,
-            GameObjectModelData {
-                display_id,
-                bounds,
+    temp_gameobject_models
+        .into_par_iter()
+        .for_each_with((model_file_send, model_list_send), |(s1, s2), tmp| {
+            let TempGameObjectModel {
+                id: display_id,
                 is_wmo,
-                name: model_name,
-            },
-        );
+                file_name: model_name,
+            } = tmp;
+
+            let raw_model_file_path = src.as_ref().join(get_fixed_plain_name(&model_name));
+            let mut raw_model_file = match fs::File::open(&raw_model_file_path) {
+                Err(e) => {
+                    warn!("cannot open raw file for some reason: path: {}, err {e}", raw_model_file_path.display());
+                    return;
+                },
+                Ok(f) => f,
+            };
+            let raw_model = match WorldModel_Raw::read(&mut raw_model_file) {
+                Err(e) => {
+                    warn!(
+                        "read raw file model file failed for some reason: path: {}, err {e}",
+                        raw_model_file_path.display()
+                    );
+                    return;
+                },
+                Ok(m) => m,
+            };
+            if s1.send(model_name.clone()).is_err() {
+                return;
+            }
+            let mut bounds = AABB::empty();
+            for grp in raw_model.groups {
+                for v in grp.vertices_chunks {
+                    bounds.grow_mut(&v.into());
+                }
+            }
+            if bounds.is_empty() {
+                warn!("Model {model_name} has empty bounding box or has an invalid bounding box");
+                return;
+            }
+            _ = s2.send((
+                display_id,
+                GameObjectModelData {
+                    display_id,
+                    bounds,
+                    is_wmo,
+                    name: model_name,
+                },
+            ));
+        });
+
+    for s in model_file_receive {
+        spawned_model_files.insert(s);
     }
-    GameObjectModelData::write_to_file(i_dest_dir, &model_list)?;
+    let model_list = model_list_receive.iter().collect();
+    GameObjectModelData::write_to_file(dst, &model_list)?;
+    let success_count = model_list.len();
     info!("GameObjectModels written: {success_count} / {total_count}");
 
     Ok(())

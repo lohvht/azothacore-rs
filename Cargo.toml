@@ -60,3 +60,4 @@ ordered-multimap = "0.6.0"
 nalgebra = { version = "0.32.2", features = [ "serde-serialize", "convert-glam023" ] }
 bincode = "1.3.3"
 bvh = { version = "0.7.2", features = [ "serde" ] }
+rayon = "1.7.0"
