@@ -124,7 +124,7 @@ impl VmapExtractor<'_> {
         let db2 = wdc1::FileLoader::<GameObjectDisplayInfo>::from_reader(source, locale as u32)?;
         let recs = db2.produce_data()?;
 
-        for (_, rec) in recs {
+        for rec in recs {
             let fid = rec.file_data_id;
             let file_name = format!("FILE{fid:08X}.xxx");
             let mut header_magic = [0u8; 4];
@@ -311,7 +311,7 @@ impl VmapExtractor<'_> {
         info!("Read Map.dbc file...");
         let source = storage.open_file("DBFilesClient/Map.db2", CascLocale::None.into())?;
         let db2 = wdc1::FileLoader::<Map>::from_reader(source, locale as u32)?;
-        let maps = db2.produce_data()?;
+        let maps = db2.produce_data()?.map(|r| (r.id, r)).collect::<HashMap<_, _>>();
         info!("Done! ({} maps loaded)", maps.len());
 
         let mut wdts = HashMap::new();

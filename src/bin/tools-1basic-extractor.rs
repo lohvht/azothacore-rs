@@ -74,7 +74,7 @@ fn main() -> GenericResult<()> {
         if let Locale::none = l {
             continue;
         }
-        if (installed_locales_mask & l.to_casc_locales()).bits() == 0 {
+        if !installed_locales_mask.contains(l.to_casc_locales()) {
             continue;
         }
         let storage = match args.get_casc_storage_handler(l) {
@@ -236,7 +236,6 @@ fn read_cinematic_camera_dbc(storage: &CascStorageHandle, locale: Locale) -> Gen
     let data = fl.produce_data()?;
 
     let res = data
-        .values()
         .map(|d| {
             let fid = d.file_data_id;
             format!("FILE{fid:08X}.xxx")
@@ -315,24 +314,25 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> Generi
     let source = storage.open_file("DBFilesClient/Map.db2", CascLocale::None.into())?;
     let db2 = wdc1::FileLoader::<Map>::from_reader(source, locale as u32)?;
     let maps = db2.produce_data()?;
-    info!("Done! ({} maps loaded)", maps.len());
+    let (num_maps, _) = maps.size_hint();
+    info!("Done! ({} maps loaded)", num_maps);
 
     info!("Read LiquidMaterial.db2 file...");
     let source = storage.open_file("DBFilesClient/LiquidMaterial.db2", CascLocale::None.into())?;
     let db2 = wdc1::FileLoader::<LiquidMaterial>::from_reader(source, locale as u32)?;
-    let liquid_materials = db2.produce_data()?;
+    let liquid_materials = db2.produce_data()?.map(|r| (r.id, r)).collect::<BTreeMap<_, _>>();
     info!("Done! ({} LiquidMaterials loaded)", liquid_materials.len());
 
     info!("Read LiquidObject.db2 file...");
     let source = storage.open_file("DBFilesClient/LiquidObject.db2", CascLocale::None.into())?;
     let db2 = wdc1::FileLoader::<LiquidObject>::from_reader(source, locale as u32)?;
-    let liquid_objects = db2.produce_data()?;
+    let liquid_objects = db2.produce_data()?.map(|r| (r.id, r)).collect::<BTreeMap<_, _>>();
     info!("Done! ({} LiquidObjects loaded)", liquid_objects.len());
 
     info!("Read LiquidType.db2 file...");
     let source = storage.open_file("DBFilesClient/LiquidType.db2", CascLocale::None.into())?;
     let db2 = wdc1::FileLoader::<LiquidType>::from_reader(source, locale as u32)?;
-    let liquid_types = db2.produce_data()?;
+    let liquid_types = db2.produce_data()?.map(|r| (r.id, r)).collect::<BTreeMap<_, _>>();
     info!("Done! ({} LiquidTypes loaded)", liquid_types.len());
 
     let liquid_types = Arc::new(liquid_types);
@@ -345,7 +345,8 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> Generi
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().max_blocking_threads(50).build()?;
     let mut jhs = vec![];
 
-    for (z, (map_id, map)) in maps.iter().enumerate() {
+    for (z, map) in maps.enumerate() {
+        let map_id = map.id;
         let map_name = &map.directory.def_str();
         let storage_path = format!("World/Maps/{map_name}/{map_name}.wdt");
         let wdt = match ChunkedFile::build(&storage, &storage_path) {
@@ -355,7 +356,7 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> Generi
             },
             Ok(f) => f,
         };
-        info!("Extract {} ({}/{})", map_name, z + 1, maps.len());
+        info!("Extract {} ({}/{})", map_name, z + 1, num_maps);
         // We expect MAIN chunk to always exist
         let chunk = wdt.chunks.get(b"MAIN").unwrap();
         let chunk = WdtChunkMain::from(chunk.clone());

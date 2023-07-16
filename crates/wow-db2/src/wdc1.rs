@@ -767,7 +767,7 @@ where
     }
 
     /// Produces the entire contents of the DB2 file. returning a BTreeMap of db2 ids to their respective records
-    pub fn produce_data(&self) -> io::Result<BTreeMap<u32, W>> {
+    pub fn produce_data(&self) -> io::Result<impl Iterator<Item = W>> {
         let mut res = BTreeMap::new();
         let mut id_value_to_record_number = BTreeMap::new();
         let max_records = self.get_num_records_to_iterate();
@@ -964,7 +964,11 @@ where
             res.entry(new_record_number).or_insert(copied_row);
             new_record_number += 1;
         }
-        let res = res.into_values().map(|record| (record.id, record.into())).collect::<BTreeMap<_, _>>();
+        // TODO: Make produce_data actually lazily returns records.
+        // Now its not doing that mostly because DB2's structure doesnt allow
+        // for this to be easy.
+        let res = res.into_values().map(|record| W::from(record));
+
         Ok(res)
     }
 }
