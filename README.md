@@ -3,6 +3,8 @@
 Azothacore is an attempt at rewriting an World of Warcraft emulator based on TrinityCore/Azerothcore
 tagged to version 7.3.5 (rev 269672), using Rust.
 
+7.3.5 source reference is based on TrinityCore's [7.3.5/269672](https://github.com/TrinityCore/TrinityCore/tree/7.3.5/26972) release.
+
 It is completely open source and still a work in progress; Community involvement is highly encouraged.
 
 # Requirements
