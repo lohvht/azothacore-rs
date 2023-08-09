@@ -71,9 +71,9 @@ pub fn scripts_registration(input: TokenStream) -> TokenStream {
     };
     let register_fn = quote! {
         #[doc = "Runs through a run of init functions, returning early if at the first script that fails to register"]
-        pub async fn register() -> Result<(), Box<dyn std::error::Error>> {
+        pub fn register() -> Result<(), Box<dyn std::error::Error>> {
             #(
-                #script_names::init().await?;
+                #script_names::init()?;
             )*
             Ok(())
         }

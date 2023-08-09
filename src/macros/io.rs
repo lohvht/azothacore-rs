@@ -51,6 +51,9 @@ macro_rules! read_buf {
 #[macro_export]
 macro_rules! cmp_or_return {
     ( $input:expr, $cmp:expr ) => {{
+        cmp_or_return!($input, $cmp, "cmpfail want {}, got {}")
+    }};
+    ( $input:expr, $cmp:expr, $format:expr ) => {{
         #[allow(unused_imports)]
         use ::std::io::Read;
         let mut buf = vec![0u8; $cmp.len()];
@@ -60,10 +63,10 @@ macro_rules! cmp_or_return {
                 if &buf != $cmp {
                     Err(::std::io::Error::new(
                         ::std::io::ErrorKind::Other,
-                        format!("cmpfail want {}, got {}", String::from_utf8_lossy($cmp), String::from_utf8_lossy(&buf)),
+                        format!($format, String::from_utf8_lossy($cmp), String::from_utf8_lossy(&buf)),
                     ))
                 } else {
-                    Ok(())
+                    Ok(buf)
                 }
             },
         }

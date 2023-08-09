@@ -84,7 +84,7 @@ pub async fn db_updater_update(
     check_update_table(pool, cfg, "updates_include").await?;
 
     let source_directory = ".".to_string();
-    let uf = UpdateFetcher::new(source_directory, cfg.DBModuleName.clone(), modules_list.clone().into_iter(), update_cfg);
+    let uf = UpdateFetcher::new(source_directory, cfg.DBModuleName.clone(), modules_list.clone(), update_cfg);
 
     let (updated, recent, archived) = uf.update(pool).await?;
     let info = format!("Containing {} new and {} archived updates.", recent, archived);

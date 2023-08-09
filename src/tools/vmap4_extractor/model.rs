@@ -4,11 +4,12 @@ use nalgebra::Vector3;
 use tracing::error;
 
 use crate::{
+    az_error,
     common::collision::maps::tile_assembler::{GroupModel_Raw, WorldModel_Raw},
     read_buf,
     read_le,
     tools::extractor_common::{casc_handles::CascStorageHandle, ChunkedFile},
-    GenericResult,
+    AzResult,
 };
 
 #[allow(dead_code)]
@@ -78,21 +79,18 @@ fn fix_coord_system(v: Vector3<f32>) -> Vector3<f32> {
 }
 
 impl Model {
-    pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, filename: P) -> GenericResult<Self> {
+    pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, filename: P) -> AzResult<Self> {
         let f = ChunkedFile::build(storage, &filename)?;
         let md21 = f.chunks.get(b"12DM").expect("MD21 chunk should exist in this version of WoW");
         let mut md20data = io::Cursor::new(md21.data.clone());
 
         let id = read_buf!(md20data, 4)?;
         if &id != b"MD20" {
-            return Err(Box::new(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "SANITY CHECK: wrong magic number?, expect {}, got {}",
-                    String::from_utf8_lossy(b"MD20"),
-                    String::from_utf8_lossy(&id),
-                ),
-            )));
+            return Err(az_error!(
+                "SANITY CHECK: wrong magic number?, expect {}, got {}",
+                String::from_utf8_lossy(b"MD20"),
+                String::from_utf8_lossy(&id),
+            ));
         }
         let version = read_buf!(md20data, 4)?;
         let names = M2Array::read(&mut md20data)?;

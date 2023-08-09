@@ -1,4 +1,4 @@
-use std::{io, sync::Arc};
+use std::{io, ops::Deref, sync::Arc};
 
 use bvh::{
     aabb::{Bounded, AABB},
@@ -12,14 +12,14 @@ use crate::{
     common::collision::vmap_definitions::VMAP_MAGIC,
     read_le,
     tools::extractor_common::{bincode_deserialise, bincode_serialise},
-    GenericResult,
+    AzResult,
 };
 
 /// Holds a model (converted M2 or WMO) in its original coordinate space
 pub struct WorldModel {
-    root_wmoid:   u32,
-    group_models: Vec<GroupModel>,
-    group_tree:   BVH,
+    root_wmoid:       u32,
+    pub group_models: Vec<GroupModel>,
+    group_tree:       BVH,
 }
 
 impl WorldModel {
@@ -36,7 +36,7 @@ impl WorldModel {
         s
     }
 
-    pub fn write_file<W: io::Write>(&self, out: &mut W) -> GenericResult<()> {
+    pub fn write_file<W: io::Write>(&self, out: &mut W) -> AzResult<()> {
         let mut out = out;
         // FILE* wf = fopen(filename.c_str(), "wb");
         // if (!wf)
@@ -62,7 +62,7 @@ impl WorldModel {
         Ok(())
     }
 
-    fn read_file<R: io::Read>(&self, r: &mut R) -> GenericResult<Self> {
+    pub fn read_file<R: io::Read>(r: &mut R) -> AzResult<Self> {
         let mut r = r;
 
         cmp_or_return!(r, VMAP_MAGIC)?;
@@ -75,7 +75,7 @@ impl WorldModel {
                 let gt = BVH { nodes: vec![] };
                 (gm, gt)
             },
-            Err(e) => return Err(Box::new(e)),
+            Err(e) => return Err(e)?,
             Ok(_) => {
                 let count = read_le!(r, usize)?;
                 let mut gm = Vec::with_capacity(count);
@@ -122,31 +122,47 @@ impl BHShape for GroupModel {
 
 /// holding additional info for WMO group files
 pub struct GroupModel {
-    vertices:  Arc<Vec<Vector3<f32>>>,
-    triangles: Vec<MeshTriangle>,
-    inner:     GroupModelInner,
+    pub vertices:  Arc<Vec<Vector3<f32>>>,
+    pub triangles: Vec<MeshTriangle>,
+    inner:         GroupModelInner,
+}
+
+impl Deref for GroupModel {
+    type Target = GroupModelInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
-struct GroupModelInner {
+pub struct GroupModelInner {
     i_bound:       AABB,
     /// 0x8 outdor; 0x2000 indoor
     i_mogp_flags:  u32,
     i_group_wmoid: u32,
     mesh_tree:     BVH,
-    i_liquid:      Option<WmoLiquid>,
+    pub i_liquid:  Option<WmoLiquid>,
     bvh_node_id:   usize,
 }
 
-struct MeshTriangle {
+pub struct MeshTriangle {
     inner:    MeshTriangleInner,
     vertices: Arc<Vec<Vector3<f32>>>,
 }
 
+impl Deref for MeshTriangle {
+    type Target = MeshTriangleInner;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
 #[derive(serde::Deserialize, serde::Serialize)]
-struct MeshTriangleInner {
-    node_idx:  usize,
-    tri_idxes: Vector3<u16>,
+pub struct MeshTriangleInner {
+    node_idx:      usize,
+    pub tri_idxes: Vector3<u16>,
 }
 
 impl Bounded for MeshTriangle {
@@ -193,7 +209,10 @@ impl GroupModel {
         };
         for tri in mesh_triangle_indices {
             s.triangles.push(MeshTriangle {
-                inner:    MeshTriangleInner { node_idx: 0, tri_idxes: tri },
+                inner:    MeshTriangleInner {
+                    node_idx:  0,
+                    tri_idxes: tri,
+                },
                 vertices: s.vertices.clone(),
             });
         }
@@ -204,7 +223,7 @@ impl GroupModel {
         s
     }
 
-    fn write_to_file<W: io::Write>(&self, out: &mut W) -> GenericResult<()> {
+    fn write_to_file<W: io::Write>(&self, out: &mut W) -> AzResult<()> {
         let mut out = out;
 
         let vert = self.vertices.iter().collect::<Vec<_>>();
@@ -217,7 +236,7 @@ impl GroupModel {
         Ok(())
     }
 
-    fn read_from_file<R: io::Read>(r: &mut R) -> GenericResult<Self> {
+    fn read_from_file<R: io::Read>(r: &mut R) -> AzResult<Self> {
         let mut r = r;
         // Do all the reading first
         let vertices: Vec<Vector3<f32>> = bincode_deserialise(&mut r)?;
@@ -233,7 +252,11 @@ impl GroupModel {
                 vertices: vertices.clone(),
             })
             .collect();
-        Ok(Self { inner, vertices, triangles })
+        Ok(Self {
+            inner,
+            vertices,
+            triangles,
+        })
     }
 
     // public:
@@ -259,27 +282,32 @@ impl GroupModel {
 #[derive(serde::Deserialize, serde::Serialize)]
 pub struct WmoLiquid {
     ///!< the lower corner
-    i_corner: Vector3<f32>,
+    pub i_corner: Vector3<f32>,
     ///!< liquid type
-    i_type:   u32,
+    pub i_type:   u32,
     /// height values in a matrix. indexed via (y, x)
     ///     => the y axis is the number of rows (i.e. height)
     ///     => the x axis is the number of cols (i.e. width)
-    i_height: DMatrix<f32>,
+    pub i_height: DMatrix<f32>,
     ///!< info if liquid tile is used
-    i_flags:  Option<DMatrix<u8>>,
+    pub i_flags:  Option<DMatrix<u8>>,
 }
 
 impl WmoLiquid {
-    pub fn new(i_tile_x: u32, i_tile_y: u32, corner: Vector3<f32>, typ: u32, i_height: Vec<f32>, i_flags: Vec<u8>) -> Self {
-        let ncols = (i_tile_x + 1) as usize;
-        let nrows = (i_tile_y + 1) as usize;
+    /// width => i_tiles_x
+    /// height => i_tiles_y
+    pub fn new(width: u32, height: u32, corner: Vector3<f32>, typ: u32, i_height: Vec<f32>, i_flags: Vec<u8>) -> Self {
+        let ncols = (width + 1) as usize;
+        let nrows = (height + 1) as usize;
         // Initialised in reversed order, b/c the i_height and i_flags are supposed to be in row order, but `DMatrix::from_vec`
         // is filled in col order.
         let i_height = DMatrix::from_vec(ncols, nrows, i_height).transpose();
-        let ncols = i_tile_x as usize;
-        let nrows = i_tile_y as usize;
+        let ncols = width as usize;
+        let nrows = height as usize;
         let i_flags = Some(DMatrix::from_vec(ncols, nrows, i_flags).transpose());
+
+        // iHeight[tx+1 +  ty    * rowOffset] - iHeight[tx   + ty * rowOffset]; ==> i_height[(ty, tx+1)] - i_height[(ty, tx)]
+
         WmoLiquid {
             i_corner: corner,
             i_type: typ,
@@ -308,7 +336,6 @@ impl WmoLiquid {
     //     uint32 GetFileSize();
     //     bool writeToFile(FILE* wf);
     //     static bool readFromFile(FILE* rf, WmoLiquid* &liquid);
-    //     void getPosInfo(uint32 &tilesX, uint32 &tilesY, G3D::Vector3 &corner) const;
     // private:
     //     WmoLiquid() : iTilesX(0), iTilesY(0), iCorner(), iType(0), iHeight(NULL), iFlags(NULL) { }
 }

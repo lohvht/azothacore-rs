@@ -22,15 +22,14 @@ azothacore-proc-macros = { version = "0.1", path = "crates/azothacore-proc-macro
 wow-db2 = { version = "0.1", path = "crates/wow-db2" }
 wow-db2-proc-macros = { version = "0.1", path = "crates/wow-db2-proc-macros" }
 tokio = { version = "1.26.0", features = ["full", "tracing"] }
-parking_lot = { version = "0.12", features = ["nightly", "deadlock_detection"] }
 clap =  { version = "4.1.8", features = ["derive"] }
 serde = { version = "1.0.152", features = ["derive"] }
 toml = { version = "0.7.2", features = ["preserve_order"] }
 structstruck = "0.4.0"
 tracing = { version = "0.1.37", features = ["log"] }
-tracing-subscriber = { version = "0.3", features = ["parking_lot", "registry", "env-filter"] }
+tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
 tracing-log = "0.1.3"
-console-subscriber = { version = "0.1.8", features = ["parking_lot"] }
+console-subscriber = { version = "0.1.8" }
 tracing-appender = "0.2"
 owo-colors = "3"
 git-version = "0.3.5"
@@ -38,7 +37,6 @@ rand = "0.8.5"
 num-bigint = { version = "0.4.3", features = ["rand"] }
 const_format = "0.2.30"
 regex = "1.7.1"
-lazy_static = "1.4.0"
 flagset = { version = "0.4.3", features = ["serde"] }
 sqlx = { version = "0.6.2", features = [ "runtime-tokio-rustls", "mysql", "time"] }
 thiserror = "1.0.40"
@@ -49,7 +47,6 @@ futures = "0.3.27"
 sql-parse = "0.12.0"
 sha2 = "0.10.6"
 hex_fmt = "0.3.0"
-once_cell = { version = "1.17.1" }
 hugsqlx = {version = "0.1.4", features = [ "mysql" ]}
 async-trait = "0.1.68"
 num-traits = "0.2.15"
@@ -61,3 +58,9 @@ nalgebra = { version = "0.32.2", features = [ "serde-serialize", "convert-glam02
 bincode = "1.3.3"
 bvh = { version = "0.7.2", features = [ "serde" ] }
 rayon = "1.7.0"
+recastnavigation-sys = { version = "1.0.1", features = [ "detour", "recast", "detour_large_nav_meshes" ] }
+glob = "0.3.1"
+sscanf = "0.4.1"
+indicatif = { version = "0.17.6", features = ["rayon" ] }
+tracing-indicatif = "0.3.4"
+

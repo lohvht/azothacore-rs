@@ -1,14 +1,14 @@
-use std::{net::ToSocketAddrs, path::Path, pin::Pin};
+use std::{io, net::ToSocketAddrs, path::Path, pin::Pin};
 
 use azothacore_rs::{
+    az_error,
     common::{
         banner,
         configuration::{
-            ConfigError,
             DatabaseTypeFlags::{Character as DBFlagCharacter, Login as DBFlagLogin, World as DBFlagWorld},
             S_CONFIG_MGR,
         },
-        utils::{create_pid_file, GenericError, InvalidBitsError},
+        utils::create_pid_file,
         AccountTypes,
     },
     logging::init_logging,
@@ -30,7 +30,7 @@ use azothacore_rs::{
             shared_defines::{ServerProcessType, ThisServerProcess},
         },
     },
-    GenericResult,
+    AzResult,
     AZOTHA_CORE_CONFIG,
     CONF_DIR,
     GIT_HASH,
@@ -55,7 +55,8 @@ fn signal_handler() -> JoinHandle<Result<(), std::io::Error>> {
                 "SIGBREAK" => sig_break
             );
             Ok(())
-        }.instrument(info_span!("signal_handler"))
+        }
+        .instrument(info_span!("signal_handler")),
     )
 }
 
@@ -69,7 +70,7 @@ fn signal_handler() -> JoinHandle<Result<(), std::io::Error>> {
             let mut sig_terminate = short_curcuit_unix_signal_unwrap!(SignalKind::terminate());
             let mut sig_quit = short_curcuit_unix_signal_unwrap!(SignalKind::quit());
             receive_signal_and_run_expr!(
-                S_WORLD.write().await.stop_now(1),
+                S_WORLD.write().unwrap().stop_now(1),
                 "SIGINT" => sig_interrupt
                 "SIGTERM" => sig_terminate
                 "SIGQUIT" => sig_quit
@@ -81,12 +82,12 @@ fn signal_handler() -> JoinHandle<Result<(), std::io::Error>> {
 }
 
 #[tokio::main]
-async fn main() -> GenericResult<()> {
+async fn main() -> AzResult<()> {
     let _wg = init_logging();
     ThisServerProcess::set(ServerProcessType::Worldserver);
     let vm = ConsoleArgs::parse();
     {
-        let mut s_config_mgr_w = S_CONFIG_MGR.write().await;
+        let mut s_config_mgr_w = S_CONFIG_MGR.write().unwrap();
         s_config_mgr_w.set_dry_run(vm.dry_run);
         s_config_mgr_w.configure(&vm.config, REGISTERED_MODULES.map(String::from));
         s_config_mgr_w.load_app_configs()?;
@@ -97,14 +98,14 @@ async fn main() -> GenericResult<()> {
     // // If logs are supposed to be handled async then we need to pass the IoContext into the Log singleton
     // sLog->Initialize(sConfigMgr->GetOption<bool>("Log.Async.Enable", false) ? ioContext.get() : nullptr);
 
-    let filename = S_CONFIG_MGR.read().await.get_filename().clone();
+    let filename = S_CONFIG_MGR.read().unwrap().get_filename().clone();
     banner::azotha_banner_show("worldserver-daemon", || info!("> Using configuration file       {}", filename));
     // Seed the OsRng here.
     // That way it won't auto-seed when calling OsRng and slow down the first world login
     OsRng.gen_bigint(16 * 8);
 
     // worldserver PID file creation
-    if let Some(pid_file) = &S_CONFIG_MGR.read().await.world().PidFile {
+    if let Some(pid_file) = &S_CONFIG_MGR.read().unwrap().world().PidFile {
         let pid = create_pid_file(pid_file)?;
         error!("Daemon PID: {}", pid);
     }
@@ -135,20 +136,20 @@ async fn main() -> GenericResult<()> {
     // // TODO: Implement process priority?
     // // Set process priority according to configuration settings
     // SetProcessPriority("server.worldserver", sConfigMgr->GetOption<int32>(CONFIG_PROCESSOR_AFFINITY, 0), sConfigMgr->GetOption<bool>(CONFIG_HIGH_PRIORITY, false));
-    let mut handles: Vec<Box<dyn Future<Output = GenericResult<()>>>> = Vec::new();
+    let mut handles: Vec<Box<dyn Future<Output = AzResult<()>>>> = Vec::new();
     // Loading the modules/scripts before configs as the hooks are required!
     info!("Initializing Scripts...");
-    ScriptMgr::initialise().await?;
-    handles.push(Box::new(ScriptMgr::unload()));
+    ScriptMgr::initialise()?;
+    handles.push(Box::new(async { ScriptMgr::unload() }));
 
-    S_CONFIG_MGR.write().await.load_modules_configs(false, true).await?;
+    S_CONFIG_MGR.write().unwrap().load_modules_configs(false, true)?;
 
     start_db().await?;
     handles.push(Box::new(stop_db()));
 
     // set server offline (not connectable)
 
-    let realm_id = S_CONFIG_MGR.read().await.world().RealmID;
+    let realm_id = S_CONFIG_MGR.read().unwrap().world().RealmID;
     sql_w_args(
         "UPDATE realmlist SET flag = (flag & ~?) | ? WHERE id = ?",
         qargs!(
@@ -200,9 +201,9 @@ async fn main() -> GenericResult<()> {
     Ok(())
 }
 
-async fn start_db() -> GenericResult<()> {
+async fn start_db() -> AzResult<()> {
     let (realm_id, updates, auth_cfg, world_cfg, character_cfg) = {
-        let config_mgr_r = S_CONFIG_MGR.read().await;
+        let config_mgr_r = S_CONFIG_MGR.read().unwrap();
         let world_cfg = config_mgr_r.world();
         (
             world_cfg.RealmID,
@@ -230,9 +231,7 @@ async fn start_db() -> GenericResult<()> {
          * anything further the client will behave anormaly
          */
         error!("Realm ID must range from 1 to 255");
-        return Err(Box::new(ConfigError::Generic {
-            msg: "Realm ID must range from 1 to 255".to_string(),
-        }));
+        return Err(az_error!("Realm ID must range from 1 to 255"));
     }
 
     info!("Loading World Information...");
@@ -242,20 +241,23 @@ async fn start_db() -> GenericResult<()> {
     clear_online_accounts(realm_id).await?;
 
     // Insert version info into DB
-    sql_w_args("UPDATE version SET core_version = ?, core_revision = ?", qargs!(GIT_VERSION, GIT_HASH))
-        .execute(WorldDatabase::get())
-        .await?;
+    sql_w_args(
+        "UPDATE version SET core_version = ?, core_revision = ?",
+        qargs!(GIT_VERSION, GIT_HASH),
+    )
+    .execute(WorldDatabase::get())
+    .await?;
 
-    S_WORLD.write().await.load_db_version().await?;
+    S_WORLD.write().unwrap().load_db_version().await?;
 
-    info!("> Version DB world:     {}", S_WORLD.read().await.get_db_version());
+    info!("> Version DB world:     {}", S_WORLD.read().unwrap().get_db_version());
 
-    ScriptMgr::on_after_databases_loaded(updates.EnableDatabases).await;
+    ScriptMgr::on_after_databases_loaded(updates.EnableDatabases);
 
     Ok(())
 }
 
-async fn stop_db() -> GenericResult<()> {
+async fn stop_db() -> AzResult<()> {
     LoginDatabase::get().close().await;
     WorldDatabase::get().close().await;
     CharacterDatabase::get().close().await;
@@ -265,7 +267,7 @@ async fn stop_db() -> GenericResult<()> {
 
 /// Clear 'online' status for all accounts with characters in this realm
 #[instrument]
-async fn clear_online_accounts(realm_id: u32) -> GenericResult<()> {
+async fn clear_online_accounts(realm_id: u32) -> AzResult<()> {
     // Reset online status for all accounts with characters on the current realm
     // pussywizard: tc query would set online=0 even if logged in on another realm >_>
     sql_w_args("UPDATE account SET online = ? WHERE online = ?", qargs!(false, realm_id))
@@ -280,8 +282,8 @@ async fn clear_online_accounts(realm_id: u32) -> GenericResult<()> {
 }
 
 #[instrument]
-async fn load_realm_info() -> GenericResult<()> {
-    let realm_id = S_CONFIG_MGR.read().await.world().RealmID;
+async fn load_realm_info() -> AzResult<()> {
+    let realm_id = S_CONFIG_MGR.read().unwrap().world().RealmID;
 
     let realm = sql_w_args(
         "SELECT id, name, address, localAddress, localSubnetMask, port, icon, flag, timezone, allowedSecurityLevel, population, gamebuild FROM realmlist WHERE id = ?",
@@ -317,7 +319,7 @@ async fn load_realm_info() -> GenericResult<()> {
         })?;
         // let realm_type: RealmType = FromPrimitive::from_u32(realm_type).ok_or_else(|| )?;
         let flag = FlagSet::<RealmFlags>::new(flag).map_err(|e| {
-            sqlx::Error::ColumnDecode{index: "flag".to_string(), source:  Box::new(InvalidBitsError{err: e})}
+            sqlx::Error::ColumnDecode{index: "flag".to_string(), source:  Box::new(io::Error::new(io::ErrorKind::Other, format!("invalid bits: {e}")))}
         })?;
         Ok(Realm{
             id,
@@ -337,9 +339,7 @@ async fn load_realm_info() -> GenericResult<()> {
 
     for x in &[realm.external_address, realm.local_address, realm.local_subnet_mask] {
         if (x.to_owned(), realm.port).to_socket_addrs()?.next().is_none() {
-            return Err(Box::new(GenericError {
-                msg: format!("Could not resolve address {}", x),
-            }));
+            return Err(az_error!("Could not resolve address {x}"));
         }
     }
 

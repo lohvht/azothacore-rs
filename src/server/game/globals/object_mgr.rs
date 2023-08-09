@@ -1,4 +1,4 @@
-use tokio::sync::RwLock;
+use std::sync::RwLock;
 
 pub struct ObjectMgr {}
 
@@ -12,4 +12,4 @@ impl ObjectMgr {
     }
 }
 
-pub static S_OBJECT_MGR: RwLock<ObjectMgr> = RwLock::const_new(ObjectMgr::new());
+pub static S_OBJECT_MGR: RwLock<ObjectMgr> = RwLock::new(ObjectMgr::new());

@@ -108,7 +108,10 @@ impl WDC1Header {
         }
         Err(io::Error::new(
             io::ErrorKind::Other,
-            format!("id_index from code is not correct. id_index from dbc is {:?}, got {:?}", self.id_index, id_idx,),
+            format!(
+                "id_index from code is not correct. id_index from dbc is {:?}, got {:?}",
+                self.id_index, id_idx,
+            ),
         ))
     }
 
@@ -152,7 +155,8 @@ impl WDC1Header {
         self.copy_table_size = rdr.read_u32::<LittleEndian>()?;
 
         let f = rdr.read_u16::<LittleEndian>()?;
-        self.flags = FlagSet::<WDCFlags>::new(f).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("FLAGS INVALID?: got {:?}, err was {}", f, e)))?;
+        self.flags = FlagSet::<WDCFlags>::new(f)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("FLAGS INVALID?: got {:?}, err was {}", f, e)))?;
         self.id_index = rdr.read_u16::<LittleEndian>()?;
         self.total_field_count = rdr.read_u32::<LittleEndian>()?;
         self.bitpacked_data_offset = rdr.read_u32::<LittleEndian>()?;
@@ -217,7 +221,11 @@ enum FieldCompression {
     /// BitWidth in TrinityCore
     ///
     /// flags - known values - 0x01: sign-extend (signed)
-    BitpackedInlined { offset_bits: u32, size_bits: u32, _flags: u32 },
+    BitpackedInlined {
+        offset_bits: u32,
+        size_bits:   u32,
+        _flags:      u32,
+    },
     /// Common data -- the field is assumed to be a default value, and exceptions
     /// from that default value are stored in the corresponding section in
     /// common_data as pairs of { uint32_t record_id; uint32_t value; }.
@@ -248,7 +256,11 @@ enum FieldCompression {
     /// BitWidth in TrinityCore
     ///
     /// This is DB2ColumnCompression::PalletArray in TrinityCore
-    BitpackedIndexedArray { offset_bits: u32, size_bits: u32, array_count: u32 },
+    BitpackedIndexedArray {
+        offset_bits: u32,
+        size_bits:   u32,
+        array_count: u32,
+    },
 }
 
 impl FieldCompression {
@@ -556,7 +568,10 @@ where
         if W::id_index().is_some() && header.id_list_size != 0 {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
-                format!("header mismatch! id_list_size {} should equal to 0 if NonInlinedIDs", header.id_list_size,),
+                format!(
+                    "header mismatch! id_list_size {} should equal to 0 if NonInlinedIDs",
+                    header.id_list_size,
+                ),
             ));
         }
         if W::id_index().is_none() && header.id_list_size != header.record_count * 4 {
@@ -699,7 +714,8 @@ where
     fn get_num_records_to_iterate(&self) -> usize {
         match &self.file_data {
             FileLoaderData::OffsetMaps {
-                number_of_catalogue_entries, ..
+                number_of_catalogue_entries,
+                ..
             } => *number_of_catalogue_entries,
             FileLoaderData::Regular { .. } => self.header.record_count as usize,
         }
@@ -718,7 +734,8 @@ where
                     None
                 } else {
                     let record_offset_start = offset_map[record_number].offset as usize - self.data_start;
-                    let raw_data = &variable_record_data[record_offset_start..record_offset_start + offset_map[record_number].size as usize];
+                    let raw_data =
+                        &variable_record_data[record_offset_start..record_offset_start + offset_map[record_number].size as usize];
                     let mut offset_relative_to_record = 0;
                     for (field, (field_type, arity)) in &W::db2_fields() {
                         let arity_map = field_and_array_offsets.entry(*field).or_insert(BTreeMap::new());
@@ -913,7 +930,13 @@ where
                             let mut s = new_localised_string();
                             s.set_by_locale_as_num(
                                 self.locale as usize,
-                                self.record_get_string(raw_record, &offset_map_field_and_array_offsets, record_number, *field_idx, array_idx)?,
+                                self.record_get_string(
+                                    raw_record,
+                                    &offset_map_field_and_array_offsets,
+                                    record_number,
+                                    *field_idx,
+                                    array_idx,
+                                )?,
                             );
                             vs.push(s);
                         }
@@ -1056,7 +1079,14 @@ where
         record_number: usize,
     ) -> io::Result<u32> {
         if let Some(id_idx) = W::id_index() {
-            return self.record_get_var_num(record_number, offset_map_field_and_array_offsets, raw_record, id_idx, 0, Self::read_u32);
+            return self.record_get_var_num(
+                record_number,
+                offset_map_field_and_array_offsets,
+                raw_record,
+                id_idx,
+                0,
+                Self::read_u32,
+            );
         }
         Ok(match &self.file_data {
             FileLoaderData::Regular { .. } => self.id_list[record_number],
@@ -1115,7 +1145,9 @@ where
         let (field_struct, fsi) = self.get_field_storage_data(field_idx);
         let res = if let Some(fsi) = fsi {
             match fsi.storage_type {
-                FieldCompression::BitpackedInlined { offset_bits, size_bits, .. } => {
+                FieldCompression::BitpackedInlined {
+                    offset_bits, size_bits, ..
+                } => {
                     if array_idx != 0 {
                         return Err(io::Error::new(
                             io::ErrorKind::Other,

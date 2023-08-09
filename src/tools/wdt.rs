@@ -7,7 +7,7 @@ use crate::{
         adt::AdtChunkModf,
         extractor_common::{casc_handles::CascStorageHandle, cstr_bytes_to_string, ChunkedFile, FileChunk},
     },
-    GenericResult,
+    AzResult,
 };
 
 pub const WDT_MAP_SIZE: usize = 64;
@@ -53,7 +53,7 @@ pub struct WDTFile {
 }
 
 impl WDTFile {
-    pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, storage_path: P) -> GenericResult<Self> {
+    pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, storage_path: P) -> AzResult<Self> {
         let file = ChunkedFile::build(storage, &storage_path)?;
         // .inspect_err(|e| {
         //     error!("Error opening wdt file at {}, err was {e}", storage_path.as_ref().display());

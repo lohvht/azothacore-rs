@@ -1,9 +1,9 @@
 mod world_impl;
 mod world_trait;
 
-use once_cell::sync::OnceCell;
+use std::sync::{OnceLock, RwLock};
+
 use thiserror::Error;
-use tokio::sync::RwLock;
 pub use world_impl::*;
 pub use world_trait::*;
 
@@ -29,5 +29,5 @@ impl WorldRealm {
     }
 }
 
-pub static S_WORLD: RwLock<World> = RwLock::const_new(World::new());
-static WORLD_REALM: OnceCell<Realm> = OnceCell::new();
+pub static S_WORLD: RwLock<World> = RwLock::new(World::new());
+static WORLD_REALM: OnceLock<Realm> = OnceLock::new();

@@ -1,7 +1,14 @@
-use std::{io, iter};
+use std::{
+    fmt::Display,
+    io,
+    iter,
+    path::{Path, PathBuf},
+};
 
 use flagset::{flags, FlagSet};
-use nalgebra::{Matrix3, SMatrix};
+use nalgebra::{DMatrix, Matrix3, SMatrix};
+use num_traits::Num;
+use tracing::warn;
 
 use crate::{
     cmp_or_return,
@@ -10,21 +17,33 @@ use crate::{
         adt::{ADT_CELLS_PER_GRID, ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
         extractor_common::{bincode_deserialise, bincode_serialise},
     },
-    GenericResult,
+    AzResult,
 };
 
-#[allow(non_snake_case)]
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct MapFile {
-    pub map_build_magic:               u32,
+    pub map_build_magic: u32,
     /// Map Area
-    map_area_header_flags:             FlagSet<MapAreaFlag>,
-    map_area_header_grid_area:         u16,
-    pub map_area_ids:                  [[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
+    pub map_area_data:   Result<[[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID], u16>,
     /// Map height
-    map_height_header_flags:           FlagSet<MapHeightFlag>,
-    map_height_header_grid_height:     f32,
-    map_height_header_grid_max_height: f32,
+    pub map_height_data: MapHeightData,
+    // Map Liquid
+    pub map_liquid_data: Option<MapLiquidData>,
+    // holes
+    pub map_holes:       Option<[[[u8; 8]; 16]; 16]>,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct MapHeightData {
+    pub grid_height:     f32,
+    pub grid_max_height: f32,
+    // m_V9[(x_int) * 129 + y_int]; => v9[(x_int, y_int)]
+    pub map_heights:     Option<MapHeightV9V8>,
+    pub flight_box:      Option<MapHeightFlightBox>,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct MapHeightV9V8 {
     // Height
     // Height values for triangles stored in order:
     // 1     2     3     4     5     6     7     8     9
@@ -41,63 +60,108 @@ pub struct MapFile {
     //    10    11    12    13    14    15    16    17
     //    27    28    29    30    31    32    33    34
     // . . . . . . . .
-    pub map_height_V9:                 SMatrix<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>,
-    pub map_height_V8:                 SMatrix<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>,
-    #[allow(clippy::type_complexity)]
-    pub map_height_flight_box_max_min: Option<(Matrix3<i16>, Matrix3<i16>)>,
-    // Map Liquid
-    map_liquid_header_flags:           FlagSet<MapLiquidHeaderFlag>,
-    map_liquid_header_liquid_flags:    FlagSet<MapLiquidTypeFlag>,
-    map_liquid_header_liquid_type:     u16,
-    map_liquid_header_offset_x:        u8,
-    map_liquid_header_offset_y:        u8,
-    map_liquid_header_width:           u8,
-    map_liquid_header_height:          u8,
-    map_liquid_header_liquid_level:    f32,
-    pub map_liquid_entry:              [[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
-    pub map_liquid_flags:              [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
-    pub map_liquid_height_map:         Vec<f32>,
-    // holes
-    pub map_holes:                     Option<[[[u8; 8]; 16]; 16]>,
+    pub v9: SMatrix<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>,
+    pub v8: SMatrix<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct MapHeightFlightBox {
+    pub max: Matrix3<i16>,
+    pub min: Matrix3<i16>,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct MapLiquidData {
+    /// header flags are different from liquid_flags
+    pub map_liquid_entry_flags: Result<MapLiquidDataEntryFlags, MapLiquidDataGlobalEntryFlags>,
+    pub offset_x:               u8,
+    pub offset_y:               u8,
+    /// height is nrows, width is ncols
+    pub liquid_height_details:  Result<DMatrix<f32>, f32>,
+}
+
+impl MapLiquidData {
+    pub fn get_liquid_entry_flags(&self, x: usize, y: usize) -> (u16, FlagSet<MapLiquidTypeFlag>) {
+        match &self.map_liquid_entry_flags {
+            Ok(lf) => (lf.liquid_entry[x][y], lf.liquid_flags[x][y]),
+            Err(global_lf) => (global_lf.liquid_type, global_lf.liquid_flags),
+        }
+    }
+
+    pub fn get_liquid_level(&self, x: usize, y: usize) -> f32 {
+        match &self.liquid_height_details {
+            Ok(liquid_map) => liquid_map[(x, y)],
+            Err(global_level) => *global_level,
+        }
+    }
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct MapLiquidDataGlobalEntryFlags {
+    pub liquid_flags: FlagSet<MapLiquidTypeFlag>,
+    pub liquid_type:  u16,
+}
+
+#[derive(Debug, serde::Deserialize, serde::Serialize)]
+pub struct MapLiquidDataEntryFlags {
+    pub liquid_entry: [[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
+    pub liquid_flags: [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
 }
 
 flags! {
     pub enum MapLiquidTypeFlag: u8 {
         // NoWater =    0x00,
         #[allow(clippy::identity_op)]
-        Water =       0x01,
-        Ocean =       0x02,
-        Magma =       0x04,
-        Slime =       0x08,
-        DarkWater =  0x10,
+        Water =       1 << 0,
+        Ocean =       1 << 1,
+        Magma =       1 << 2,
+        Slime =       1 << 3,
+        DarkWater =   1 << 4,
         AllLiquids = (MapLiquidTypeFlag::Water | MapLiquidTypeFlag::Ocean | MapLiquidTypeFlag::Magma | MapLiquidTypeFlag::Slime).bits(),
       }
 
-      pub enum MapAreaFlag: u16 {
-        NoArea = 0x0001,
-      }
+    //   pub enum MapAreaFlag: u16 {
+    //     NoArea = 0x0001,
+    //   }
 
-      pub enum MapHeightFlag: u32 {
-        NoHeight        = 0x0001,
-        // AsInt16         = 0x0002,
-        // AsInt8          = 0x0004,
-        HasFlightBounds = 0x0008,
-      }
+    //   pub enum MapHeightFlag: u32 {
+    //     NoHeight        = 0x0001,
+    //     // AsInt16         = 0x0002,
+    //     // AsInt8          = 0x0004,
+    //     HasFlightBounds = 0x0008,
+    //   }
 
-      pub enum MapLiquidHeaderFlag: u8 {
-        NoType      =  0x0001,
-        NoHeight    =  0x0002,
-      }
+    //   enum MapLiquidHeaderFlag: u8 {
+    //     NoType      =  0x0001,
+    //     NoHeight    =  0x0002,
+    //   }
 }
+
+impl MapLiquidTypeFlag {
+    pub fn from_liquid_type_sound_bank_unchecked(sound_bank: u8) -> FlagSet<Self> {
+        Self::from_liquid_type_sound_bank(sound_bank)
+            .inspect_err(|e| {
+                warn!("{e}: sound_bank value was: {sound_bank}");
+            })
+            .unwrap_or_default()
+    }
+
+    pub fn from_liquid_type_sound_bank(sound_bank: u8) -> AzResult<FlagSet<Self>> {
+        Ok(FlagSet::new(1u8 << sound_bank)?)
+    }
+}
+
+const MAP_MAGIC: &[u8] = b"MAPS";
+const MAP_VERSION_MAGIC: &[u8] = b"v2.0";
 
 // Methods to pack into MapFile
 impl MapFile {
-    #[allow(clippy::too_many_arguments, non_snake_case)]
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         map_build_magic: u32,
         map_area_ids: [[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
-        mut map_height_V9: SMatrix<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>,
-        mut map_height_V8: SMatrix<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>,
+        map_height_v9: SMatrix<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>,
+        map_height_v8: SMatrix<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>,
         map_liquid_flags: [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
         map_liquid_entry: [[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
         map_holes: Option<[[[u8; 8]; 16]; 16]>,
@@ -107,52 +171,27 @@ impl MapFile {
         map_liquid_height: [[f32; ADT_GRID_SIZE + 1]; ADT_GRID_SIZE + 1],
         use_min_height: f32,
     ) -> Self {
-        let (map_area_header_grid_area, map_area_header_flags) = Self::pack_area_data(&map_area_ids);
-        let (map_height_header_grid_height, map_height_header_grid_max_height, map_height_header_flags) = Self::pack_height_data(
-            &mut map_height_V9,
-            &mut map_height_V8,
-            map_height_flight_box_max_min.as_ref(),
+        let map_area_data = Self::pack_area_data(map_area_ids);
+        let map_height_data = Self::pack_height_data(
+            map_height_v9,
+            map_height_v8,
+            map_height_flight_box_max_min,
             allow_height_limit,
             use_min_height,
         );
-        let (
-            map_liquid_header_offset_x,
-            map_liquid_header_offset_y,
-            map_liquid_header_width,
-            map_liquid_header_height,
-            map_liquid_header_liquid_level,
-            map_liquid_header_flags,
-            map_liquid_header_liquid_flags,
-            map_liquid_header_liquid_type,
-            map_liquid_height_map,
-        ) = Self::pack_liquid_data(&map_liquid_entry, &map_liquid_flags, liquid_show, map_liquid_height);
+        let map_liquid_data = Self::pack_liquid_data(map_liquid_entry, map_liquid_flags, liquid_show, map_liquid_height);
         Self {
             map_build_magic,
-            map_area_ids,
-            map_height_V9,
-            map_height_V8,
-            map_liquid_flags,
-            map_liquid_entry,
+            map_area_data,
             map_holes,
-            map_height_flight_box_max_min,
-            map_area_header_grid_area,
-            map_area_header_flags,
-            map_height_header_grid_height,
-            map_height_header_grid_max_height,
-            map_height_header_flags,
-            map_liquid_header_offset_x,
-            map_liquid_header_offset_y,
-            map_liquid_header_width,
-            map_liquid_header_height,
-            map_liquid_header_liquid_level,
-            map_liquid_header_flags,
-            map_liquid_header_liquid_flags,
-            map_liquid_header_liquid_type,
-            map_liquid_height_map,
+            map_height_data,
+            map_liquid_data,
         }
     }
 
-    fn pack_area_data(map_area_ids: &[[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID]) -> (u16, FlagSet<MapAreaFlag>) {
+    fn pack_area_data(
+        map_area_ids: [[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
+    ) -> Result<[[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID], u16> {
         //============================================
         // Try pack area data
         //============================================
@@ -160,57 +199,40 @@ impl MapFile {
         let full_area_data = map_area_ids.iter().any(|row| row.iter().any(|map_area_id| area_id != *map_area_id));
 
         if full_area_data {
-            (0, None.into())
+            Ok(map_area_ids)
         } else {
-            (area_id, MapAreaFlag::NoArea.into())
+            Err(area_id)
         }
     }
 
-    #[allow(non_snake_case)]
     fn pack_height_data(
-        map_height_V9: &mut SMatrix<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>,
-        map_height_V8: &mut SMatrix<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>,
-        map_height_flight_box_max_min: Option<&(Matrix3<i16>, Matrix3<i16>)>,
+        mut map_height_v9: SMatrix<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>,
+        mut map_height_v8: SMatrix<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>,
+        flight_box_max_min: Option<(Matrix3<i16>, Matrix3<i16>)>,
         allow_height_limit: bool,
         use_min_height: f32,
-    ) -> (f32, f32, FlagSet<MapHeightFlag>) {
+    ) -> MapHeightData {
         //============================================
         // Try pack height data
         //============================================
 
-        let (mut max_height, mut min_height) = (map_height_V8.max().max(map_height_V9.max()), map_height_V8.min().min(map_height_V9.min()));
-
-        map_height_V8.iter_mut().for_each(|v| *v = v.max(use_min_height));
+        let mut max_height = map_height_v8.max().max(map_height_v9.max());
+        let mut min_height = map_height_v8.min().min(map_height_v9.min());
 
         // Check for allow limit minimum height (not store height in deep ochean - allow save some memory)
         if allow_height_limit && min_height < use_min_height {
-            map_height_V8.iter_mut().for_each(|v| *v = v.max(use_min_height));
-            map_height_V9.iter_mut().for_each(|v| *v = v.max(use_min_height));
+            map_height_v8.iter_mut().for_each(|v| *v = v.max(use_min_height));
+            map_height_v9.iter_mut().for_each(|v| *v = v.max(use_min_height));
 
             max_height = max_height.max(use_min_height);
             min_height = min_height.max(use_min_height);
-        }
-
-        //     map.heightMapOffset = map.areaMapOffset + map.areaMapSize;
-        //     map.heightMapSize = sizeof(map_heightHeader);
-
-        //     map_heightHeader heightHeader;
-        let map_height_header_grid_height = min_height;
-        let map_height_header_grid_max_height = max_height;
-
-        let mut map_height_header_flags = None.into();
-        if max_height == min_height {
-            map_height_header_flags |= MapHeightFlag::NoHeight;
         }
 
         //     // Not need store if flat surface
         //     if (CONF_allow_float_to_int && (maxHeight - minHeight) < CONF_flat_height_delta_limit)
         //         heightHeader.flags |= MAP_HEIGHT_NO_HEIGHT;
 
-        if map_height_flight_box_max_min.is_some() {
-            map_height_header_flags |= MapHeightFlag::HasFlightBounds;
-            // map.heightMapSize += sizeof(flight_box_max) + sizeof(flight_box_min);
-        }
+        let flight_box = flight_box_max_min.map(|(max, min)| MapHeightFlightBox { max, min });
 
         //     // Try store as packed in uint16 or uint8 values
         //     if (!(heightHeader.flags & MAP_HEIGHT_NO_HEIGHT))
@@ -256,57 +278,76 @@ impl MapFile {
         //         else
         //             map.heightMapSize+= sizeof(V9) + sizeof(V8);
         //     }
-        (map_height_header_grid_height, map_height_header_grid_max_height, map_height_header_flags)
+
+        let map_heights = if max_height == min_height {
+            None
+        } else {
+            Some(MapHeightV9V8 {
+                v9: map_height_v9,
+                v8: map_height_v8,
+            })
+        };
+
+        MapHeightData {
+            grid_height: min_height,
+            grid_max_height: max_height,
+            map_heights,
+            flight_box,
+        }
     }
 
     /// Returns a triple denoting the first liquid type, the first liquid flag, as well as whether or not
     /// its a full type
-    fn overall_liquid_info(
+    fn global_liquid_info(
         map_liquid_entry: &[[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
         map_liquid_flags: &[[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
-    ) -> (u16, FlagSet<MapLiquidTypeFlag>, bool) {
+    ) -> Option<(u16, FlagSet<MapLiquidTypeFlag>)> {
         let first_liquid_type = map_liquid_entry[0][0];
         let first_liquid_flag = map_liquid_flags[0][0];
 
-        let mut it = iter::zip(map_liquid_entry, map_liquid_flags);
-
-        let full_type = it.any(|(tyit, flit)| {
-            let mut it = iter::zip(tyit, flit);
-            it.any(|(ty, fl)| *ty != first_liquid_type || *fl != first_liquid_flag)
+        let full_type = iter::zip(map_liquid_entry, map_liquid_flags).any(|(liq_entries, flag_entries)| {
+            iter::zip(liq_entries, flag_entries)
+                .any(|(liq_entry, flag_entry)| *liq_entry != first_liquid_type || *flag_entry != first_liquid_flag)
         });
 
-        (first_liquid_type, first_liquid_flag, full_type)
+        if full_type {
+            Some((first_liquid_type, first_liquid_flag))
+        } else {
+            None
+        }
     }
 
-    #[allow(clippy::type_complexity)]
     fn pack_liquid_data(
-        map_liquid_entry: &[[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
-        map_liquid_flags: &[[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
+        map_liquid_entry: [[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
+        map_liquid_flags: [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
         liquid_show: [[bool; ADT_GRID_SIZE]; ADT_GRID_SIZE],
         map_liquid_height: [[f32; ADT_GRID_SIZE + 1]; ADT_GRID_SIZE + 1],
-    ) -> (u8, u8, u8, u8, f32, FlagSet<MapLiquidHeaderFlag>, FlagSet<MapLiquidTypeFlag>, u16, Vec<f32>) {
+    ) -> Option<MapLiquidData> {
         //============================================
         // Pack liquid data
         //============================================
-        let (first_liquid_type, first_liquid_flag, full_type) = Self::overall_liquid_info(map_liquid_entry, map_liquid_flags);
+        let global_liq_info = Self::global_liquid_info(&map_liquid_entry, &map_liquid_flags);
         // no water data (if all grid have 0 liquid type)
-        if first_liquid_flag.bits() == 0 && !full_type {
+        match global_liq_info {
+            Some((_, first_liquid_flag)) if first_liquid_flag.bits() == 0 => {
+                // No liquid data
+                return None;
+            },
             // No liquid data
-            return (0, 0, 0, 0, 0.0, None.into(), None.into(), 0, vec![]);
-        }
+            None => return None,
+            _ => {},
+        };
         // has liquid data
-        let mut min_x = 255;
-        let mut min_y = 255;
-        let mut max_x = 0;
-        let mut max_y = 0;
+        let (mut min_x, mut min_y) = (255, 255);
+        let (mut max_x, mut max_y) = (0, 0);
         let mut max_height = -20000f32;
         let mut min_height = 20000f32;
         for (y, yarr) in liquid_show.iter().enumerate() {
             for (x, liq_show) in yarr.iter().enumerate() {
                 if *liq_show {
                     min_x = min_x.min(x as u8);
-                    min_y = min_y.min(y as u8);
                     max_x = max_x.max(x as u8);
+                    min_y = min_y.min(y as u8);
                     max_y = max_y.max(y as u8);
                     let h = map_liquid_height[y][x];
                     max_height = max_height.max(h);
@@ -314,84 +355,86 @@ impl MapFile {
                 }
             }
         }
-        let map_liquid_header_offset_x = min_x;
-        let map_liquid_header_offset_y = min_y;
-        let map_liquid_header_width = max_x - min_x + 1 + 1;
-        let map_liquid_header_height = max_y - min_y + 1 + 1;
-        let map_liquid_header_liquid_level = min_height;
-        let mut map_liquid_header_flags: FlagSet<_> = None.into();
-        let mut map_liquid_header_liquid_flags = None.into();
-        let mut map_liquid_header_liquid_type = 0;
-        let mut map_liquid_height_map = vec![];
-
-        if max_height == min_height {
-            map_liquid_header_flags |= MapLiquidHeaderFlag::NoHeight;
-        }
+        let offset_x = min_x;
+        let offset_y = min_y;
+        let width = max_x - min_x + 1 + 1;
+        let height = max_y - min_y + 1 + 1;
+        let liquid_level = min_height;
 
         // // Not need store if flat surface
         // if (CONF_allow_float_to_int && (maxHeight - minHeight) < CONF_flat_liquid_delta_limit)
         //     liquidHeader_flags |= MapLiquidHeaderFlag::NO_HEIGHT;
 
-        if !full_type {
-            map_liquid_header_flags |= MapLiquidHeaderFlag::NoType;
-        }
-
-        if map_liquid_header_flags.contains(MapLiquidHeaderFlag::NoType) {
-            map_liquid_header_liquid_flags = first_liquid_flag;
-            map_liquid_header_liquid_type = first_liquid_type;
-        }
+        let map_liquid_entry_flags = if let Some((first_liquid_type, first_liquid_flag)) = global_liq_info {
+            Err(MapLiquidDataGlobalEntryFlags {
+                liquid_flags: first_liquid_flag,
+                liquid_type:  first_liquid_type,
+            })
+        } else {
+            Ok(MapLiquidDataEntryFlags {
+                liquid_entry: map_liquid_entry,
+                liquid_flags: map_liquid_flags,
+            })
+        };
 
         // _liquidMap = new float[uint32(_liquidWidth) * uint32(_liquidHeight)];
 
-        if !map_liquid_header_flags.contains(MapLiquidHeaderFlag::NoHeight) {
+        let liquid_height_details = if max_height == min_height {
+            Err(liquid_level)
+        } else {
             // map.liquidMapSize += sizeof(float) * liquidHeader.width * liquidHeader.height;
-            for y in 0..map_liquid_header_height {
-                let y_off: usize = (y + map_liquid_header_offset_y).try_into().unwrap();
-                let x_off: usize = map_liquid_header_offset_x.try_into().unwrap();
-                let liq_header_width: usize = map_liquid_header_width.try_into().unwrap();
-                for h in map_liquid_height[y_off][x_off..x_off + liq_header_width].iter() {
-                    map_liquid_height_map.push(*h);
-                }
-            }
-            let liq_height_map_len = map_liquid_header_width as usize * map_liquid_header_height as usize;
-            if map_liquid_height_map.len() != liq_height_map_len {
-                panic!(
-                    "MAP LIQUID HEIGHT MAP LEN DOES NOT MATCH CALCULATED LEN: calc was {liq_height_map_len}, data from header was: {}",
-                    map_liquid_height_map.len()
-                );
-            }
-        }
-        (
-            map_liquid_header_offset_x,
-            map_liquid_header_offset_y,
-            map_liquid_header_width,
-            map_liquid_header_height,
-            map_liquid_header_liquid_level,
-            map_liquid_header_flags,
-            map_liquid_header_liquid_flags,
-            map_liquid_header_liquid_type,
-            map_liquid_height_map,
-        )
+            let offset_y = offset_y as usize;
+            let offset_x = offset_x as usize;
+            Ok(DMatrix::from_fn(height as usize, width as usize, |y, x| {
+                map_liquid_height[y + offset_y][x + offset_x]
+            }))
+        };
+        Some(MapLiquidData {
+            offset_x,
+            offset_y,
+            map_liquid_entry_flags,
+            liquid_height_details,
+        })
     }
 
-    pub fn read<R: io::Read + io::Seek>(rdr: &mut R) -> GenericResult<Self> {
-        let mut rdr = rdr;
-        cmp_or_return!(rdr, b"MAPS")?;
-        cmp_or_return!(rdr, b"v1.9")?;
+    pub fn read<R: io::Read + io::Seek>(mut rdr: &mut R) -> AzResult<Self> {
+        cmp_or_return!(
+            rdr,
+            MAP_MAGIC,
+            "Mapfile magic does not match, please ensure that this is the right file. got {}, want {}"
+        )?;
+        cmp_or_return!(
+            rdr,
+            MAP_VERSION_MAGIC,
+            "Mapfile is the wrong version, please extract new .map files. got {}, want {}"
+        )?;
         let ret = bincode_deserialise(&mut rdr)?;
 
         sanity_check_read_all_bytes_from_reader!(rdr)?;
         Ok(ret)
     }
 
-    pub fn write<W: io::Write + io::Seek>(&self, out: &mut W) -> GenericResult<()> {
-        let mut out = out;
+    pub fn write<W: io::Write + io::Seek>(&self, mut out: &mut W) -> AzResult<()> {
         // everything is packed, now proceed to writing
-        out.write_all(b"MAPS")?;
-        out.write_all(b"v1.9")?;
+        out.write_all(MAP_MAGIC)?;
+        out.write_all(MAP_VERSION_MAGIC)?;
 
         bincode_serialise(&mut out, self)?;
 
         Ok(())
+    }
+}
+
+pub struct Map {}
+
+impl Map {
+    pub fn map_file_name<P, M, X, Y>(maps_dir: P, map_id: M, y: Y, x: X) -> PathBuf
+    where
+        P: AsRef<Path>,
+        M: Num + Display,
+        X: Num + Display,
+        Y: Num + Display,
+    {
+        maps_dir.as_ref().join(format!("{map_id:04}_{y:02}_{x:02}.map"))
     }
 }

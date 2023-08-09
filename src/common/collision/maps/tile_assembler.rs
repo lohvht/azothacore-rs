@@ -30,14 +30,14 @@ use crate::{
         extractor_common::{bincode_deserialise, bincode_serialise, get_fixed_plain_name, ExtractorConfig},
         vmap4_extractor::{wmo::WMOLiquidHeader, TempGameObjectModel},
     },
-    GenericResult,
+    AzResult,
 };
 
 pub fn tile_assembler_convert_world2(
     args: &ExtractorConfig,
     map_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>>,
     temp_gameobject_models: Vec<TempGameObjectModel>,
-) -> GenericResult<()> {
+) -> AzResult<()> {
     let src = args.output_vmap_sz_work_dir_wmo();
     let dst = args.output_vmap_output_path();
 
@@ -72,8 +72,14 @@ pub fn tile_assembler_convert_world2(
             };
             let bounds = entry.bound.expect("By here bounds should never be unset");
             let bounds = AABB::with_bounds(bounds[0].into(), bounds[1].into());
-            let low = Vector2::new((bounds.min.x * inv_tile_size).floor() as u16, (bounds.min.y * inv_tile_size).floor() as u16);
-            let high = Vector2::new((bounds.max.x * inv_tile_size).ceil() as u16, (bounds.max.y * inv_tile_size).ceil() as u16);
+            let low = Vector2::new(
+                (bounds.min.x * inv_tile_size).floor() as u16,
+                (bounds.min.y * inv_tile_size).floor() as u16,
+            );
+            let high = Vector2::new(
+                (bounds.max.x * inv_tile_size).ceil() as u16,
+                (bounds.max.y * inv_tile_size).ceil() as u16,
+            );
 
             for x in low.x..=high.x {
                 for y in low.y..=high.y {
@@ -100,14 +106,14 @@ pub fn tile_assembler_convert_world2(
         StaticMapTree::write_map_tree_to_file(&dst, map_id, &ptree, &map_spawns)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("write map tree to file err: {e}")))?;
 
-        if args.debug_validation {
+        if args.vmap_extract_and_generate.debug_validation {
             info!("Debug validating map tree {map_id}");
             let mapfilename = StaticMapTree::map_file_name(&dst, map_id);
             let mut mapfile = fs::File::open(&mapfilename).inspect_err(|e| {
                 error!("cannot open {}, err was: {e}", mapfilename.display());
             })?;
-            let (r_bvh, r_spawn_id_to_bvh_id) =
-                StaticMapTree::read_map_tree(&mut mapfile).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("read map tree to file err: {e}")))?;
+            let (r_bvh, r_spawn_id_to_bvh_id) = StaticMapTree::read_map_tree(&mut mapfile)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("read map tree to file err: {e}")))?;
 
             if r_bvh.nodes.len() != ptree.nodes.len() {
                 error!(
@@ -129,7 +135,11 @@ pub fn tile_assembler_convert_world2(
                         error!("CALCULATED SPAWN ID SHOULD BE IN READ SPAWN ID, CALCULATED: ID: {}", m.id)
                     },
                     Some(bvh_id) if *bvh_id != m.bh_node_index() => {
-                        error!("CALCULATED SPAWN ID MISMATCH, CALCULATED: ID: {}, READ ID: {}", m.bh_node_index(), bvh_id)
+                        error!(
+                            "CALCULATED SPAWN ID MISMATCH, CALCULATED: ID: {}, READ ID: {}",
+                            m.bh_node_index(),
+                            bvh_id
+                        )
                     },
                     _ => {},
                 }
@@ -146,9 +156,10 @@ pub fn tile_assembler_convert_world2(
                 let has_r_bh_id = r_bvh.nodes.iter().any(|n| match n {
                     bvh::bvh::BVHNode::Leaf { shape_index, .. } => *shape_index == *r_bh_id,
                     bvh::bvh::BVHNode::Node {
-                        child_l_index, child_r_index, ..
+                        child_l_index,
+                        child_r_index,
+                        ..
                     } => *child_l_index == *r_bh_id || *child_r_index == *r_bh_id,
-                    _ => false,
                 });
                 if !has_r_bh_id {
                     error!("Spawn ID may be invalid as its respective BH ID isnt found. spawn_id {spawn_id}, bh_id: {r_bh_id}");
@@ -180,7 +191,7 @@ pub fn tile_assembler_convert_world2(
             }
             StaticMapTree::write_map_tile_spawns_file(&dst, map_id, y, x, &all_tile_entries)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("write_map_tile_spawns_file err: {e}")))?;
-            if args.debug_validation {
+            if args.vmap_extract_and_generate.debug_validation {
                 let tilefilename = StaticMapTree::get_tile_file_name(&dst, map_id, y, x);
                 let mut tilefile = fs::File::open(&tilefilename).inspect_err(|e| {
                     error!("cannot open {}, err was: {e}", tilefilename.display());
@@ -217,7 +228,10 @@ pub fn tile_assembler_convert_world2(
     export_gameobject_models(&src, &dst, temp_gameobject_models, &mut spawned_model_files)?;
     // export objects
     info!("Converting Model Files");
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().max_blocking_threads(50).build()?;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(50)
+        .build()?;
     let mut jhs = Vec::with_capacity(spawned_model_files.len());
     for mfile_name in spawned_model_files {
         let src = src.clone();
@@ -244,7 +258,7 @@ pub fn tile_assembler_convert_world2(
     Ok(())
 }
 
-fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpawn) -> GenericResult<()> {
+fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpawn) -> AzResult<()> {
     if spawn.bound.is_some() {
         return Ok(());
     }
@@ -344,7 +358,7 @@ fn export_gameobject_models<P: AsRef<Path> + std::marker::Sync>(
     dst: P,
     temp_gameobject_models: Vec<TempGameObjectModel>,
     spawned_model_files: &mut BTreeSet<String>,
-) -> GenericResult<()> {
+) -> AzResult<()> {
     let total_count = temp_gameobject_models.len();
     let (model_file_send, model_file_receive) = channel();
     let (model_list_send, model_list_receive) = channel();
@@ -361,7 +375,10 @@ fn export_gameobject_models<P: AsRef<Path> + std::marker::Sync>(
             let raw_model_file_path = src.as_ref().join(get_fixed_plain_name(&model_name));
             let mut raw_model_file = match fs::File::open(&raw_model_file_path) {
                 Err(e) => {
-                    warn!("cannot open raw file for some reason: path: {}, err {e}", raw_model_file_path.display());
+                    warn!(
+                        "cannot open raw file for some reason: path: {}, err {e}",
+                        raw_model_file_path.display()
+                    );
                     return;
                 },
                 Ok(f) => f,

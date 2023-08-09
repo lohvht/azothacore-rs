@@ -15,11 +15,13 @@ use ordered_multimap::ListOrderedMultimap;
 use serde::{Deserialize, Serialize};
 use serde_default::DefaultFromSerde;
 use serde_inline_default::serde_inline_default;
+use tracing::warn;
 
 use crate::{
+    az_error,
     common::Locale,
     tools::extractor_common::casc_handles::{CascHandlerError, CascLocale, CascStorageHandle},
-    GenericResult,
+    AzResult,
 };
 
 flags! {
@@ -77,10 +79,6 @@ structstruck::strike! {
     #[strikethrough[serde_inline_default]]
     #[strikethrough[derive(Deserialize, DefaultFromSerde, Serialize, Clone, Debug,  PartialEq)]]
     pub struct ExtractorConfig {
-        /// Validate the extracted files as we go
-        /// THIS WILL INCREASE THE WRITE TIMES SO DO AT YOUR OWN RISK
-        #[serde_inline_default(false)]
-        pub debug_validation: bool,
         #[serde_inline_default(env::current_dir().unwrap().to_string_lossy().to_string())]
         pub input_path: String,
         #[serde_inline_default(env::current_dir().unwrap().to_string_lossy().to_string())]
@@ -104,15 +102,44 @@ structstruck::strike! {
             pub precise_vector_data: bool,
             #[serde_inline_default(false)]
             pub override_cached: bool,
+            /// Validate the extracted files as we go
+            /// THIS WILL INCREASE THE WRITE TIMES SO DO AT YOUR OWN RISK
+            #[serde_inline_default(false)]
+            pub debug_validation: bool,
         },
+        #[serde_inline_default(MmapPathGenerator::default())]
+        pub mmap_path_generator: struct{
+            /// If not specified, run for all
+            #[serde(default)]
+            pub map_id_tile_x_y: Option<(u32, Option<(u16, u16)>)>,
+            #[serde(default)]
+            pub file: Option<String>,
+            #[serde_inline_default(70.0)]
+            pub max_angle: f32,
+            #[serde_inline_default(false)]
+            pub skip_liquid : bool,
+            #[serde_inline_default(false)]
+            pub skip_continents : bool,
+            #[serde_inline_default(true)]
+            pub skip_junk_maps : bool,
+            #[serde_inline_default(false)]
+            pub skip_battlegrounds : bool,
+            #[serde_inline_default(false)]
+            pub debug_output : bool,
+            #[serde_inline_default(false)]
+            pub big_base_unit : bool,
+            #[serde(default)]
+            pub off_mesh_file_path: Option<String>,
+        }
     }
 }
 
 impl ExtractorConfig {
-    pub fn from_toml<R: io::Read>(rdr: &mut R) -> GenericResult<Self> {
+    pub fn from_toml<R: io::Read>(rdr: &mut R) -> AzResult<Self> {
         let mut buf = String::new();
         rdr.read_to_string(&mut buf)?;
-        Ok(toml::from_str(&buf)?)
+        let res = toml::from_str(&buf).map_err(|e| az_error!(e))?;
+        Ok(res)
     }
 }
 
@@ -133,7 +160,7 @@ impl ExtractorConfig {
         CascStorageHandle::build(self.input_storage_data_dir(), locale.to_casc_locales())
     }
 
-    pub fn get_installed_locales_mask(&self) -> GenericResult<FlagSet<CascLocale>> {
+    pub fn get_installed_locales_mask(&self) -> AzResult<FlagSet<CascLocale>> {
         let storage = self.get_casc_storage_handler(Locale::none)?;
 
         Ok(storage.get_installed_locales_mask()?)
@@ -174,6 +201,14 @@ impl ExtractorConfig {
     pub fn output_vmap_output_path(&self) -> PathBuf {
         Path::new(self.output_path.as_str()).join("vmaps")
     }
+
+    pub fn output_mmap_path(&self) -> PathBuf {
+        Path::new(self.output_path.as_str()).join("mmaps")
+    }
+
+    pub fn output_meshes_debug_path(&self) -> PathBuf {
+        Path::new(self.output_path.as_str()).join("meshes")
+    }
 }
 
 macro_rules! bincode_cfg {
@@ -206,7 +241,7 @@ pub struct FileChunk {
 }
 
 impl FileChunk {
-    fn build(fcc: [u8; 4], size: u32, data: Vec<u8>) -> GenericResult<Self> {
+    fn build(fcc: [u8; 4], size: u32, data: Vec<u8>) -> AzResult<Self> {
         let mut s = Self {
             fcc,
             size,
@@ -255,12 +290,12 @@ pub struct ChunkedFile {
 }
 
 const INTERESTING_CHUNKS: [&[u8; 4]; 18] = [
-    b"MVER", b"MAIN", b"MH2O", b"MCNK", b"MCVT", b"MWMO", b"MCLQ", b"MFBO", b"MOGP", b"MOGP", b"MOPY", b"MOVI", b"MOVT", b"MONR", b"MOTV", b"MOBA", b"MODR",
-    b"MLIQ",
+    b"MVER", b"MAIN", b"MH2O", b"MCNK", b"MCVT", b"MWMO", b"MCLQ", b"MFBO", b"MOGP", b"MOGP", b"MOPY", b"MOVI", b"MOVT", b"MONR", b"MOTV",
+    b"MOBA", b"MODR", b"MLIQ",
 ];
 
 impl ChunkedFile {
-    pub fn build<P>(storage: &CascStorageHandle, filename: P) -> GenericResult<Self>
+    pub fn build<P>(storage: &CascStorageHandle, filename: P) -> AzResult<Self>
     where
         P: AsRef<Path>,
     {
@@ -279,10 +314,9 @@ impl ChunkedFile {
         })?;
 
         if file_size != read_file_size {
-            return Err(Box::new(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Unexpected file sizes while reading chunked file. expect {file_size}, got {read_file_size}"),
-            )));
+            return Err(az_error!(
+                "Unexpected file sizes while reading chunked file. expect {file_size}, got {read_file_size}"
+            ));
         }
         let mut ptr = io::Cursor::new(buf);
 
@@ -314,4 +348,31 @@ impl ChunkedFile {
 
         Ok(s)
     }
+}
+
+pub fn get_dir_contents<'a, P: AsRef<Path> + 'a>(dirpath: P, filter: &str) -> io::Result<impl Iterator<Item = PathBuf> + 'a> {
+    let path_glob = dirpath.as_ref().join(filter);
+    let path_glob = path_glob.as_os_str().to_str().ok_or(io::Error::new(
+        io::ErrorKind::Other,
+        format!("No valid str from path: {} for filter {filter}", dirpath.as_ref().display()),
+    ))?;
+    let paths = glob::glob(path_glob)
+        .map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::Other,
+                format!(
+                    "path pattern error from path: {} for filter {filter}; err {e}",
+                    dirpath.as_ref().display()
+                ),
+            )
+        })?
+        .filter_map(|g| match g {
+            Err(e) => {
+                warn!("get_dir_contents error getting glob: err {e}");
+                None
+            },
+            Ok(p) => Some(p),
+        });
+
+    Ok(paths)
 }

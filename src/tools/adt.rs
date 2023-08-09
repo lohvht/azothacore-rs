@@ -10,7 +10,7 @@ use nalgebra::{Matrix3, Vector3};
 use crate::{
     read_le_unwrap,
     tools::extractor_common::{casc_handles::CascStorageHandle, cstr_bytes_to_string, ChunkedFile, FileChunk},
-    GenericResult,
+    AzResult,
 };
 
 pub const ADT_CELLS_PER_GRID: usize = 16;
@@ -49,13 +49,6 @@ pub enum LiquidVertexFormatType {
     HeightDepthTextureCoord = 3,
     Unk4 = 4,
     Unk5 = 5,
-}
-
-pub enum AdtLiquidType {
-    Water = 0,
-    Ocean = 1,
-    Magma = 2,
-    Slime = 3,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -433,11 +426,27 @@ impl From<FileChunk> for AdtChunkModf {
         while !cursor.is_empty() {
             let id = read_le_unwrap!(cursor, u32);
             let unique_id = read_le_unwrap!(cursor, u32);
-            let position = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
-            let rotation = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
+            let position = Vector3::new(
+                read_le_unwrap!(cursor, f32),
+                read_le_unwrap!(cursor, f32),
+                read_le_unwrap!(cursor, f32),
+            );
+            let rotation = Vector3::new(
+                read_le_unwrap!(cursor, f32),
+                read_le_unwrap!(cursor, f32),
+                read_le_unwrap!(cursor, f32),
+            );
             let bounds = [
-                Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32)),
-                Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32)),
+                Vector3::new(
+                    read_le_unwrap!(cursor, f32),
+                    read_le_unwrap!(cursor, f32),
+                    read_le_unwrap!(cursor, f32),
+                ),
+                Vector3::new(
+                    read_le_unwrap!(cursor, f32),
+                    read_le_unwrap!(cursor, f32),
+                    read_le_unwrap!(cursor, f32),
+                ),
             ];
             let flags = read_le_unwrap!(cursor, u16);
             let doodad_set = read_le_unwrap!(cursor, u16);
@@ -483,8 +492,16 @@ impl From<FileChunk> for AdtChunkMddf {
         while !cursor.is_empty() {
             let id = read_le_unwrap!(cursor, u32);
             let unique_id = read_le_unwrap!(cursor, u32);
-            let position = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
-            let rotation = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
+            let position = Vector3::new(
+                read_le_unwrap!(cursor, f32),
+                read_le_unwrap!(cursor, f32),
+                read_le_unwrap!(cursor, f32),
+            );
+            let rotation = Vector3::new(
+                read_le_unwrap!(cursor, f32),
+                read_le_unwrap!(cursor, f32),
+                read_le_unwrap!(cursor, f32),
+            );
             let scale = read_le_unwrap!(cursor, u16);
             let flags = read_le_unwrap!(cursor, u16);
             doodad_defs.push(AdtDoodadDef {
@@ -508,7 +525,7 @@ pub struct ADTFile {
 }
 
 impl ADTFile {
-    pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, storage_path: P) -> GenericResult<Self> {
+    pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, storage_path: P) -> AzResult<Self> {
         let file = ChunkedFile::build(storage, &storage_path)?;
         // .inspect_err(|e| {
         //     error!("Error opening adt file at {}, err was {e}", storage_path.as_ref().display());

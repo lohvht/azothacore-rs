@@ -1,4 +1,5 @@
-use once_cell::sync::OnceCell;
+use std::sync::OnceLock;
+
 use sqlx::{MySql, Pool};
 
 mod login_db {
@@ -57,6 +58,6 @@ impl LoginDatabase {
     }
 }
 
-static WORLD_DB: OnceCell<Pool<MySql>> = OnceCell::new();
-static CHARACTER_DB: OnceCell<Pool<MySql>> = OnceCell::new();
-static LOGIN_DB: OnceCell<Pool<MySql>> = OnceCell::new();
+static WORLD_DB: OnceLock<Pool<MySql>> = OnceLock::new();
+static CHARACTER_DB: OnceLock<Pool<MySql>> = OnceLock::new();
+static LOGIN_DB: OnceLock<Pool<MySql>> = OnceLock::new();

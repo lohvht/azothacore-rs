@@ -9,11 +9,12 @@ use std::{
 };
 
 use azothacore_rs::{
+    az_error,
     common::{banner, Locale},
     logging::init_logging,
     server::{
-        game::map::{MapFile, MapLiquidTypeFlag},
-        shared::data_stores::db2_structure::{CinematicCamera, LiquidMaterial, LiquidObject, LiquidType, Map},
+        game::map::{Map, MapFile, MapLiquidTypeFlag},
+        shared::data_stores::db2_structure::{CinematicCamera, LiquidMaterial, LiquidObject, LiquidType, Map as MapDb2},
     },
     tools::{
         adt::{
@@ -23,7 +24,6 @@ use azothacore_rs::{
             AdtChunkMfbo,
             AdtChunkMh2o,
             AdtChunkMh2oLiquidInstance,
-            AdtLiquidType,
             LiquidVertexFormatType,
             ADT_CELLS_PER_GRID,
             ADT_CELL_SIZE,
@@ -38,11 +38,12 @@ use azothacore_rs::{
             Db2AndMapExtract,
             ExtractorConfig,
         },
+        mmap_generator::main_path_generator,
         vmap4_assembler::main_vmap4_assemble,
         vmap4_extractor::main_vmap4_extract,
         wdt::{WdtChunkMain, WDT_MAP_SIZE},
     },
-    GenericResult,
+    AzResult,
 };
 use byteorder::{LittleEndian, ReadBytesExt};
 use flagset::FlagSet;
@@ -52,12 +53,12 @@ use tracing::{error, info, warn};
 use walkdir::WalkDir;
 use wow_db2::wdc1;
 
-fn main() -> GenericResult<()> {
+fn main() -> AzResult<()> {
     init_logging();
     let mut f = fs::File::open("env/dist/etc/extractor.toml")?;
     let args = ExtractorConfig::from_toml(&mut f)?;
 
-    banner::azotha_banner_show("DBC, Maps, VMaps & MMaps Extractor and Assembler", || {
+    banner::azotha_banner_show("Azothacore Extractor", || {
         info!("Client directory: {}", args.input_path);
         info!("Data directory:   {}", args.output_path);
         info!("rest of config: {:?}", args);
@@ -126,9 +127,20 @@ fn main() -> GenericResult<()> {
 
     // VMAP EXTRACTOR
     let vmap4_extractor_res = main_vmap4_extract(&args, first_installed_locale)?;
+    for (map_id, spawns) in vmap4_extractor_res.model_spawns_data.iter() {
+        info!("map_id: {map_id} => spawns {}", spawns.len());
+    }
+    info!("game object models: {}", vmap4_extractor_res.temp_gameobject_models.len());
 
     // VMAP ASSEMBLER
-    main_vmap4_assemble(&args, vmap4_extractor_res.model_spawns_data, vmap4_extractor_res.temp_gameobject_models)?;
+    main_vmap4_assemble(
+        &args,
+        vmap4_extractor_res.model_spawns_data,
+        vmap4_extractor_res.temp_gameobject_models,
+    )?;
+
+    // Mmap generator
+    main_path_generator(&args, first_installed_locale)?;
 
     Ok(())
 }
@@ -141,7 +153,7 @@ fn get_casc_filename_part<P: AsRef<Path>>(casc_path: P) -> PathBuf {
     }
 }
 
-fn extract_db_files_client(storage: &CascStorageHandle, args: &ExtractorConfig, locale: Locale) -> GenericResult<()> {
+fn extract_db_files_client(storage: &CascStorageHandle, args: &ExtractorConfig, locale: Locale) -> AzResult<()> {
     info!("Extracting dbc/db2 files for {}...", locale);
     let locale_path = args.output_dbc_path(locale);
 
@@ -171,7 +183,7 @@ fn extract_db_files_client(storage: &CascStorageHandle, args: &ExtractorConfig, 
     Ok(())
 }
 
-fn extract_file(file_in_archive: &mut CascFileHandle, out_path: PathBuf) -> GenericResult<()> {
+fn extract_file(file_in_archive: &mut CascFileHandle, out_path: PathBuf) -> AzResult<()> {
     let file_size = file_in_archive.get_file_size()?;
 
     let mut output = fs::File::create(&out_path).inspect_err(|e| {
@@ -182,24 +194,20 @@ fn extract_file(file_in_archive: &mut CascFileHandle, out_path: PathBuf) -> Gene
 
     // Sanity check here! just verifying that file_size detected is the same as the result
     if file_size != res {
-        let e = Box::new(io::Error::new(
-            io::ErrorKind::Other,
-            format!(
-                "Extracted file sizes don't match somehow for {}. expected {}, got {}",
-                out_path.display(),
-                file_size,
-                res
-            )
-            .as_str(),
-        ));
-        error!("extract_file has failed somehow: {}", e);
+        let e = az_error!(
+            "Extracted file sizes don't match somehow for {}. expected {}, got {}",
+            out_path.display(),
+            file_size,
+            res
+        );
+        error!("extract_file has failed somehow: {e}");
         Err(e)
     } else {
         Ok(())
     }
 }
 
-fn extract_camera_files(args: &ExtractorConfig, locale: Locale) -> GenericResult<()> {
+fn extract_camera_files(args: &ExtractorConfig, locale: Locale) -> AzResult<()> {
     info!("Extracting camera files...");
 
     let storage = args.get_casc_storage_handler(locale)?;
@@ -229,7 +237,7 @@ fn extract_camera_files(args: &ExtractorConfig, locale: Locale) -> GenericResult
     Ok(())
 }
 
-fn read_cinematic_camera_dbc(storage: &CascStorageHandle, locale: Locale) -> GenericResult<Vec<String>> {
+fn read_cinematic_camera_dbc(storage: &CascStorageHandle, locale: Locale) -> AzResult<Vec<String>> {
     info!("Read CinematicCamera.db2 file...");
     let source = storage.open_file("DBFilesClient/CinematicCamera.db2", CascLocale::None.into())?;
     let fl = wdc1::FileLoader::<CinematicCamera>::from_reader(source, locale as u32)?;
@@ -246,7 +254,7 @@ fn read_cinematic_camera_dbc(storage: &CascStorageHandle, locale: Locale) -> Gen
     Ok(res)
 }
 
-fn extract_game_tables(args: &ExtractorConfig, locale: Locale) -> GenericResult<()> {
+fn extract_game_tables(args: &ExtractorConfig, locale: Locale) -> AzResult<()> {
     info!("Extracting game tables...");
     let storage = args.get_casc_storage_handler(locale)?;
     let output_path = args.output_gametable_path();
@@ -306,13 +314,13 @@ fn extract_game_tables(args: &ExtractorConfig, locale: Locale) -> GenericResult<
     Ok(())
 }
 
-fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> GenericResult<()> {
+fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> AzResult<()> {
     let storage = args.get_casc_storage_handler(locale)?;
 
     info!("Extracting maps...");
     info!("Read Map.db2 file...");
     let source = storage.open_file("DBFilesClient/Map.db2", CascLocale::None.into())?;
-    let db2 = wdc1::FileLoader::<Map>::from_reader(source, locale as u32)?;
+    let db2 = wdc1::FileLoader::<MapDb2>::from_reader(source, locale as u32)?;
     let maps = db2.produce_data()?;
     let (num_maps, _) = maps.size_hint();
     info!("Done! ({} maps loaded)", num_maps);
@@ -342,7 +350,10 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> Generi
     fs::create_dir_all(&output_path)?;
 
     info!("Convert map files");
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().max_blocking_threads(50).build()?;
+    let rt = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .max_blocking_threads(50)
+        .build()?;
     let mut jhs = vec![];
 
     for (z, map) in maps.enumerate() {
@@ -367,7 +378,8 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> Generi
                 if chunk.adt_list[y][x].flag & 0x1 == 0 {
                     continue;
                 }
-                let output_file_name = output_path.join(format!("{map_id:04}_{y:02}_{x:02}.map"));
+
+                let output_file_name = Map::map_file_name(&output_path, map_id, y, x);
                 if output_file_name.exists() {
                     continue;
                 }
@@ -491,13 +503,14 @@ fn convert_adt(
     ignore_deep_water: bool,
     liquid_types_db2: Arc<BTreeMap<u32, LiquidType>>,
     liquid_materials_db2: Arc<BTreeMap<u32, LiquidMaterial>>,
-) -> GenericResult<()> {
+) -> AzResult<()> {
     // Prepare map header
     let map_build_magic = build_no;
     let mut map_area_ids = [[0; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
     let mut map_height_V9 = SMatrix::<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>::zeros();
     let mut map_height_V8 = SMatrix::<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>::zeros();
-    let mut map_liquid_flags: [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID] = [[None.into(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
+    let mut map_liquid_flags: [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID] =
+        [[None.into(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
     let mut map_liquid_entry = [[0; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
     let mut map_holes = None;
     let mut map_height_flight_box_max_min = None;
@@ -637,7 +650,7 @@ fn convert_adt(
                 let mut count = 0;
                 let mut exists_mask = h2o.get_exists_bitmap(i, j);
                 let h = &h2o.liquid_instance[i][j];
-                let attrs = &h2o.liquid_attributes[i][j];
+                let _attrs = &h2o.liquid_attributes[i][j];
                 for y in 0..h.get_height() {
                     let cy = i * ADT_CELL_SIZE + y + h.get_offset_y();
                     for x in 0..h.get_width() {
@@ -654,23 +667,22 @@ fn convert_adt(
                     None => {
                         warn!("can't find liquid_type of ID {}", &(map_liquid_entry[i][j] as u32));
                     },
-                    Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Water as u8 => map_liquid_flags[i][j] |= MapLiquidTypeFlag::Water,
-                    Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Ocean as u8 => {
-                        map_liquid_flags[i][j] |= MapLiquidTypeFlag::Ocean;
-                        if !ignore_deep_water && attrs.deep > 0 {
-                            map_liquid_flags[i][j] |= MapLiquidTypeFlag::DarkWater;
-                        }
-                    },
-                    Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Magma as u8 => map_liquid_flags[i][j] |= MapLiquidTypeFlag::Magma,
-                    Some(&LiquidType { sound_bank, .. }) if sound_bank == AdtLiquidType::Slime as u8 => map_liquid_flags[i][j] |= MapLiquidTypeFlag::Slime,
-                    _ => {
-                        warn!(
-                            "\nCan't find Liquid type {} for map {}\nchunk {},{}\n",
-                            h.liquid_type,
-                            adt.filename.display(),
-                            i,
-                            j
-                        );
+                    Some(&LiquidType { sound_bank, .. }) => match MapLiquidTypeFlag::from_liquid_type_sound_bank(sound_bank) {
+                        Err(e) => {
+                            warn!(
+                                "\nCan't find Liquid type {} for map {}\nchunk {},{}\n e: {e}",
+                                h.liquid_type,
+                                adt.filename.display(),
+                                i,
+                                j
+                            );
+                        },
+                        Ok(flag_from_liquid_type_dbc) => {
+                            map_liquid_flags[i][j] |= flag_from_liquid_type_dbc;
+                            if flag_from_liquid_type_dbc.contains(MapLiquidTypeFlag::Ocean) {
+                                map_liquid_flags[i][j] |= MapLiquidTypeFlag::DarkWater;
+                            }
+                        },
                     },
                 };
 
@@ -686,7 +698,8 @@ fn convert_adt(
                     let cy = i * ADT_CELL_SIZE + y + h.get_offset_y();
                     for x in 0..h.get_width() {
                         let cx = j * ADT_CELL_SIZE + x + h.get_offset_x();
-                        map_liquid_height[cy][cx] = get_liquid_height(&mut h2o.raw_data, h, pos, liquid_types_db2.clone(), liquid_materials_db2.clone());
+                        map_liquid_height[cy][cx] =
+                            get_liquid_height(&mut h2o.raw_data, h, pos, liquid_types_db2.clone(), liquid_materials_db2.clone());
                         pos += 1;
                     }
                 }

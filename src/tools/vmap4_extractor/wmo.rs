@@ -10,9 +10,10 @@ use nalgebra::{Vector3, Vector4};
 use tracing::{error, info};
 
 use crate::{
+    az_error,
     common::collision::maps::tile_assembler::{GroupModel_Liquid_Raw, GroupModel_Raw, WorldModel_Raw},
     tools::extractor_common::{casc_handles::CascStorageHandle, cstr_bytes_to_string, ChunkedFile},
-    GenericResult,
+    AzResult,
 };
 
 #[derive(Clone, Default, Debug)]
@@ -67,7 +68,7 @@ pub struct WmoRoot {
 }
 
 impl WmoRoot {
-    pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, filename: P) -> GenericResult<Self> {
+    pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, filename: P) -> AzResult<Self> {
         let cf = ChunkedFile::build(storage, &filename)?;
         let mut s = Self {
             filename: filename.as_ref().to_string_lossy().to_string(),
@@ -87,8 +88,16 @@ impl WmoRoot {
                     s.n_doodad_sets = f.read_u32::<LittleEndian>()?; // , 4
                     s.color = f.read_u32::<LittleEndian>()?; // , 4
                     s.root_wmoid = f.read_u32::<LittleEndian>()?; // , 4
-                    s.bbcorn1 = Vector3::new(f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?); // , 12
-                    s.bbcorn2 = Vector3::new(f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?); // , 12
+                    s.bbcorn1 = Vector3::new(
+                        f.read_f32::<LittleEndian>()?,
+                        f.read_f32::<LittleEndian>()?,
+                        f.read_f32::<LittleEndian>()?,
+                    ); // , 12
+                    s.bbcorn2 = Vector3::new(
+                        f.read_f32::<LittleEndian>()?,
+                        f.read_f32::<LittleEndian>()?,
+                        f.read_f32::<LittleEndian>()?,
+                    ); // , 12
                     s.flags = f.read_u16::<LittleEndian>()?; // , 2
                     s.num_lod = f.read_u16::<LittleEndian>()?; // , 2
                 },
@@ -159,7 +168,11 @@ impl WmoRoot {
                     while !f.is_empty() {
                         s.doodad_data.spawns.push(WmoModd {
                             name_index: f.read_u32::<LittleEndian>()?,
-                            position:   Vector3::new(f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?),
+                            position:   Vector3::new(
+                                f.read_f32::<LittleEndian>()?,
+                                f.read_f32::<LittleEndian>()?,
+                                f.read_f32::<LittleEndian>()?,
+                            ),
                             rotation:   Vector4::new(
                                 f.read_f32::<LittleEndian>()?,
                                 f.read_f32::<LittleEndian>()?,
@@ -212,7 +225,7 @@ impl WmoRoot {
         Ok(s)
     }
 
-    pub fn init_wmo_groups(&mut self, storage: &CascStorageHandle, valid_doodad_name_indices: HashSet<usize>) -> GenericResult<()> {
+    pub fn init_wmo_groups(&mut self, storage: &CascStorageHandle, valid_doodad_name_indices: HashSet<usize>) -> AzResult<()> {
         for group_file_data_id in self.group_file_data_ids.iter() {
             let s = format!("FILE{group_file_data_id:08X}.xxx");
             let fgroup = WmoGroup::build(self, storage, s).inspect_err(|e| {
@@ -356,7 +369,7 @@ struct WmoGroupMOPY {
 }
 
 impl WmoGroup {
-    fn build<P: AsRef<Path>>(root_wmo: &WmoRoot, storage: &CascStorageHandle, filename: P) -> GenericResult<Self> {
+    fn build<P: AsRef<Path>>(root_wmo: &WmoRoot, storage: &CascStorageHandle, filename: P) -> AzResult<Self> {
         let f = ChunkedFile::build(storage, &filename)?;
         let mut s = Self::default();
 
@@ -507,26 +520,25 @@ impl WmoGroup {
         if s.mopy.len() == s.movi.len() {
             Ok(s)
         } else if s.hlq.xverts != s.hlq.xtiles + 1 {
-            Err(Box::new(io::Error::new(
-                io::ErrorKind::Other,
-                format!("SANITY CHECK, xverts {} must be 1 more than xtiles {}", s.hlq.xverts, s.hlq.xtiles),
-            )))
+            Err(az_error!(
+                "SANITY CHECK, xverts {} must be 1 more than xtiles {}",
+                s.hlq.xverts,
+                s.hlq.xtiles
+            ))
         } else if s.hlq.yverts != s.hlq.ytiles + 1 {
-            Err(Box::new(io::Error::new(
-                io::ErrorKind::Other,
-                format!("SANITY CHECK, yverts {} must be 1 more than ytiles {}", s.hlq.yverts, s.hlq.ytiles),
-            )))
+            Err(az_error!(
+                "SANITY CHECK, yverts {} must be 1 more than ytiles {}",
+                s.hlq.yverts,
+                s.hlq.ytiles
+            ))
         } else {
-            Err(Box::new(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "SANITY CHECK FAILED: MOPY and MOVI should be the same, mopy_data_size={}, movt_data_size={}, s.mopy.len()={}, movi.len()={}",
-                    mopy_data_size,
-                    movt_data_size,
-                    s.mopy.len(),
-                    s.movi.len(),
-                ),
-            )))
+            Err(az_error!(
+                "SANITY CHECK FAILED: MOPY and MOVI should be the same, mopy_data_size={}, movt_data_size={}, s.mopy.len()={}, movi.len()={}",
+                mopy_data_size,
+                movt_data_size,
+                s.mopy.len(),
+                s.movi.len(),
+            ))
         }
     }
 
@@ -590,7 +602,11 @@ impl WmoGroup {
             for i in 0..3 * n_col_triangles {
                 if usize::from(movi_ex[i]) >= index_renum.len() {
                     // ASSERT(movi_ex[i] < nVertices);
-                    panic!("the original movi_ex[{i}] = {} should not be greater than {}", movi_ex[i], index_renum.len());
+                    panic!(
+                        "the original movi_ex[{i}] = {} should not be greater than {}",
+                        movi_ex[i],
+                        index_renum.len()
+                    );
                 }
                 movi_ex[i] = if let Some(movi_idx) = index_renum[usize::from(movi_ex[i])].flatten() {
                     movi_idx

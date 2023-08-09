@@ -15,11 +15,11 @@ stable yet.
 TODO: FILL THIS IN WITH CMAKE/C++ REQUIREMENTS AND TEST OUT BUILDS FOR WINDOWS
 
 # Roadmap checklist (To be updated as it goes)
-- [ ] Extractors/Generators
+- [x] Extractors/Generators
     - [x] Map & DB2
     - [x] Vmap4 Extractor
     - [x] Vmap4 Assembler
-    - [ ] Mmap Generator
+    - [x] Mmap Generator
 - [ ] Loading game assets
 - [ ] Loading DB fixes
 - [ ] Migrations / DB reloader

@@ -1,33 +1,10 @@
-use std::{fs, io, path::Path, process};
+use std::{fs, path::Path, process};
 
-use flagset::InvalidBits;
-use thiserror::Error;
-
-#[derive(Error, Debug)]
-#[error("GenericError: {msg}")]
-pub struct GenericError {
-    pub msg: String,
-}
-
-#[derive(Error, Debug)]
-#[error("invalid bits: {err}")]
-pub struct InvalidBitsError {
-    pub err: InvalidBits,
-}
-
-#[derive(Error, Debug)]
-#[error("cannot create PID file {pid} (possible error: permission)")]
-pub struct PIDFileError {
-    pid:   u32,
-    #[source]
-    inner: io::Error,
-}
+use crate::AzResult;
 
 /// create PID file
-pub fn create_pid_file<P: AsRef<Path>>(filename: P) -> Result<u32, PIDFileError> {
+pub fn create_pid_file<P: AsRef<Path>>(filename: P) -> AzResult<u32> {
     let pid = process::id();
-    if let Err(e) = fs::write(filename, pid.to_string().as_bytes()) {
-        return Err(PIDFileError { inner: e, pid });
-    }
+    fs::write(filename, pid.to_string().as_bytes())?;
     Ok(pid)
 }

@@ -1,5 +1,6 @@
+use std::sync::OnceLock;
+
 use num_derive::{FromPrimitive, ToPrimitive};
-use once_cell::sync::OnceCell;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, ToPrimitive, FromPrimitive, Deserialize, Serialize, PartialEq)]
@@ -20,4 +21,4 @@ impl ThisServerProcess {
     }
 }
 
-static THIS_SERVER_PROCESS: OnceCell<ServerProcessType> = OnceCell::new();
+static THIS_SERVER_PROCESS: OnceLock<ServerProcessType> = OnceLock::new();

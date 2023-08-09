@@ -3,7 +3,7 @@ use std::sync::atomic::AtomicI32;
 use flagset::FlagSet;
 use tracing::info;
 
-use crate::{common::configuration::DatabaseTypeFlags, modules, server::game::scripts, GenericResult};
+use crate::{az_error, common::configuration::DatabaseTypeFlags, modules, server::game::scripts, AzResult};
 
 pub trait ScriptObject: Sync + Send {
     fn name(&self) -> String {
@@ -16,7 +16,7 @@ pub trait ScriptObject: Sync + Send {
     fn is_database_bound(&self) -> bool {
         false
     }
-    fn check_validity(&self) -> GenericResult<()> {
+    fn check_validity(&self) -> AzResult<()> {
         Ok(())
     }
 }
@@ -33,7 +33,7 @@ pub trait WorldScript: ScriptObject {
 
     /// Called when loading module configuration. Returns Ok(Vec(String)) containing the paths
     /// used for a given module if successfully loaded, else return an error.
-    fn on_load_module_config(&mut self, _reload: bool) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    fn on_load_module_config(&mut self, _reload: bool) -> AzResult<Vec<String>> {
         Ok(Vec::new())
     }
 
@@ -83,25 +83,25 @@ pub struct ScriptMgr {
 }
 
 impl ScriptMgr {
-    pub async fn initialise() -> GenericResult<()> {
+    pub fn initialise() -> AzResult<()> {
         info!("initialising scripts...");
-        scripts::register().await?;
-        modules::register().await?;
+        scripts::register().map_err(|e| az_error!(e))?;
+        modules::register().map_err(|e| az_error!(e))?;
 
         Ok(())
     }
 
-    pub async fn unload() -> GenericResult<()> {
-        WorldScriptRegistry::unload().await;
-        DatabaseScriptRegistry::unload().await;
+    pub fn unload() -> AzResult<()> {
+        WorldScriptRegistry::unload();
+        DatabaseScriptRegistry::unload();
 
         Ok(())
     }
 
-    pub async fn get_script_id_count() -> i64 {
+    pub fn get_script_id_count() -> i64 {
         let mut i: i64 = 0;
-        i += WorldScriptRegistry::get_script_id_counter().await;
-        i += DatabaseScriptRegistry::get_script_id_counter().await;
+        i += WorldScriptRegistry::get_script_id_counter();
+        i += DatabaseScriptRegistry::get_script_id_counter();
 
         i
     }
@@ -109,8 +109,8 @@ impl ScriptMgr {
 
 macro_rules! script_register_method {
     (  $register_fn_name:tt, $script_trait:tt, $script_registry_name:tt ) => {
-        pub async fn $register_fn_name(script: std::sync::Arc<tokio::sync::Mutex<dyn $script_trait>>) {
-            $script_registry_name::add_script(Box::new(script)).await;
+        pub fn $register_fn_name(script: std::sync::Arc<std::sync::Mutex<dyn $script_trait>>) {
+            $script_registry_name::add_script(Box::new(script));
         }
     };
 }
@@ -119,90 +119,90 @@ macro_rules! script_register_method {
 impl ScriptMgr {
     script_register_method!(register_world_script, WorldScript, WorldScriptRegistry);
 
-    pub async fn on_load_module_config(is_reload: bool) -> Result<Vec<String>, Box<dyn std::error::Error>> {
+    pub fn on_load_module_config(is_reload: bool) -> AzResult<Vec<String>> {
         let mut script_configs: Vec<String> = Vec::new();
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            let res = script.lock().await.on_load_module_config(is_reload)?;
-            script_configs.extend(res.into_iter());
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            let res = script.lock().unwrap().on_load_module_config(is_reload)?;
+            script_configs.extend(res);
         }
         Ok(script_configs)
     }
 
-    pub async fn on_load_custom_database_table(&mut self) {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_load_custom_database_table();
+    pub fn on_load_custom_database_table(&mut self) {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_load_custom_database_table();
         }
     }
 
-    pub async fn on_open_state_change(open: bool) {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_open_state_change(open);
+    pub fn on_open_state_change(open: bool) {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_open_state_change(open);
         }
     }
 
-    pub async fn on_before_config_load(reload: bool) {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_before_config_load(reload);
+    pub fn on_before_config_load(reload: bool) {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_before_config_load(reload);
         }
     }
 
-    pub async fn on_after_config_load(reload: bool) {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_after_config_load(reload);
+    pub fn on_after_config_load(reload: bool) {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_after_config_load(reload);
         }
     }
 
-    pub async fn on_before_finalize_player_world_session(cache_version: u32) {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_before_finalize_player_world_session(cache_version);
+    pub fn on_before_finalize_player_world_session(cache_version: u32) {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_before_finalize_player_world_session(cache_version);
         }
     }
 
-    pub async fn on_motd_change(new_motd: &str) {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_motd_change(new_motd);
+    pub fn on_motd_change(new_motd: &str) {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_motd_change(new_motd);
         }
     }
 
-    pub async fn on_shutdown_initiate(shutdown_exit_code: u32, shutdown_mask: u64) {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_shutdown_initiate(shutdown_exit_code, shutdown_mask);
+    pub fn on_shutdown_initiate(shutdown_exit_code: u32, shutdown_mask: u64) {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_shutdown_initiate(shutdown_exit_code, shutdown_mask);
         }
     }
 
-    pub async fn on_shutdown_cancel() {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_shutdown_cancel();
+    pub fn on_shutdown_cancel() {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_shutdown_cancel();
         }
     }
 
-    pub async fn on_update(diff: u32) {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_update(diff);
+    pub fn on_update(diff: u32) {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_update(diff);
         }
     }
 
-    pub async fn on_startup() {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_startup();
+    pub fn on_startup() {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_startup();
         }
     }
 
-    pub async fn on_shutdown() {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_shutdown();
+    pub fn on_shutdown() {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_shutdown();
         }
     }
 
-    pub async fn on_before_world_initialized() {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_before_world_initialized();
+    pub fn on_before_world_initialized() {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_before_world_initialized();
         }
     }
 
-    pub async fn on_after_unload_all_maps() {
-        for (_script_id, script) in WORLD_SCRIPTS.read().await.iter() {
-            script.lock().await.on_after_unload_all_maps();
+    pub fn on_after_unload_all_maps() {
+        for (_script_id, script) in WORLD_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_after_unload_all_maps();
         }
     }
 }
@@ -211,9 +211,9 @@ impl ScriptMgr {
 impl ScriptMgr {
     script_register_method!(register_database_script, DatabaseScript, DatabaseScriptRegistry);
 
-    pub async fn on_after_databases_loaded(update_flags: FlagSet<DatabaseTypeFlags>) {
-        for (_script_id, script) in DATABASE_SCRIPTS.read().await.iter() {
-            script.lock().await.on_after_databases_loaded(update_flags);
+    pub fn on_after_databases_loaded(update_flags: FlagSet<DatabaseTypeFlags>) {
+        for (_script_id, script) in DATABASE_SCRIPTS.read().unwrap().iter() {
+            script.lock().unwrap().on_after_databases_loaded(update_flags);
         }
     }
 }
@@ -269,64 +269,68 @@ macro_rules! script_registry {
 
         impl $crate::server::game::scripting::$script_registry_name {
             /// Force unload all scripts registered
-            pub async fn unload() {
-                *$al_scripts.lock().await = Vec::new();
-                *$script_pointer_list.write().await = std::collections::BTreeMap::new();
+            pub fn unload() {
+                *$al_scripts.lock().unwrap() = Vec::new();
+                *$script_pointer_list.write().unwrap() = std::collections::BTreeMap::new();
             }
 
-            pub async fn get_script_id_counter() -> i64 {
+            pub fn get_script_id_counter() -> i64 {
                 $script_id_counter.load(std::sync::atomic::Ordering::SeqCst)
             }
 
-            pub async fn add_script(script: Box<std::sync::Arc<tokio::sync::Mutex<dyn $script_trait>>>) {
-                if script.lock().await.is_database_bound() {
-                    $al_scripts.lock().await.push(script);
+            pub fn add_script(script: Box<std::sync::Arc<std::sync::Mutex<dyn $script_trait>>>) {
+                if script.lock().unwrap().is_database_bound() {
+                    $al_scripts.lock().unwrap().push(script);
                     return;
                 }
-                _ = script.lock().await.check_validity();
+                _ = script.lock().unwrap().check_validity();
                 // We're dealing with a code-only script; just add it.
                 $script_pointer_list
                     .write()
-                    .await
+                    .unwrap()
                     .insert($script_id_counter.load(std::sync::atomic::Ordering::SeqCst), script);
                 $script_id_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             }
 
             /// Adds the database-bound (i.e. after load) scripts to script management
             #[tracing::instrument]
-            pub async fn add_al_scripts() {
-                let mut locked = $al_scripts.lock().await;
+            pub fn add_al_scripts() {
+                let mut locked = $al_scripts.lock().unwrap();
                 while let Some(script) = locked.pop() {
-                    _ = script.lock().await.check_validity();
-                    if !script.lock().await.is_database_bound() {
+                    _ = script.lock().unwrap().check_validity();
+                    if !script.lock().unwrap().is_database_bound() {
                         // We're dealing with a code-only script; just add it.
                         $script_pointer_list
                             .write()
-                            .await
+                            .unwrap()
                             .insert($script_id_counter.load(std::sync::atomic::Ordering::SeqCst), script);
                         $script_id_counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
                         continue;
                     }
-                    let script_name = script.lock().await.name();
+                    let script_name = script.lock().unwrap().name();
                     // Get an ID for the script. An ID only exists if it's a script that is assigned in the database
                     // through a script name (or similar).
                     let script_id: i64 = match $crate::server::game::globals::object_mgr::S_OBJECT_MGR
                         .read()
-                        .await
+                        .unwrap()
                         .get_script_id(&script_name)
                     {
                         Err(e) => {
-                            tracing::error!("Scripted named '{}' is not assigned in the database. error was: {}", script_name, e);
+                            tracing::error!(
+                                "Scripted named '{}' is not assigned in the database. error was: {}",
+                                script_name,
+                                e
+                            );
                             continue;
                         },
                         Ok(i) => i,
                     };
                     // Drop / delete existing scripts that have names that match the incoming script
-                    let mut guard = $script_pointer_list.write().await;
+                    let mut guard = $script_pointer_list.write().unwrap();
 
                     let mut all_script_id_to_name = Vec::new();
                     for (k, v) in guard.iter() {
-                        all_script_id_to_name.push((*k, v.lock().await.name().clone()));
+                        all_script_id_to_name.push((*k, v.lock().unwrap().name().clone()));
                     }
                     // Take out old scripts if it matches the same script name.
                     let mut old_scripts_count: i64 = 0;
@@ -345,8 +349,8 @@ macro_rules! script_registry {
                 }
             }
 
-            pub async fn get_script_by_id(script_id: i64) -> Option<Box<std::sync::Arc<tokio::sync::Mutex<dyn $script_trait>>>> {
-                let guard = $script_pointer_list.read().await;
+            pub fn get_script_by_id(script_id: i64) -> Option<Box<std::sync::Arc<std::sync::Mutex<dyn $script_trait>>>> {
+                let guard = $script_pointer_list.read().unwrap();
                 let res = guard.get(&script_id)?;
                 Some(res.to_owned())
             }
@@ -354,10 +358,12 @@ macro_rules! script_registry {
 
         /// The actual list of $script_trait scripts. This will be accessed concurrently, so it must not be modified
         /// after server startup.
-        static $script_pointer_list: tokio::sync::RwLock<std::collections::BTreeMap<i64, Box<std::sync::Arc<tokio::sync::Mutex<dyn $script_trait>>>>> =
-            tokio::sync::RwLock::const_new(std::collections::BTreeMap::new());
+        static $script_pointer_list: std::sync::RwLock<
+            std::collections::BTreeMap<i64, Box<std::sync::Arc<std::sync::Mutex<dyn $script_trait>>>>,
+        > = std::sync::RwLock::new(std::collections::BTreeMap::new());
         /// After database load scripts
-        static $al_scripts: tokio::sync::Mutex<Vec<Box<std::sync::Arc<tokio::sync::Mutex<dyn $script_trait>>>>> = tokio::sync::Mutex::const_new(Vec::new());
+        static $al_scripts: std::sync::Mutex<Vec<Box<std::sync::Arc<std::sync::Mutex<dyn $script_trait>>>>> =
+            std::sync::Mutex::new(Vec::new());
         /// Counter used for code-only scripts.
         static $script_id_counter: std::sync::atomic::AtomicI64 = std::sync::atomic::AtomicI64::new(0);
     };
