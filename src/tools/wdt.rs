@@ -1,4 +1,4 @@
-use std::{collections::HashMap, io, path::Path};
+use std::{io, path::Path};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 
@@ -48,8 +48,8 @@ impl From<FileChunk> for WdtChunkMain {
 }
 
 pub struct WDTFile {
-    pub wmo_paths: HashMap<usize, String>,
-    pub modf:      Option<AdtChunkModf>,
+    pub wmo_paths: Vec<String>,
+    pub modf:      Vec<AdtChunkModf>,
 }
 
 impl WDTFile {
@@ -59,30 +59,22 @@ impl WDTFile {
         //     error!("Error opening wdt file at {}, err was {e}", storage_path.as_ref().display());
         // })?;
 
-        let mut wmo_paths = HashMap::new();
-        let mut modf = None;
+        let mut wmo_paths = Vec::new();
+        let mut modf = vec![];
 
         for (fourcc, chunk) in file.chunks {
             match &fourcc {
                 b"MAIN" => {},
                 b"MWMO" => {
-                    let mut offset = 0;
-                    let paths = chunk
-                        .data
-                        .split_inclusive(|b| *b == 0)
-                        .map(|raw| {
-                            // We dont anticipate a panic here as the strings will always be nul-terminated
-                            let s = cstr_bytes_to_string(raw).unwrap();
-                            let r = (offset, s);
-                            offset += 1; // raw.len();
-                            r
-                        })
-                        .collect::<HashMap<_, _>>();
-                    wmo_paths.extend(paths);
+                    for raw in chunk.data.split_inclusive(|b| *b == 0) {
+                        // We dont anticipate a panic here as the strings will always be nul-terminated
+                        let s = cstr_bytes_to_string(raw).unwrap();
+                        wmo_paths.push(s);
+                    }
                 },
                 b"MODF" => {
                     // global wmo instance data
-                    modf = Some(AdtChunkModf::from(chunk));
+                    modf.push(AdtChunkModf::from(chunk));
                 },
                 _ => {},
             }

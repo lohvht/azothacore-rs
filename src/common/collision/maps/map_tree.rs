@@ -321,8 +321,8 @@ impl StaticMapTree {
         let file_name = Self::get_tile_file_name(&dir, map_id, y, x);
         let mut file = fs::File::open(file_name).or_else(|e| match parent_map_data.get(&map_id) {
             None => Err(e),
-            Some(parent_map_id) => {
-                let file_name = Self::get_tile_file_name(&dir, *parent_map_id, y, x);
+            Some(parent_id) => {
+                let file_name = Self::get_tile_file_name(&dir, *parent_id, y, x);
                 fs::File::open(file_name)
             },
         })?;

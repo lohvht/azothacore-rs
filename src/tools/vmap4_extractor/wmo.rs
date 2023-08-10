@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeSet, HashMap, HashSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     io::{self, Read},
     path::Path,
 };
@@ -7,7 +7,7 @@ use std::{
 use byteorder::{LittleEndian, ReadBytesExt};
 use flagset::{flags, FlagSet};
 use nalgebra::{Vector3, Vector4};
-use tracing::{error, info};
+use tracing::{debug, error};
 
 use crate::{
     az_error,
@@ -39,9 +39,8 @@ pub struct WmoModd {
 #[derive(Clone, Default, Debug)]
 pub struct WmoDoodadData {
     pub sets:       Vec<WmoMods>,
-    pub paths:      HashMap<usize, String>,
     pub spawns:     Vec<WmoModd>,
-    pub references: BTreeSet<u16>,
+    pub references: BTreeMap<u32, String>,
 }
 
 #[derive(Default)]
@@ -74,6 +73,7 @@ impl WmoRoot {
             filename: filename.as_ref().to_string_lossy().to_string(),
             ..Self::default()
         };
+        let mut wmo_paths = HashMap::new();
         for (fourcc, chunk) in cf.chunks {
             match &fourcc {
                 b"MOHD" => {
@@ -151,17 +151,14 @@ impl WmoRoot {
                 },
                 b"MODN" => {
                     let mut offset = 0;
-
-                    s.doodad_data.paths = chunk
-                        .data
-                        .split_inclusive(|b| *b == 0)
-                        .map(|raw| {
-                            // We dont anticipate a panic here as the strings will always be nul-terminated
-                            let s = cstr_bytes_to_string(raw).unwrap();
-                            offset += 1; // raw.len();
-                            (offset, s)
-                        })
-                        .collect::<HashMap<_, _>>();
+                    for raw in chunk.data.split_inclusive(|b| *b == 0) {
+                        // We dont anticipate a panic here as the strings will always be nul-terminated
+                        let p = cstr_bytes_to_string(raw).unwrap();
+                        if p.len() >= 4 {
+                            wmo_paths.insert(offset, p);
+                        }
+                        offset += raw.len();
+                    }
                 },
                 b"MODD" => {
                     let mut f = io::Cursor::new(&chunk.data);
@@ -221,11 +218,17 @@ impl WmoRoot {
                 _ => {},
             }
         }
+        s.init_wmo_groups(storage, wmo_paths)?;
 
         Ok(s)
     }
 
-    pub fn init_wmo_groups(&mut self, storage: &CascStorageHandle, valid_doodad_name_indices: HashSet<usize>) -> AzResult<()> {
+    fn init_wmo_groups(
+        &mut self,
+        storage: &CascStorageHandle,
+        wmo_paths: HashMap<usize, String>,
+        // valid_doodad_name_indices: HashSet<usize>,
+    ) -> AzResult<()> {
         for group_file_data_id in self.group_file_data_ids.iter() {
             let s = format!("FILE{group_file_data_id:08X}.xxx");
             let fgroup = WmoGroup::build(self, storage, s).inspect_err(|e| {
@@ -235,11 +238,35 @@ impl WmoRoot {
                 if *group_reference as usize >= self.doodad_data.spawns.len() {
                     continue;
                 }
-                let doodad_name_index = self.doodad_data.spawns[*group_reference as usize].name_index;
-                if valid_doodad_name_indices.get(&(doodad_name_index as usize)).is_none() {
-                    continue;
-                }
-                self.doodad_data.references.insert(*group_reference);
+                let doodad = &self.doodad_data.spawns[*group_reference as usize];
+                let path = match wmo_paths.get(&(doodad.name_index as usize)) {
+                    None => {
+                        debug!(
+                            "doodad.name_index {} should exist in {:?} but it doesn't",
+                            doodad.name_index, wmo_paths,
+                        );
+                        continue;
+                    },
+                    Some(s) => s,
+                };
+
+                // let mut valid_doodad_name_indices = HashSet::new();
+                // for (doodad_name_index, s) in self.doodad_data.paths.iter() {
+                //     match self.extract_single_model(storage, s) {
+                //         Ok(_) => {
+                //             valid_doodad_name_indices.insert(*doodad_name_index);
+                //         },
+                //         Err(e) => {
+                //             warn!("extract_single_wmo extract_single_model err for path {s} due to err: {e}");
+                //         },
+                //     };
+                // }
+                // let doodad_name_index = self.doodad_data.spawns[*group_reference as usize].name_index;
+                // if valid_doodad_name_indices.get(&(doodad_name_index as usize)).is_none() {
+                //     continue;
+                // }
+
+                self.doodad_data.references.insert(*group_reference as u32, path.clone());
             }
             self.wmo_groups.push(fgroup);
         }
@@ -247,7 +274,6 @@ impl WmoRoot {
     }
 
     pub fn convert_to_vmap(&self, precise_vector_data: bool) -> WorldModel_Raw {
-        info!("Converting to vmap: {}", self.filename);
         let mut wmo_n_vertices = 0;
         let mut groups = Vec::with_capacity(self.wmo_groups.len());
         for grp in self.wmo_groups.iter() {
@@ -557,6 +583,7 @@ impl WmoGroup {
         #[allow(unused_assignments)]
         let mut vertices_chunks = Vec::new();
         let mut liquid = None;
+        #[allow(unused_assignments)]
         let mut n_col_triangles = 0;
         let mut liquid_type = 0;
         if precise_vector_data {
@@ -566,73 +593,47 @@ impl WmoGroup {
         } else {
             //-------INDX------------------------------------
             //-------MOPY--------
-            let mut movi_ex = vec![0; self.movi.len() * 3]; // "worst case" size...
-            let mut index_renum = vec![None; self.movt.len()];
+            let mut index_renum = BTreeSet::new();
+            let mut movi_ex = Vec::with_capacity(self.movi.len());
             for (i, mopy) in self.mopy.iter().enumerate() {
                 use MopyFlags::*;
                 // Skip no collision triangles
-                let is_render_face = (mopy.flag & WmoMaterialRender).bits() > 0 && (mopy.flag & WmoMaterialDetail).bits() == 0;
-                let is_detail = (mopy.flag & WmoMaterialDetail).bits() > 0;
-                let is_collision = (mopy.flag & WmoMaterialCollision).bits() > 0;
+                let is_render_face = mopy.flag.contains(WmoMaterialRender) && !mopy.flag.contains(WmoMaterialDetail);
+                let is_detail = mopy.flag.contains(WmoMaterialDetail);
+                let is_collision = mopy.flag.contains(WmoMaterialCollision);
                 if !is_render_face && !is_detail && !is_collision {
                     continue;
                 }
                 // Use this triangle
-                index_renum[usize::from(self.movi[i].x)] = Some(None);
-                index_renum[usize::from(self.movi[i].y)] = Some(None);
-                index_renum[usize::from(self.movi[i].z)] = Some(None);
-                movi_ex[3 * n_col_triangles] = self.movi[i].x;
-                movi_ex[3 * n_col_triangles + 1] = self.movi[i].y;
-                movi_ex[3 * n_col_triangles + 2] = self.movi[i].z;
-                n_col_triangles += 1;
+                index_renum.insert(self.movi[i].x);
+                index_renum.insert(self.movi[i].y);
+                index_renum.insert(self.movi[i].z);
+                movi_ex.push(self.movi[i]);
             }
             // assign new vertex index numbers
-            let mut n_col_vertices = 0;
-            for idx in index_renum.iter_mut().flatten() {
-                // if (IndexRenum[i] == 1)
-                // {
-                //     IndexRenum[i] = nColVertices;
-                //     ++nColVertices;
-                // }
-                *idx = Some(n_col_vertices);
-                n_col_vertices += 1;
-            }
+            let index_renum = index_renum
+                .into_iter()
+                .enumerate()
+                .map(|(new_vert_idx, old_vert_idx)| (old_vert_idx, new_vert_idx as u16))
+                .collect::<BTreeMap<_, _>>();
 
             // translate triangle indices to new numbers
-            for i in 0..3 * n_col_triangles {
-                if usize::from(movi_ex[i]) >= index_renum.len() {
-                    // ASSERT(movi_ex[i] < nVertices);
-                    panic!(
-                        "the original movi_ex[{i}] = {} should not be greater than {}",
-                        movi_ex[i],
-                        index_renum.len()
-                    );
-                }
-                movi_ex[i] = if let Some(movi_idx) = index_renum[usize::from(movi_ex[i])].flatten() {
-                    movi_idx
-                } else {
-                    0xff
-                };
+            let mut triangles_to_use = Vec::with_capacity(movi_ex.len());
+            for movi in movi_ex {
+                // unwrap here is fine, we know that we pushed in these keys.
+                triangles_to_use.push(Vector3::new(
+                    *index_renum.get(&movi.x).unwrap(),
+                    *index_renum.get(&movi.y).unwrap(),
+                    *index_renum.get(&movi.z).unwrap(),
+                ));
             }
-            // write triangle indices
-            for (i, m) in movi_ex.chunks_exact(3).enumerate() {
-                if i < n_col_triangles {
-                    // write up to n_col_triangles triangles
-                    mesh_triangle_indices.push(Vector3::new(m[0], m[1], m[2]));
-                }
+            let mut vertices_to_use = vec![Vector3::zeros(); index_renum.len()];
+            for (old_vert_idx, new_vert_idx) in index_renum {
+                vertices_to_use[new_vert_idx as usize] = self.movt[old_vert_idx as usize]
             }
-            // write vertices
-            let mut check = 0;
-            for (i, idx_re) in index_renum.into_iter().enumerate() {
-                if idx_re.flatten().is_some() {
-                    vertices_chunks.push(self.movt[i]);
-                    check += 1;
-                }
-            }
-            if n_col_vertices != check {
-                // ASSERT(check==0);
-                panic!("n_col_vertices is not equals to the checked movt amount. n_col_vertices was {n_col_vertices}, check was {check}");
-            }
+            mesh_triangle_indices = triangles_to_use;
+            vertices_chunks = vertices_to_use;
+            n_col_triangles = mesh_triangle_indices.len();
         }
         if (self.liquflags & 3) > 0 {
             liquid_type = self.group_liquid;

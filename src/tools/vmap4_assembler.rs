@@ -1,5 +1,3 @@
-use std::collections::BTreeMap;
-
 use tracing::{error, info};
 
 use crate::{
@@ -10,7 +8,7 @@ use crate::{
 
 pub fn main_vmap4_assemble(
     args: &ExtractorConfig,
-    model_spawns_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>>,
+    model_spawns_data: Vec<VmapModelSpawn>,
     temp_gameobject_models: Vec<TempGameObjectModel>,
 ) -> AzResult<()> {
     tile_assembler_convert_world2(args, model_spawns_data, temp_gameobject_models).inspect_err(|e| {

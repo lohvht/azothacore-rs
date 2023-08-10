@@ -1,12 +1,13 @@
 use std::{
-    collections::{BTreeMap, HashMap, HashSet},
+    collections::{BTreeMap, HashMap},
     fs,
     io::{self, Read},
-    path::Path,
+    path::{Path, PathBuf},
+    sync::Mutex,
 };
 
 use nalgebra::{Quaternion, Rotation, UnitQuaternion, Vector3};
-use tracing::{error, info, warn};
+use tracing::{error, info, instrument, warn};
 use wow_db2::wdc1;
 
 use crate::{
@@ -40,16 +41,12 @@ use crate::{
     AzResult,
 };
 
-mod model;
+pub mod model;
 pub mod wmo;
 
-pub struct VmapExtractor<'a> {
-    args: &'a ExtractorConfig,
-    wmo_doodads: BTreeMap<String, WmoDoodadData>,
-    /// Mapping of map_id to spawn ID to its spawn.
-    pub model_spawns_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>>,
-    pub temp_gameobject_models: Vec<TempGameObjectModel>,
-    unique_object_id: HashMap<(u32, u16), u32>,
+pub struct VmapExtractor {
+    pub temp_vmap_dir:       PathBuf,
+    pub precise_vector_data: bool,
 }
 
 pub fn load_cached<R: io::Read, T: for<'a> serde::Deserialize<'a>>(r: &mut R) -> AzResult<T> {
@@ -62,7 +59,10 @@ pub fn save_cached<W: io::Write, T: serde::Serialize>(w: &mut W, t: &T) -> AzRes
     Ok(bincode_serialise(w, t)?)
 }
 
-pub fn main_vmap4_extract(args: &ExtractorConfig, first_installed_locale: Locale) -> AzResult<VmapExtractor> {
+pub fn main_vmap4_extract(
+    args: &ExtractorConfig,
+    first_installed_locale: Locale,
+) -> AzResult<(Vec<VmapModelSpawn>, Vec<TempGameObjectModel>)> {
     // VMAP EXTRACTOR AND ASSEMBLER
     let version_string = VmapExtractAndGenerate::version_string();
     info!("Extract VMAP {version_string}. Beginning work .....\n\n");
@@ -70,31 +70,32 @@ pub fn main_vmap4_extract(args: &ExtractorConfig, first_installed_locale: Locale
     // Create the VMAP working directory
     fs::create_dir_all(args.output_vmap_sz_work_dir_wmo())?;
 
-    let mut vmap_extract = VmapExtractor {
-        args,
-        wmo_doodads: BTreeMap::new(),
-        model_spawns_data: BTreeMap::new(),
-        temp_gameobject_models: Vec::new(),
-        unique_object_id: HashMap::new(),
-    };
-
     let model_spawns_tmp = args.output_vmap_sz_work_dir_wmo_dir_bin();
     let gameobject_models_tmp = args.output_vmap_sz_work_dir_wmo_tmp_gameobject_models();
     if model_spawns_tmp.exists() && gameobject_models_tmp.exists() && !args.vmap_extract_and_generate.override_cached {
         // if not override cache, when these 2 files exist, we go ahead load from them instead. It is assumed that
         // if these 2 files are available, the rest of the map / vmap files + doodads etc are extracted too.
-        vmap_extract.model_spawns_data = load_cached(&mut fs::File::open(model_spawns_tmp)?)?;
-        vmap_extract.temp_gameobject_models = load_cached(&mut fs::File::open(gameobject_models_tmp)?)?;
+        let model_spawns_data = load_cached(&mut fs::File::open(model_spawns_tmp)?)?;
+        let temp_gameobject_models = load_cached(&mut fs::File::open(gameobject_models_tmp)?)?;
         info!("Extract VMAP skipped due to no override cached!");
-        return Ok(vmap_extract);
+        return Ok((model_spawns_data, temp_gameobject_models));
     }
 
-    let storage = args.get_casc_storage_handler(first_installed_locale)?;
-    vmap_extract.extract_game_object_models(&storage, first_installed_locale)?;
-    vmap_extract.parse_map_files(first_installed_locale, &storage)?;
+    let mut model_spawns_data = vec![];
+    let mut temp_gameobject_models = vec![];
+    let mut wmo_doodads = BTreeMap::new();
 
-    save_cached(&mut fs::File::create(model_spawns_tmp)?, &vmap_extract.model_spawns_data)?;
-    save_cached(&mut fs::File::create(gameobject_models_tmp)?, &vmap_extract.temp_gameobject_models)?;
+    let vmap_extract = VmapExtractor {
+        temp_vmap_dir:       args.output_vmap_sz_work_dir_wmo(),
+        precise_vector_data: args.vmap_extract_and_generate.precise_vector_data,
+    };
+
+    let storage = args.get_casc_storage_handler(first_installed_locale)?;
+    vmap_extract.extract_game_object_models(&storage, first_installed_locale, &mut wmo_doodads, &mut temp_gameobject_models)?;
+    vmap_extract.parse_map_files(first_installed_locale, &storage, &mut wmo_doodads, &mut model_spawns_data)?;
+
+    save_cached(&mut fs::File::create(model_spawns_tmp)?, &model_spawns_data)?;
+    save_cached(&mut fs::File::create(gameobject_models_tmp)?, &temp_gameobject_models)?;
 
     // TODO: hirogoro@04jul2023 - VMAP extraction caching (i.e. how not to do more work)
     // 1. save model_spawns_data and temp_gameobject_models to files (similar to
@@ -102,7 +103,7 @@ pub fn main_vmap4_extract(args: &ExtractorConfig, first_installed_locale: Locale
     // use them as indications that the files are extracted
     // 2. Open via existing map files if possible? - dont rely on CASC storage too much. can probably extract adt and wdt files
     info!("Extract VMAP done!");
-    Ok(vmap_extract)
+    Ok((model_spawns_data, temp_gameobject_models))
 }
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
@@ -114,11 +115,24 @@ pub struct TempGameObjectModel {
 
 struct WdtWithAdts {
     _wdt:      WDTFile,
-    adt_cache: Vec<Vec<Option<ADTFile>>>,
+    map_name:  String,
+    map_id:    u32,
+    adt_cache: Option<Vec<Vec<Option<AdtWithDirFileCache>>>>,
 }
 
-impl VmapExtractor<'_> {
-    fn extract_game_object_models(&mut self, storage: &CascStorageHandle, locale: Locale) -> AzResult<()> {
+struct AdtWithDirFileCache {
+    _f:             ADTFile,
+    dir_file_cache: Option<Vec<VmapModelSpawn>>,
+}
+
+impl VmapExtractor {
+    fn extract_game_object_models(
+        &self,
+        storage: &CascStorageHandle,
+        locale: Locale,
+        wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
+        temp_gameobject_models: &mut Vec<TempGameObjectModel>,
+    ) -> AzResult<()> {
         info!("Extracting GameObject models...");
 
         let source = storage.open_file("DBFilesClient/GameObjectDisplayInfo.db2", CascLocale::None.into())?;
@@ -142,7 +156,7 @@ impl VmapExtractor<'_> {
             let res = match &header_magic {
                 // This an an MVER (i.e. a chunked file)
                 // should a root WMO
-                b"REVM" => self.extract_single_wmo(storage, &file_name).map(|_| true),
+                b"REVM" => self.extract_single_wmo(storage, &file_name, wmo_doodads).map(|_| true),
                 b"MD21" => self.extract_single_model(storage, &file_name).map(|_| false),
                 c => {
                     let magic = String::from_utf8_lossy(c);
@@ -156,7 +170,7 @@ impl VmapExtractor<'_> {
                 },
                 Ok(b) => b,
             };
-            self.temp_gameobject_models.push(TempGameObjectModel {
+            temp_gameobject_models.push(TempGameObjectModel {
                 id: rec.id,
                 is_wmo,
                 file_name: get_fixed_plain_name(&file_name),
@@ -167,9 +181,14 @@ impl VmapExtractor<'_> {
         Ok(())
     }
 
-    fn extract_single_wmo(&mut self, storage: &CascStorageHandle, file_name: &str) -> AzResult<()> {
+    fn extract_single_wmo(
+        &self,
+        storage: &CascStorageHandle,
+        file_name: &str,
+        wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
+    ) -> AzResult<()> {
         let plain_name = get_fixed_plain_name(file_name);
-        let sz_local_file = self.args.output_vmap_sz_work_dir_wmo().join(&plain_name);
+        let sz_local_file = self.temp_vmap_dir.join(&plain_name);
         if let Some((_prefix, rest)) = plain_name.rsplit_once('_') {
             if rest.len() == 3 && rest.chars().all(|c| c.is_ascii_digit()) {
                 // i.e. the rest after '_' are all digits => not root wmo files, return
@@ -180,14 +199,17 @@ impl VmapExtractor<'_> {
         if !file_exist {
             info!("Extracting to vmap: {}", file_name);
         }
-        let mut froot = WmoRoot::build(storage, file_name)?;
-        let mut valid_doodad_names = HashSet::new();
-        for (doodad_name_index, s) in froot.doodad_data.paths.iter() {
-            if self.extract_single_model(storage, s).is_ok() {
-                valid_doodad_names.insert(*doodad_name_index);
-            }
+        let froot = WmoRoot::build(storage, file_name)?;
+        for s in froot.doodad_data.references.values() {
+            match self.extract_single_model(storage, s) {
+                Ok(_) => {
+                    //  valid_doodad_name_indices.insert(*doodad_name_index);
+                },
+                Err(e) => {
+                    warn!("extract_single_wmo extract_single_model err for path {s} due to err: {e}");
+                },
+            };
         }
-        froot.init_wmo_groups(storage, valid_doodad_names)?;
         if !file_exist {
             // save only if not exist. The above code is also to ensure that the model spawns are always idempotent.
             let mut output = fs::File::create(&sz_local_file).inspect_err(|e| {
@@ -197,14 +219,14 @@ impl VmapExtractor<'_> {
                     e
                 );
             })?;
-            let vmap = froot.convert_to_vmap(self.args.vmap_extract_and_generate.precise_vector_data);
+            let vmap = froot.convert_to_vmap(self.precise_vector_data);
             vmap.write(&mut output)?;
         }
-        self.wmo_doodads.insert(plain_name, froot.doodad_data);
+        wmo_doodads.insert(plain_name, froot.doodad_data);
         Ok(())
     }
 
-    fn extract_single_model(&mut self, storage: &CascStorageHandle, file_name: &str) -> AzResult<()> {
+    fn extract_single_model(&self, storage: &CascStorageHandle, file_name: &str) -> AzResult<()> {
         if file_name.len() < 4 {
             return Err(az_error!("File name {file_name} has unexpected length"));
         }
@@ -220,7 +242,7 @@ impl VmapExtractor<'_> {
             file_name_path.to_owned()
         };
         let plain_name = get_fixed_plain_name(&file_name.to_string_lossy());
-        let sz_local_file = self.args.output_vmap_sz_work_dir_wmo().join(plain_name);
+        let sz_local_file = self.temp_vmap_dir.join(plain_name);
         if sz_local_file.exists() {
             return Ok(());
         }
@@ -248,11 +270,14 @@ impl VmapExtractor<'_> {
     /// such as invariants within the WoW client files that arent met are *PANICKED*.
     ///
     /// for the get part of getWDT itself, it should be done by just a normal `wdts.get_mut`
+    #[instrument(skip_all, fields(map_id=map.id, map_name=map.directory.def_str()))]
     fn get_or_extract_wdt<'a>(
-        &mut self,
+        &self,
         map: &Map,
         storage: &CascStorageHandle,
         wdts: &'a mut HashMap<u32, WdtWithAdts>,
+        wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
+        model_spawns_data: &mut Vec<VmapModelSpawn>,
     ) -> Option<&'a mut WdtWithAdts> {
         if wdts.contains_key(&map.id) {
             return wdts.get_mut(&map.id);
@@ -267,56 +292,88 @@ impl VmapExtractor<'_> {
             Ok(wdt) => wdt,
         };
         // do some extraction also
-        let mut wmo_names = HashMap::with_capacity(wdt.wmo_paths.len());
-        for (wmid, path) in &wdt.wmo_paths {
-            wmo_names.entry(*wmid).or_insert(get_fixed_plain_name(path));
-            if self.extract_single_wmo(storage, path).is_err() {
+        let mut wmo_names = Vec::with_capacity(wdt.wmo_paths.len());
+        for path in &wdt.wmo_paths {
+            wmo_names.push(get_fixed_plain_name(path));
+            if let Err(e) = self.extract_single_wmo(storage, path, wmo_doodads) {
+                warn!("get_or_extract_wdt extract_single_wmo err for path {path} due to err: {e}");
                 continue;
-            }
+            };
         }
         // global wmo instance data
-        if let Some(modf) = &wdt.modf {
+        for modf in wdt.modf.iter() {
             for map_obj_def in &modf.map_object_defs {
                 if map_obj_def.flags & 0x8 == 0 {
                     let name = wmo_names
-                        .get(&(map_obj_def.id as usize))
+                        .get(map_obj_def.id as usize)
                         .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", map_obj_def.id, wmo_names));
-                    _ = self.mapobject_extract(map_obj_def, name, true, map.id, map.id).inspect_err(|e| {
-                        warn!("get_or_extract_wdt mapobject_extract err for name {name} due to err: {e}");
-                    });
-                    _ = self.doodad_extractset(name, map_obj_def, true, map.id, map.id).inspect_err(|e| {
-                        warn!("get_or_extract_wdt doodad_extractset err for name {name} due to err: {e}");
-                    });
+                    _ = self
+                        .mapobject_extract(map_obj_def, name, true, map.id, map.id, model_spawns_data, &mut None)
+                        .inspect_err(|e| {
+                            warn!("get_or_extract_wdt mapobject_extract err for name {name} due to err: {e}");
+                        });
+                    _ = self
+                        .doodad_extractset(name, map_obj_def, true, map.id, map.id, wmo_doodads, model_spawns_data, &mut None)
+                        .inspect_err(|e| {
+                            warn!("get_or_extract_wdt doodad_extractset err for name {name} due to err: {e}");
+                        });
                 } else {
                     let fid = map_obj_def.id;
                     let filename = format!("FILE{fid:08X}.xxx");
-                    _ = self.extract_single_wmo(storage, &filename).inspect_err(|e| {
+                    _ = self.extract_single_wmo(storage, &filename, wmo_doodads).inspect_err(|e| {
                         warn!("get_or_extract_wdt extract_single_wmo err for fid {filename} due to err: {e}");
                     });
                     _ = self
-                        .mapobject_extract(map_obj_def, &filename, true, map.id, map.id)
+                        .mapobject_extract(map_obj_def, &filename, true, map.id, map.id, model_spawns_data, &mut None)
                         .inspect_err(|e| {
                             warn!("get_or_extract_wdt doodad_extractset err for fid {filename} due to err: {e}");
                         });
                     _ = self
-                        .doodad_extractset(&filename, map_obj_def, true, map.id, map.id)
+                        .doodad_extractset(
+                            &filename,
+                            map_obj_def,
+                            true,
+                            map.id,
+                            map.id,
+                            wmo_doodads,
+                            model_spawns_data,
+                            &mut None,
+                        )
                         .inspect_err(|e| {
                             warn!("get_or_extract_wdt doodad_extractset err for fid {filename} due to err: {e}");
                         });
                 }
             }
-        };
+        }
 
-        let mut adt_cache = Vec::new();
-        adt_cache.resize_with(WDT_MAP_SIZE, || {
-            let mut v = Vec::new();
-            v.resize_with(WDT_MAP_SIZE, || None);
-            v
-        });
-        Some(wdts.entry(map.id).or_insert(WdtWithAdts { _wdt: wdt, adt_cache }))
+        let map_id = map.id;
+        // cache ADTs for maps that have parent maps
+        let adt_cache = if map.parent_map_id >= 0 {
+            let mut c = Vec::new();
+            c.resize_with(WDT_MAP_SIZE, || {
+                let mut v = Vec::new();
+                v.resize_with(WDT_MAP_SIZE, || None);
+                v
+            });
+            Some(c)
+        } else {
+            None
+        };
+        Some(wdts.entry(map.id).or_insert(WdtWithAdts {
+            map_name,
+            map_id,
+            _wdt: wdt,
+            adt_cache,
+        }))
     }
 
-    fn parse_map_files(&mut self, locale: Locale, storage: &CascStorageHandle) -> AzResult<()> {
+    pub fn parse_map_files(
+        &self,
+        locale: Locale,
+        storage: &CascStorageHandle,
+        wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
+        model_spawns_data: &mut Vec<VmapModelSpawn>,
+    ) -> AzResult<()> {
         //xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
         //map.dbc
         info!("Read Map.dbc file...");
@@ -326,27 +383,61 @@ impl VmapExtractor<'_> {
         info!("Done! ({} maps loaded)", maps.len());
 
         let mut wdts = HashMap::new();
-        for (_map_id, map) in maps.iter() {
-            // Populate `wdts` with map_id and parent_map_id's WDT files first
-            let map_id = if self.get_or_extract_wdt(map, storage, &mut wdts).is_some() {
-                map.id
+        for map in maps.values() {
+            // Populate `wdts` with current map's and parent map's WDT files first
+            let map_id = if let Some(wdt) = self.get_or_extract_wdt(map, storage, &mut wdts, wmo_doodads, model_spawns_data) {
+                wdt.map_id
             } else {
                 continue;
             };
-            let parent_map_id = maps
-                .get(&(map.parent_map_id as u32))
-                .and_then(|m| self.get_or_extract_wdt(m, storage, &mut wdts).map(|_w| map.parent_map_id as u32));
+            let parent_id = if map.parent_map_id >= 0 {
+                let parent_id = map.parent_map_id.try_into().unwrap();
+                maps.get(&parent_id).and_then(|m| {
+                    self.get_or_extract_wdt(m, storage, &mut wdts, wmo_doodads, model_spawns_data)
+                        .map(|w| w.map_id)
+                })
+            } else {
+                None
+            };
 
             let map_name = map.directory.def_str();
             // After populating, then process ADTs
             info!("Processing Map file {map_id} - {map_name}");
             for x in 0..WDT_MAP_SIZE {
                 for y in 0..WDT_MAP_SIZE {
-                    if let Some(r) = self.store_adt_in_wdt(storage, &map_name, map_id, map_id, x, y, &mut wdts) {
+                    // tmp_store is purely for the case where there is no caching.
+                    // It is done to solve the issue where `store_adt_in_wdt`
+                    // returns a reference as the case no caching, the resultant
+                    // ADT needs to be owned by something.
+                    //
+                    // Can think of tmp_store as `WDT->FreeADT` in this case as
+                    // its dropped after the loop.
+                    let mut tmp_store = None;
+                    if let Some(r) = self.store_adt_in_wdt(
+                        storage,
+                        map_id,
+                        map_id,
+                        x,
+                        y,
+                        &mut wdts,
+                        &mut tmp_store,
+                        wmo_doodads,
+                        model_spawns_data,
+                    ) {
                         r
-                    } else if let Some(r) = parent_map_id
-                        .and_then(|original_map_id| self.store_adt_in_wdt(storage, &map_name, map_id, original_map_id, x, y, &mut wdts))
-                    {
+                    } else if let Some(r) = parent_id.and_then(|original_map_id| {
+                        self.store_adt_in_wdt(
+                            storage,
+                            map_id,
+                            original_map_id,
+                            x,
+                            y,
+                            &mut wdts,
+                            &mut tmp_store,
+                            wmo_doodads,
+                            model_spawns_data,
+                        )
+                    }) {
                         r
                     } else {
                         continue;
@@ -357,18 +448,17 @@ impl VmapExtractor<'_> {
         Ok(())
     }
 
-    fn generate_unique_object_id(&mut self, client_id: u32, client_doodad_id: u16) -> u32 {
-        let next_id = (self.unique_object_id.len() + 1) as u32;
-        *self.unique_object_id.entry((client_id, client_doodad_id)).or_insert(next_id)
-    }
-
-    fn mapobject_extract(
-        &mut self,
+    #[expect(clippy::too_many_arguments)]
+    #[instrument(skip_all, fields(map_id=map_id, original_map_id=original_map_id))]
+    pub fn mapobject_extract(
+        &self,
         map_obj_def: &AdtMapObjectDefs,
         wmo_inst_name: &str,
         is_global_wmo: bool,
         map_id: u32,
         original_map_id: u32,
+        model_spawns_data: &mut Vec<VmapModelSpawn>,
+        dir_file_cache: &mut Option<Vec<VmapModelSpawn>>,
     ) -> AzResult<()> {
         // destructible wmo, do not dump. we can handle the vmap for these
         // in dynamic tree (gameobject vmaps)
@@ -377,7 +467,7 @@ impl VmapExtractor<'_> {
         }
 
         //-----------add_in _dir_file----------------
-        let tempname = self.args.output_vmap_sz_work_dir_wmo().join(wmo_inst_name);
+        let tempname = self.temp_vmap_dir.join(wmo_inst_name);
         let mut input = fs::File::open(tempname)?;
         let (n_vertices, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
         if n_vertices == 0 {
@@ -396,14 +486,14 @@ impl VmapExtractor<'_> {
         if map_obj_def.flags & 0x4 > 0 {
             scale = f32::from(map_obj_def.scale) / 1024.0;
         }
-        let unique_id = self.generate_unique_object_id(map_obj_def.unique_id, 0);
-        let mut flags = ModelFlags::ModHasBound.into();
+        let unique_id = generate_unique_object_id(map_obj_def.unique_id, 0);
+        let mut flags = None.into();
         if map_id != original_map_id {
             flags |= ModelFlags::ModParentSpawn;
         }
 
         //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, Bound_lo, Bound_hi, name
-        let m = VmapModelSpawn::new(
+        let mut m = VmapModelSpawn::new(
             map_id,
             flags,
             map_obj_def.name_set,
@@ -414,27 +504,34 @@ impl VmapExtractor<'_> {
             Some(bounds),
             wmo_inst_name.to_string(),
         );
-        self.model_spawns_data.entry(m.map_num).or_default().entry(m.id).or_insert(m);
+        model_spawns_data.push(m.clone());
+        if let Some(dfc) = dir_file_cache {
+            m.flags.retain(|fl| fl != ModelFlags::ModParentSpawn);
+            dfc.push(m);
+        }
         Ok(())
     }
 
-    fn doodad_extractset(
-        &mut self,
+    #[expect(clippy::too_many_arguments)]
+    #[instrument(skip_all, fields(map_id=map_id, original_map_id=original_map_id))]
+    pub fn doodad_extractset(
+        &self,
         wmo_inst_name: &str,
         wmo: &AdtMapObjectDefs,
         is_global_wmo: bool,
         map_id: u32,
         original_map_id: u32,
+        wmo_doodads: &BTreeMap<String, WmoDoodadData>,
+        model_spawns_data: &mut Vec<VmapModelSpawn>,
+        dir_file_cache: &mut Option<Vec<VmapModelSpawn>>,
     ) -> AzResult<()> {
-        // Hacky fix for now, we clone this data just for use here.
-        //
-        // In theory we should be able to get away without cloning but Rust's
-        // safety guide-rails makes it hard for us to do so (Without unsafe)
-        let doodad_data = self
-            .wmo_doodads
-            .get(wmo_inst_name)
-            .unwrap_or_else(|| panic!("name {} should exist in {:?}", wmo_inst_name, self.wmo_doodads))
-            .clone();
+        let doodad_data = match wmo_doodads.get(wmo_inst_name) {
+            None => {
+                let keys = wmo_doodads.keys().collect::<Vec<_>>();
+                return Err(az_error!("name {} should exist in collected wmo doodads {:?}", wmo_inst_name, keys));
+            },
+            Some(d) => d,
+        };
         if usize::from(wmo.doodad_set) >= doodad_data.sets.len() {
             return Ok(());
         }
@@ -453,35 +550,28 @@ impl VmapExtractor<'_> {
 
         let mut doodad_id = 0u16;
         let doodad_set_data = &doodad_data.sets[usize::from(wmo.doodad_set)];
-        for doodad_index in doodad_data.references.iter() {
-            if u32::from(*doodad_index) < doodad_set_data.start_index
-                || u32::from(*doodad_index) >= doodad_set_data.start_index + doodad_set_data.count
-            {
+
+        for (doodad_index, path) in doodad_data.references.iter() {
+            if *doodad_index < doodad_set_data.start_index || *doodad_index >= doodad_set_data.start_index + doodad_set_data.count {
                 continue;
             }
 
-            let doodad = &doodad_data.spawns[usize::from(*doodad_index)];
+            let doodad = &doodad_data.spawns[*doodad_index as usize];
 
-            let model_inst_name = doodad_data
-                .paths
-                .get(&(doodad.name_index as usize))
-                .map(|p| {
-                    let plain_name = get_fixed_plain_name(p);
-                    let file_name_path: &Path = plain_name.as_ref();
-                    let plain_name = if let Some(ext) = file_name_path.extension() {
-                        let mut f_n = file_name_path.to_owned();
-                        if ext == "mdx" || ext == "MDX" || ext == "mdl" || ext == "MDL" {
-                            f_n.set_extension("m2");
-                        }
-                        f_n
-                    } else {
-                        file_name_path.to_owned()
-                    };
-                    plain_name.to_string_lossy().to_string()
-                })
-                .unwrap_or_else(|| panic!("doodad.name_index {} should exist in {:?}", doodad.name_index, doodad_data.paths));
-            let tempname = self.args.output_vmap_sz_work_dir_wmo().join(&model_inst_name);
-            let mut input = fs::File::open(tempname)?;
+            let plain_name = get_fixed_plain_name(path);
+            let file_name_path: &Path = plain_name.as_ref();
+            let plain_name = if let Some(ext) = file_name_path.extension() {
+                let mut f_n = file_name_path.to_owned();
+                if ext == "mdx" || ext == "MDX" || ext == "mdl" || ext == "MDL" {
+                    f_n.set_extension("m2");
+                }
+                f_n
+            } else {
+                file_name_path.to_owned()
+            };
+            let model_inst_name = plain_name.to_string_lossy().to_string();
+            let tempname = self.temp_vmap_dir.join(&model_inst_name);
+            let mut input = fs::File::open(&tempname).map_err(|e| az_error!("READ_ERR: path={}, err={e}", tempname.display()))?;
             let (n_vertices, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
             if n_vertices == 0 {
                 continue;
@@ -505,14 +595,14 @@ impl VmapExtractor<'_> {
             let rotation = Vector3::new(x.to_degrees(), y.to_degrees(), z.to_degrees());
 
             let name_set = 0; // not used for models
-            let unique_id = self.generate_unique_object_id(wmo.unique_id, doodad_id);
+            let unique_id = generate_unique_object_id(wmo.unique_id, doodad_id);
             let mut tcflags = ModelFlags::ModM2.into();
             if map_id != original_map_id {
                 tcflags |= ModelFlags::ModParentSpawn;
             }
 
             //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, name
-            let m = VmapModelSpawn::new(
+            let mut m = VmapModelSpawn::new(
                 map_id,
                 tcflags,
                 name_set, // not used for models
@@ -523,13 +613,26 @@ impl VmapExtractor<'_> {
                 None,
                 model_inst_name,
             );
-            self.model_spawns_data.entry(m.map_num).or_default().entry(m.id).or_insert(m);
+            model_spawns_data.push(m.clone());
+            if let Some(dfc) = dir_file_cache {
+                m.flags.retain(|fl| fl != ModelFlags::ModParentSpawn);
+                dfc.push(m);
+            }
         }
         Ok(())
     }
 
-    fn doodad_extract(&mut self, doodad_def: &AdtDoodadDef, model_inst_name: &str, map_id: u32, original_map_id: u32) -> AzResult<()> {
-        let tempname = self.args.output_vmap_sz_work_dir_wmo().join(model_inst_name);
+    #[instrument(skip_all, fields(map_id=map_id, original_map_id=original_map_id))]
+    pub fn doodad_extract(
+        &self,
+        doodad_def: &AdtDoodadDef,
+        model_inst_name: &str,
+        map_id: u32,
+        original_map_id: u32,
+        model_spawns_data: &mut Vec<VmapModelSpawn>,
+        dir_file_cache: &mut Option<Vec<VmapModelSpawn>>,
+    ) -> AzResult<()> {
+        let tempname = self.temp_vmap_dir.join(model_inst_name);
         let mut input = fs::File::open(tempname)?;
         let (n_vertices, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
         if n_vertices == 0 {
@@ -545,131 +648,217 @@ impl VmapExtractor<'_> {
             flags |= ModelFlags::ModParentSpawn;
         }
         //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, name
-        let m = VmapModelSpawn::new(
+        let mut m = VmapModelSpawn::new(
             map_id,
             flags,
             0, // not used for models
-            self.generate_unique_object_id(doodad_def.unique_id, 0),
+            generate_unique_object_id(doodad_def.unique_id, 0),
             position,
             doodad_def.rotation,
             sc,
             None,
             model_inst_name.to_string(),
         );
-        self.model_spawns_data.entry(m.map_num).or_default().entry(m.id).or_insert(m);
+        model_spawns_data.push(m.clone());
+        if let Some(dfc) = dir_file_cache {
+            m.flags.retain(|fl| fl != ModelFlags::ModParentSpawn);
+            dfc.push(m);
+        }
         Ok(())
     }
 
+    /// equivalent to WDT->GetMap(x, y) and ADT->init(map_id, original_map_id)
+    /// in a single step
     #[allow(clippy::too_many_arguments)]
+    #[instrument(skip_all, fields(map_id=map_id, original_map_id=original_map_id, x=x, y=y))]
     fn store_adt_in_wdt<'a>(
-        &mut self,
+        &self,
         storage: &CascStorageHandle,
-        map_name: &str,
         map_id: u32,
         original_map_id: u32,
         x: usize,
         y: usize,
         wdts: &'a mut HashMap<u32, WdtWithAdts>,
-    ) -> Option<&'a mut ADTFile> {
+        tmp_store: &'a mut Option<AdtWithDirFileCache>,
+        wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
+        model_spawns_data: &mut Vec<VmapModelSpawn>,
+    ) -> Option<&'a mut AdtWithDirFileCache> {
         let wdt = match wdts.get_mut(&original_map_id) {
             None => return None,
             Some(wdt) => wdt,
         };
-        let mut is_first_set = false;
-        let storage_path = format!("World/Maps/{map_name}/{map_name}_{x}_{y}_obj0.adt");
-        if wdt.adt_cache[x][y].is_none() {
-            wdt.adt_cache[x][y] = ADTFile::build(storage, &storage_path)
-                // .inspect_err(|e| {
-                //     warn!("Unable to get ADT file {storage_path} with warn: {e}, moving on");
-                // })
-                .ok();
-            // The first time see this ADT. Do some extraction
-            is_first_set = true;
+        let should_cache_adts = wdt.adt_cache.is_some();
+        // initFromCache routine from TC / AC
+        let mut adt_has_dir_file_cache = false;
+        if let Some(dir_file_cache) = wdt
+            .adt_cache
+            .as_ref()
+            .and_then(|cache| cache[x][y].as_ref())
+            .and_then(|c| c.dir_file_cache.as_ref())
+        {
+            adt_has_dir_file_cache = true;
+            for cached in dir_file_cache {
+                let mut spawn = cached.clone();
+                spawn.map_num = map_id;
+                if map_id != original_map_id {
+                    spawn.flags |= ModelFlags::ModParentSpawn;
+                }
+                model_spawns_data.push(spawn);
+            }
+        }
+        if adt_has_dir_file_cache {
+            return wdt.adt_cache.as_mut().and_then(|cache| cache[x][y].as_mut());
         }
 
-        if is_first_set {
-            if let Some(adt) = &wdt.adt_cache[x][y] {
-                // Do some extraction here as well.
-                let mut model_instance_names = HashMap::with_capacity(adt.model_paths.len());
-                let mut wmo_instance_names = HashMap::with_capacity(adt.wmo_paths.len());
-                for (off, path) in adt.model_paths.iter() {
-                    model_instance_names.entry(*off).or_insert(get_fixed_plain_name(path));
-                    _ = self.extract_single_model(storage, path).inspect_err(|e| {
-                        warn!("store_adt_in_wdt extract_single_model err for path {path} due to err: {e}");
-                    });
-                }
-                for (off, path) in adt.wmo_paths.iter() {
-                    wmo_instance_names.entry(*off).or_insert(get_fixed_plain_name(path));
-                    _ = self.extract_single_wmo(storage, path).inspect_err(|e| {
-                        warn!("store_adt_in_wdt extract_single_wmo err for path {path} due to err: {e}");
-                    });
-                }
+        let mut dir_file_cache = if should_cache_adts { Some(vec![]) } else { None };
 
-                if let Some(mddf) = &adt.mddf {
-                    for doodad_def in mddf.doodad_defs.iter() {
-                        if doodad_def.flags & 0x40 == 0 {
-                            let name = model_instance_names
-                                .get(&(doodad_def.id as usize))
-                                .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", doodad_def.id, model_instance_names,));
-                            _ = self.doodad_extract(doodad_def, name, map_id, original_map_id).inspect_err(|e| {
-                                warn!("store_adt_in_wdt doodad_extract err for name {name} due to err: {e}");
-                            });
-                        } else {
-                            let fid = doodad_def.id;
-                            let filename = format!("FILE{fid:08X}.xxx");
-                            _ = self.extract_single_model(storage, &filename).inspect_err(|e| {
-                                warn!("store_adt_in_wdt extract_single_model err for fid {filename} due to err: {e}");
-                            });
-                            _ = self
-                                .doodad_extract(doodad_def, &filename, map_id, original_map_id)
-                                .inspect_err(|e| {
-                                    warn!("store_adt_in_wdt doodad_extract err for fid {filename} due to err: {e}");
-                                });
-                        }
-                    }
+        let map_name = &wdt.map_name;
+        let storage_path = format!("World/Maps/{map_name}/{map_name}_{x}_{y}_obj0.adt");
+        let adt = match ADTFile::build(storage, &storage_path) {
+            Err(_e) => {
+                // warn!("Unable to get ADT file {storage_path} with warning: {e}, moving on");
+                return None;
+            },
+            Ok(f) => f,
+        };
+        // Do some extraction here as well.
+        let mut model_instance_names = HashMap::with_capacity(adt.model_paths.len());
+        let mut wmo_instance_names = HashMap::with_capacity(adt.wmo_paths.len());
+        for (off, path) in adt.model_paths.iter() {
+            model_instance_names.entry(*off).or_insert(get_fixed_plain_name(path));
+            _ = self.extract_single_model(storage, path).inspect_err(|e| {
+                warn!("store_adt_in_wdt extract_single_model err for path {path} due to err: {e}");
+            });
+        }
+        for (off, path) in adt.wmo_paths.iter() {
+            wmo_instance_names.entry(*off).or_insert(get_fixed_plain_name(path));
+            _ = self.extract_single_wmo(storage, path, wmo_doodads).inspect_err(|e| {
+                warn!("store_adt_in_wdt extract_single_wmo err for path {path} due to err: {e}");
+            });
+        }
+
+        for mddf in adt.mddf.iter() {
+            for doodad_def in mddf.doodad_defs.iter() {
+                if doodad_def.flags & 0x40 == 0 {
+                    let name = model_instance_names
+                        .get(&(doodad_def.id as usize))
+                        .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", doodad_def.id, model_instance_names,));
+                    _ = self
+                        .doodad_extract(doodad_def, name, map_id, original_map_id, model_spawns_data, &mut dir_file_cache)
+                        .inspect_err(|e| {
+                            warn!("store_adt_in_wdt doodad_extract err for name {name} due to err: {e}");
+                        });
+                } else {
+                    let fid = doodad_def.id;
+                    let filename = format!("FILE{fid:08X}.xxx");
+                    _ = self.extract_single_model(storage, &filename).inspect_err(|e| {
+                        warn!("store_adt_in_wdt extract_single_model err for fid {filename} due to err: {e}");
+                    });
+                    _ = self
+                        .doodad_extract(
+                            doodad_def,
+                            &filename,
+                            map_id,
+                            original_map_id,
+                            model_spawns_data,
+                            &mut dir_file_cache,
+                        )
+                        .inspect_err(|e| {
+                            warn!("store_adt_in_wdt doodad_extract err for fid {filename} due to err: {e}");
+                        });
                 }
-                if let Some(modf) = &adt.modf {
-                    for map_obj_def in modf.map_object_defs.iter() {
-                        if map_obj_def.flags & 0x8 == 0 {
-                            let wmo_inst_name = wmo_instance_names
-                                .get(&(map_obj_def.id as usize))
-                                .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", map_obj_def.id, model_instance_names));
-                            _ = self
-                                .mapobject_extract(map_obj_def, wmo_inst_name, false, map_id, original_map_id)
-                                .inspect_err(|e| {
-                                    warn!("store_adt_in_wdt mapobject_extract err for wmo_inst_name {wmo_inst_name} due to err: {e}");
-                                });
-                            _ = self
-                                .doodad_extractset(wmo_inst_name, map_obj_def, false, map_id, original_map_id)
-                                .inspect_err(|e| {
-                                    warn!("store_adt_in_wdt doodad_extractset err for wmo_inst_name {wmo_inst_name} due to err: {e}");
-                                });
-                        } else {
-                            let fid = map_obj_def.id;
-                            let filename = format!("FILE{fid:08X}.xxx");
-                            _ = self.extract_single_wmo(storage, &filename).inspect_err(|e| {
-                                warn!("store_adt_in_wdt extract_single_wmo err for fid {filename} due to err: {e}");
-                            });
-                            _ = self
-                                .mapobject_extract(map_obj_def, &filename, false, map_id, original_map_id)
-                                .inspect_err(|e| {
-                                    warn!("store_adt_in_wdt mapobject_extract err for fid {filename} due to err: {e}");
-                                });
-                            _ = self
-                                .doodad_extractset(&filename, map_obj_def, false, map_id, original_map_id)
-                                .inspect_err(|e| {
-                                    warn!("store_adt_in_wdt doodad_extractset err for fid {filename} due to err: {e}");
-                                });
-                        }
-                    }
+            }
+        }
+        for modf in adt.modf.iter() {
+            for map_obj_def in modf.map_object_defs.iter() {
+                if map_obj_def.flags & 0x8 == 0 {
+                    let wmo_inst_name = wmo_instance_names
+                        .get(&(map_obj_def.id as usize))
+                        .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", map_obj_def.id, model_instance_names));
+                    _ = self
+                        .mapobject_extract(
+                            map_obj_def,
+                            wmo_inst_name,
+                            false,
+                            map_id,
+                            original_map_id,
+                            model_spawns_data,
+                            &mut dir_file_cache,
+                        )
+                        .inspect_err(|e| {
+                            warn!("store_adt_in_wdt mapobject_extract err for wmo_inst_name {wmo_inst_name} due to err: {e}");
+                        });
+                    _ = self
+                        .doodad_extractset(
+                            wmo_inst_name,
+                            map_obj_def,
+                            false,
+                            map_id,
+                            original_map_id,
+                            wmo_doodads,
+                            model_spawns_data,
+                            &mut dir_file_cache,
+                        )
+                        .inspect_err(|e| {
+                            warn!("store_adt_in_wdt doodad_extractset err for wmo_inst_name {wmo_inst_name} due to err: {e}");
+                        });
+                } else {
+                    let fid = map_obj_def.id;
+                    let filename = format!("FILE{fid:08X}.xxx");
+                    _ = self.extract_single_wmo(storage, &filename, wmo_doodads).inspect_err(|e| {
+                        warn!("store_adt_in_wdt extract_single_wmo err for fid {filename} due to err: {e}");
+                    });
+                    _ = self
+                        .mapobject_extract(
+                            map_obj_def,
+                            &filename,
+                            false,
+                            map_id,
+                            original_map_id,
+                            model_spawns_data,
+                            &mut dir_file_cache,
+                        )
+                        .inspect_err(|e| {
+                            warn!("store_adt_in_wdt mapobject_extract err for fid {filename} due to err: {e}");
+                        });
+                    _ = self
+                        .doodad_extractset(
+                            &filename,
+                            map_obj_def,
+                            false,
+                            map_id,
+                            original_map_id,
+                            wmo_doodads,
+                            model_spawns_data,
+                            &mut dir_file_cache,
+                        )
+                        .inspect_err(|e| {
+                            warn!("store_adt_in_wdt doodad_extractset err for fid {filename} due to err: {e}");
+                        });
                 }
             }
         }
 
-        wdt.adt_cache[x][y].as_mut()
+        let res = Some(AdtWithDirFileCache { _f: adt, dir_file_cache });
+        if let Some(cache) = &mut wdt.adt_cache {
+            cache[x][y] = res;
+            cache[x][y].as_mut()
+        } else {
+            *tmp_store = res;
+            tmp_store.as_mut()
+        }
     }
 }
 
 fn fix_coords(v: &Vector3<f32>) -> Vector3<f32> {
     Vector3::new(v.z, v.x, v.y)
+}
+
+static UNIQUE_OBJECT_BANK: Mutex<BTreeMap<(u32, u16), u32>> = Mutex::new(BTreeMap::new());
+
+fn generate_unique_object_id(client_id: u32, client_doodad_id: u16) -> u32 {
+    let mut bank = UNIQUE_OBJECT_BANK.lock().unwrap();
+
+    let next_id = (bank.len() + 1) as u32;
+    *bank.entry((client_id, client_doodad_id)).or_insert(next_id)
 }

@@ -33,9 +33,22 @@ use crate::{
     AzResult,
 };
 
+pub fn read_map_spawns(map_spawns: Vec<VmapModelSpawn>) -> BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>> {
+    // retrieve the unique entries
+    let mut map_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>> = BTreeMap::new();
+    for spawn in map_spawns {
+        let unique_entries = map_data.entry(spawn.map_num).or_default();
+        if unique_entries.is_empty() {
+            info!("Spawning map {}", spawn.map_num);
+        }
+        unique_entries.insert(spawn.id, spawn);
+    }
+    map_data
+}
+
 pub fn tile_assembler_convert_world2(
     args: &ExtractorConfig,
-    map_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>>,
+    map_spawns: Vec<VmapModelSpawn>,
     temp_gameobject_models: Vec<TempGameObjectModel>,
 ) -> AzResult<()> {
     let src = args.output_vmap_sz_work_dir_wmo();
@@ -51,6 +64,7 @@ pub fn tile_assembler_convert_world2(
 
     let (sender, receiver) = channel();
 
+    let map_data = read_map_spawns(map_spawns);
     // export Map data
     map_data.into_par_iter().try_for_each_with(sender, |s, (map_id, mut data)| {
         // tile entries => packedTileId to set of tilespawns
@@ -289,7 +303,6 @@ fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpaw
     max += spawn.i_pos;
 
     spawn.bound = Some([min, max]);
-    spawn.flags |= ModelFlags::ModHasBound;
     Ok(())
 }
 

@@ -73,8 +73,13 @@ impl BHShape for VmapModelSpawn {
 flags! {
     pub enum ModelFlags: u32 {
         ModM2           = 0b001,
-        ModHasBound     = 0b010,
         ModParentSpawn  = 0b100,
+    }
+}
+
+impl ModelFlags {
+    pub fn flags_from_u32(value: u32) -> FlagSet<Self> {
+        FlagSet::new_truncated(value)
     }
 }
 

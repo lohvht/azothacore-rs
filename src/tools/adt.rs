@@ -421,9 +421,11 @@ impl From<FileChunk> for AdtChunkModf {
         if value.fcc != *b"MODF" {
             panic!("value.fcc must be MODF, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
         }
+        let data_len: usize = value.data.len();
         let mut cursor = io::Cursor::new(value.data);
         let mut map_object_defs = Vec::new();
-        while !cursor.is_empty() {
+
+        while cursor.position() < data_len as u64 {
             let id = read_le_unwrap!(cursor, u32);
             let unique_id = read_le_unwrap!(cursor, u32);
             let position = Vector3::new(
@@ -518,8 +520,8 @@ impl From<FileChunk> for AdtChunkMddf {
 }
 
 pub struct ADTFile {
-    pub mddf:        Option<AdtChunkMddf>,
-    pub modf:        Option<AdtChunkModf>,
+    pub mddf:        Vec<AdtChunkMddf>,
+    pub modf:        Vec<AdtChunkModf>,
     pub model_paths: HashMap<usize, String>,
     pub wmo_paths:   HashMap<usize, String>,
 }
@@ -530,8 +532,8 @@ impl ADTFile {
         // .inspect_err(|e| {
         //     error!("Error opening adt file at {}, err was {e}", storage_path.as_ref().display());
         // })?;
-        let mut mddf = None;
-        let mut modf = None;
+        let mut mddf = vec![];
+        let mut modf = vec![];
         let mut model_paths = HashMap::new();
         let mut wmo_paths = HashMap::new();
 
@@ -571,10 +573,10 @@ impl ADTFile {
                 },
                 //======================
                 b"MDDF" => {
-                    mddf = Some(AdtChunkMddf::from(chunk));
+                    mddf.push(AdtChunkMddf::from(chunk));
                 },
                 b"MODF" => {
-                    modf = Some(AdtChunkModf::from(chunk));
+                    modf.push(AdtChunkModf::from(chunk));
                 },
                 _ => {},
             }

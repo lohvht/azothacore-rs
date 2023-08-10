@@ -1,5 +1,6 @@
 use std::{io, path::Path};
 
+use bvh::aabb::AABB;
 use nalgebra::Vector3;
 use tracing::error;
 
@@ -13,53 +14,52 @@ use crate::{
 };
 
 #[allow(dead_code)]
+#[derive(Debug)]
 pub struct Model {
     /// HEADER VALUES
     id: [u8; 4],
     version: [u8; 4],
-    names: M2Array,
-    type_: u32,
-    global_sequences: M2Array,
-    animations: M2Array,
-    animation_lookup: M2Array,
-    bones: M2Array,
-    key_bone_lookup: M2Array,
-    vertices: M2Array,
-    n_views: u32,
-    colors: M2Array,
-    textures: M2Array,
-    transparency: M2Array,
-    textureanimations: M2Array,
-    tex_replace: M2Array,
-    render_flags: M2Array,
-    bone_lookup_table: M2Array,
-    tex_lookup: M2Array,
-    tex_units: M2Array,
-    trans_lookup: M2Array,
-    tex_anim_lookup: M2Array,
-    bounding_box_min: Vector3<f32>,
-    bounding_box_max: Vector3<f32>,
-    bounding_sphere_radius: f32,
-    collision_box_min: Vector3<f32>,
-    collision_box_max: Vector3<f32>,
-    collision_sphere_radius: f32,
-    bounding_triangles: M2Array,
-    bounding_vertices: M2Array,
-    bounding_normals: M2Array,
-    attachments: M2Array,
-    attach_lookup: M2Array,
-    attachments_2: M2Array,
-    lights: M2Array,
-    cameras: M2Array,
-    camera_lookup: M2Array,
-    ribbon_emitters: M2Array,
-    particle_emitters: M2Array,
+    names: M2Array,               // uint32 nameLength; uint32 nameOfs;
+    type_: u32,                   // type
+    global_sequences: M2Array,    // nGlobalSequences, ofsGlobalSequences
+    animations: M2Array,          // nAnimations, ofsAnimations
+    animation_lookup: M2Array,    // nAnimationLookup, ofsAnimationLookup
+    bones: M2Array,               // nBones, ofsBones
+    key_bone_lookup: M2Array,     // nKeyBoneLookup, ofsKeyBoneLookup
+    vertices: M2Array,            // nVertices, ofsVertices
+    n_views: u32,                 // nViews
+    colors: M2Array,              // nColors, ofsColors
+    textures: M2Array,            // nTextures, ofsTextures
+    transparency: M2Array,        // nTransparency, ofsTransparency
+    textureanimations: M2Array,   // nTextureanimations, ofsTextureanimations
+    tex_replace: M2Array,         // nTexReplace, ofsTexReplace
+    render_flags: M2Array,        // nRenderFlags, ofsRenderFlags
+    bone_lookup_table: M2Array,   // nBoneLookupTable, ofsBoneLookupTable
+    tex_lookup: M2Array,          // nTexLookup, ofsTexLookup
+    tex_units: M2Array,           // nTexUnits, ofsTexUnits
+    trans_lookup: M2Array,        // nTransLookup, ofsTransLookup
+    tex_anim_lookup: M2Array,     // nTexAnimLookup, ofsTexAnimLookup
+    bounding_box: AABB,           // boundingBox
+    bounding_sphere_radius: f32,  // boundingSphereRadius
+    collision_box: AABB,          // collisionBox
+    collision_sphere_radius: f32, // collisionSphereRadius
+    bounding_triangles: M2Array,  // nBoundingTriangles, ofsBoundingTriangles
+    bounding_vertices: M2Array,   // nBoundingVertices, ofsBoundingVertices
+    bounding_normals: M2Array,    // nBoundingNormals, ofsBoundingNormals
+    attachments: M2Array,         // nAttachments, ofsAttachments
+    attach_lookup: M2Array,       // nAttachLookup, ofsAttachLookup
+    attachments_2: M2Array,       // nAttachments_2, ofsAttachments_2
+    lights: M2Array,              // nLights, ofsLights
+    cameras: M2Array,             // nCameras, ofsCameras
+    camera_lookup: M2Array,       // nCameraLookup, ofsCameraLookup
+    ribbon_emitters: M2Array,     // nRibbonEmitters, ofsRibbonEmitters
+    particle_emitters: M2Array,   // nParticleEmitters, ofsParticleEmitters
 
     /// Values
     val_vertices: Vec<Vector3<f32>>,
     val_indices:  Vec<u16>,
 }
-
+#[derive(Debug)]
 struct M2Array {
     number:          u32,
     offset_elements: u32,
@@ -113,12 +113,17 @@ impl Model {
         let tex_units = M2Array::read(&mut md20data)?;
         let trans_lookup = M2Array::read(&mut md20data)?;
         let tex_anim_lookup = M2Array::read(&mut md20data)?;
-        let bounding_box_min = Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?);
-        let bounding_box_max = Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?);
+
+        let bounding_box = AABB::with_bounds(
+            Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?).into(),
+            Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?).into(),
+        );
         let bounding_sphere_radius = read_le!(md20data, f32)?;
-        let collision_box_min = Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?);
-        let collision_box_max = Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?);
-        let collision_sphere_radius = read_le!(md20data, f32)?;
+        let collision_box = AABB::with_bounds(
+            Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?).into(),
+            Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?).into(),
+        );
+        let collision_sphere_radius = read_le!(md20data, f32)?; // end 212
         let bounding_triangles = M2Array::read(&mut md20data)?;
         let bounding_vertices = M2Array::read(&mut md20data)?;
         let bounding_normals = M2Array::read(&mut md20data)?;
@@ -169,11 +174,9 @@ impl Model {
             tex_units,
             trans_lookup,
             tex_anim_lookup,
-            bounding_box_min,
-            bounding_box_max,
+            bounding_box,
             bounding_sphere_radius,
-            collision_box_min,
-            collision_box_max,
+            collision_box,
             collision_sphere_radius,
             bounding_triangles,
             bounding_vertices,
@@ -212,8 +215,8 @@ impl Model {
             groups:      vec![GroupModel_Raw {
                 mogp_flags: 0,
                 group_wmo_id: 0,
-                bbcorn1: self.bounding_box_min,
-                bbcorn2: self.bounding_box_max,
+                bbcorn1: self.bounding_box.min.into(),
+                bbcorn2: self.bounding_box.max.into(),
                 liquidflags: 0,
                 n_bounding_triangles: vec![self
                     .bounding_triangles

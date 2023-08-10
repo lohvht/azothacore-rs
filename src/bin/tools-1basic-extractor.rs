@@ -126,18 +126,12 @@ fn main() -> AzResult<()> {
     }
 
     // VMAP EXTRACTOR
-    let vmap4_extractor_res = main_vmap4_extract(&args, first_installed_locale)?;
-    for (map_id, spawns) in vmap4_extractor_res.model_spawns_data.iter() {
-        info!("map_id: {map_id} => spawns {}", spawns.len());
-    }
-    info!("game object models: {}", vmap4_extractor_res.temp_gameobject_models.len());
+    let (model_spawns_data, temp_gameobject_models) = main_vmap4_extract(&args, first_installed_locale)?;
+    info!("maps with spawns: {}", model_spawns_data.len());
+    info!("game object models: {}", temp_gameobject_models.len());
 
     // VMAP ASSEMBLER
-    main_vmap4_assemble(
-        &args,
-        vmap4_extractor_res.model_spawns_data,
-        vmap4_extractor_res.temp_gameobject_models,
-    )?;
+    main_vmap4_assemble(&args, model_spawns_data, temp_gameobject_models)?;
 
     // Mmap generator
     main_path_generator(&args, first_installed_locale)?;
