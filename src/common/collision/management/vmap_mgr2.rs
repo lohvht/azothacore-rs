@@ -1,13 +1,14 @@
 use std::{
     collections::HashMap,
+    ffi::OsStr,
     fs,
     ops::{Deref, DerefMut},
-    path::Path,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
 };
 
 use flagset::FlagSet;
-use tracing::{debug, error};
+use tracing::{debug, error, instrument};
 
 use crate::{
     common::collision::{management::VMapMgrTrait, maps::map_tree::StaticMapTree, models::world_model::WorldModel},
@@ -69,13 +70,27 @@ impl DerefMut for VMapModelStore {
     }
 }
 
+/// pushes an extension to the path, making `ext` the new extension
+fn push_extension<P: AsRef<Path>, E: AsRef<OsStr>>(path: P, ext: E) -> PathBuf {
+    let path = path.as_ref();
+    match path.extension() {
+        None => path.with_extension(ext),
+        Some(existing_ext) => {
+            let mut existing_ext = existing_ext.to_os_string();
+            existing_ext.push(".");
+            existing_ext.push(ext);
+            path.with_extension(existing_ext)
+        },
+    }
+}
+
 impl VMapModelStore {
     pub fn acquire_model_instance<P: AsRef<Path>>(&mut self, base_path: P, filename: &str) -> Option<Arc<WorldModel>> {
         if let Some((model, ref_count)) = self.loaded_model_files.get_mut(filename) {
             *ref_count += 1;
             return Some(model.clone());
         };
-        let path = base_path.as_ref().join(filename).with_extension("vmo");
+        let path = push_extension(base_path.as_ref().join(filename), "vmo");
         match fs::File::open(&path) {
             Err(e) => {
                 error!("misc: VMapMgr2: could not load {}; err {e}", path.display());
@@ -133,6 +148,7 @@ impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
         self.parent_map_data = Arc::new(parent_map_data);
     }
 
+    #[instrument(skip_all, fields(base_path=format!("{}", base_path.as_ref().display()), map_id = map_id))]
     fn get_or_load_map_tree<P: AsRef<Path>>(&mut self, map_id: u32, base_path: P) -> super::VmapFactoryLoadResult<&mut StaticMapTree> {
         let instance_tree = match self.instance_map_trees.get_mut(&map_id) {
             None => {
@@ -143,7 +159,7 @@ impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
             Some(it) => {
                 if it.is_none() {
                     let new_tree = StaticMapTree::init_from_file(&base_path, map_id)
-                        .map_err(|e| super::VmapFactoryLoadError::General(e.to_string()))?;
+                        .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tree: {}", e)))?;
                     *it = Some(new_tree)
                 }
                 it.as_mut().unwrap_or_else(|| {
@@ -159,6 +175,7 @@ impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
 
     /// load one tile (internal use only)
     /// loadSingleMap in TC
+    #[instrument(skip_all, fields(base_path=format!("{}", base_path.as_ref().display()), tile = format!("[Map {map_id:04}] [{tile_x:02},{tile_y:02}]")))]
     pub fn load_single_map_tile<P: AsRef<Path>>(
         &mut self,
         map_id: u32,
@@ -172,7 +189,7 @@ impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
 
         instance_tree
             .load_map_tile(tile_x, tile_y, parent_map_data, model_store)
-            .map_err(|e| super::VmapFactoryLoadError::General(e.to_string()))?;
+            .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tile: {}", e)))?;
         Ok(())
     }
 
@@ -187,7 +204,7 @@ impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
                 true
             };
             if remove_tree {
-                self.instance_map_trees.remove(&map_id);
+                *instance_tree = None;
             }
         }
     }

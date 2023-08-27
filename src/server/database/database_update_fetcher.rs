@@ -342,7 +342,13 @@ async fn update_state(pool: &sqlx::Pool<MySql>, file_name: String, state: Fetche
     Ok(())
 }
 
-#[instrument(skip_all, fields(file_path, file_state, redundancy_checks, archived_redundancy, allow_rehash))]
+#[instrument(skip_all, fields(
+    file_path=format!("{}", file_path.display()),
+    file_state=format!("{file_state:?}"),
+    redundancy_checks=update_cfg.Redundancy,
+    archived_redundancy=update_cfg.ArchivedRedundancy,
+    allow_rehash=update_cfg.AllowRehash,
+))]
 async fn apply_update_file(
     update_cfg: &Updates,
     pool: &sqlx::Pool<MySql>,

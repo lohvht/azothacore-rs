@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, io, path::Path};
 
-use bvh::aabb::AABB;
+use parry3d::bounding_volume::Aabb;
 
 use crate::{
     cmp_or_return,
@@ -15,7 +15,7 @@ pub struct GameObjectModelData {
     pub display_id: u32,
     pub is_wmo:     bool,
     pub name:       String,
-    pub bounds:     AABB,
+    pub bounds:     Aabb,
 }
 
 impl GameObjectModelData {

@@ -19,8 +19,6 @@ use azothacore_rs::{
     tools::{
         adt::{
             AdtChunkMcnk,
-            AdtChunkMcnkSubchunkMclq,
-            AdtChunkMcnkSubchunkMcvt,
             AdtChunkMfbo,
             AdtChunkMh2o,
             AdtChunkMh2oLiquidInstance,
@@ -37,6 +35,7 @@ use azothacore_rs::{
             DB2AndMapExtractFlags,
             Db2AndMapExtract,
             ExtractorConfig,
+            RunStagesFlag,
         },
         mmap_generator::main_path_generator,
         vmap4_assembler::main_vmap4_assemble,
@@ -47,14 +46,13 @@ use azothacore_rs::{
 };
 use byteorder::{LittleEndian, ReadBytesExt};
 use flagset::FlagSet;
-use futures::future;
 use nalgebra::SMatrix;
 use tracing::{error, info, warn};
 use walkdir::WalkDir;
 use wow_db2::wdc1;
 
 fn main() -> AzResult<()> {
-    init_logging();
+    let _wg = init_logging();
     let mut f = fs::File::open("env/dist/etc/extractor.toml")?;
     let args = ExtractorConfig::from_toml(&mut f)?;
 
@@ -75,7 +73,12 @@ fn main() -> AzResult<()> {
         if let Locale::none = l {
             continue;
         }
-        if !installed_locales_mask.contains(l.to_casc_locales()) {
+
+        if (installed_locales_mask & l.to_casc_locales()).bits() == 0 {
+            info!(
+                "Locale {l:?} ({:?}) is not part of the installed locales {installed_locales_mask:?}",
+                l.to_casc_locales()
+            );
             continue;
         }
         let storage = match args.get_casc_storage_handler(l) {
@@ -103,6 +106,10 @@ fn main() -> AzResult<()> {
             info!("Detected client build: {}", build);
             break;
         }
+        if !args.run_stage_flags.contains(RunStagesFlag::DB2Extraction) {
+            info!("Skipping DB2 extraction because of flags");
+            break;
+        }
         // Extract DBC files
         info!("Detected client build: {} for locale {}", build, l);
         extract_db_files_client(&storage, &args, l)?;
@@ -115,26 +122,32 @@ fn main() -> AzResult<()> {
         return Ok(());
     };
 
-    if args.db2_and_map_extract.should_extract(DB2AndMapExtractFlags::Camera) {
-        extract_camera_files(&args, first_installed_locale)?;
-    }
-    if args.db2_and_map_extract.should_extract(DB2AndMapExtractFlags::GameTables) {
-        extract_game_tables(&args, first_installed_locale)?;
-    }
-    if args.db2_and_map_extract.should_extract(DB2AndMapExtractFlags::Map) {
-        extract_maps(&args, first_installed_locale, build)?;
+    if args.run_stage_flags.contains(RunStagesFlag::DB2Extraction) {
+        if args.db2_and_map_extract.should_extract(DB2AndMapExtractFlags::Camera) {
+            extract_camera_files(&args, first_installed_locale)?;
+        }
+        if args.db2_and_map_extract.should_extract(DB2AndMapExtractFlags::GameTables) {
+            extract_game_tables(&args, first_installed_locale)?;
+        }
+        if args.db2_and_map_extract.should_extract(DB2AndMapExtractFlags::Map) {
+            extract_maps(&args, first_installed_locale, build)?;
+        }
+    } else {
+        info!("Skipping Camera, GameTable and Map extraction because of flags");
     }
 
-    // VMAP EXTRACTOR
-    let (model_spawns_data, temp_gameobject_models) = main_vmap4_extract(&args, first_installed_locale)?;
-    info!("maps with spawns: {}", model_spawns_data.len());
-    info!("game object models: {}", temp_gameobject_models.len());
+    if args.run_stage_flags.contains(RunStagesFlag::VmapExtraction) {
+        // VMAP EXTRACTOR
+        let (model_spawns_data, temp_gameobject_models) = main_vmap4_extract(&args, first_installed_locale)?;
 
-    // VMAP ASSEMBLER
-    main_vmap4_assemble(&args, model_spawns_data, temp_gameobject_models)?;
+        // VMAP ASSEMBLER
+        main_vmap4_assemble(&args, model_spawns_data, temp_gameobject_models)?;
+    }
 
-    // Mmap generator
-    main_path_generator(&args, first_installed_locale)?;
+    if args.run_stage_flags.contains(RunStagesFlag::MmapGeneration) {
+        // Mmap generator
+        main_path_generator(&args, first_installed_locale)?;
+    }
 
     Ok(())
 }
@@ -344,11 +357,6 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> AzResu
     fs::create_dir_all(&output_path)?;
 
     info!("Convert map files");
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(50)
-        .build()?;
-    let mut jhs = vec![];
 
     for (z, map) in maps.enumerate() {
         let map_id = map.id;
@@ -363,8 +371,17 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> AzResu
         };
         info!("Extract {} ({}/{})", map_name, z + 1, num_maps);
         // We expect MAIN chunk to always exist
-        let chunk = wdt.chunks.get(b"MAIN").unwrap();
-        let chunk = WdtChunkMain::from(chunk.clone());
+
+        let chunk = wdt
+            .chunks()
+            .find_map(|(fcc, data)| {
+                if fcc == b"MAIN" {
+                    Some(WdtChunkMain::from((fcc, data)))
+                } else {
+                    None
+                }
+            })
+            .unwrap();
         // Loadup map grid data
         for y in 0..WDT_MAP_SIZE {
             for x in 0..WDT_MAP_SIZE {
@@ -383,33 +400,24 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> AzResu
                 let args = args.db2_and_map_extract.clone();
                 let liquid_types = liquid_types.clone();
                 let liquid_materials = liquid_materials.clone();
-                jhs.push(rt.spawn_blocking(move || {
-                    let _ = convert_adt(
-                        &args,
-                        adt,
-                        output_file_name.as_ref(),
-                        build_no,
-                        ignore_deep_water,
-                        liquid_types,
-                        liquid_materials,
-                    )
-                    .inspect_err(|e| {
-                        let output_file_name_display = output_file_name.display();
-                        error!("error converting {storage_path} ADT to map {output_file_name_display} due to err: {e}");
-                    });
-                }));
+                let _ = convert_adt(
+                    &args,
+                    adt,
+                    output_file_name.as_ref(),
+                    build_no,
+                    ignore_deep_water,
+                    liquid_types,
+                    liquid_materials,
+                )
+                .inspect_err(|e| {
+                    let output_file_name_display = output_file_name.display();
+                    error!("error converting {storage_path} ADT to map {output_file_name_display} due to err: {e}");
+                });
             }
             // // draw progress bar
             // info!("Processing........................{}%\r", (100 * (y + 1)) / WDT_MAP_SIZE);
         }
     }
-    rt.block_on(async {
-        for r in future::join_all(jhs).await {
-            if let Err(e) = r {
-                warn!("join error while converting: err {e}");
-            }
-        }
-    });
     Ok(())
 }
 
@@ -458,7 +466,7 @@ fn get_liquid_type(
 }
 
 fn get_liquid_height(
-    mh20_raw_data: &mut io::Cursor<Vec<u8>>,
+    mh20_raw_data: &mut io::Cursor<&[u8]>,
     h: &AdtChunkMh2oLiquidInstance,
     pos: usize,
     liquid_types_db2: Arc<BTreeMap<u32, LiquidType>>,
@@ -512,8 +520,8 @@ fn convert_adt(
     let mut liquid_show = [[false; ADT_GRID_SIZE]; ADT_GRID_SIZE];
     let mut map_liquid_height = [[args.use_min_height; ADT_GRID_SIZE + 1]; ADT_GRID_SIZE + 1];
     // Get area flags data
-    for (_fcc, chunk) in adt.chunks.iter().filter(|(fcc, _)| *fcc == b"MCNK") {
-        let mcnk = AdtChunkMcnk::from(chunk.clone());
+    for (fcc, chunk) in adt.chunks().filter(|(fcc, _)| *fcc == b"MCNK") {
+        let mcnk = AdtChunkMcnk::from((fcc, chunk));
         // Area data
         map_area_ids[mcnk.iy()][mcnk.ix()] = mcnk.areaid.try_into().unwrap();
         // Set map height as grid height
@@ -532,8 +540,7 @@ fn convert_adt(
             }
         }
         // Get custom height
-        if let Some(chunk) = chunk.sub_chunks.get(b"MCVT") {
-            let mcvt = AdtChunkMcnkSubchunkMcvt::from(chunk.clone());
+        if let Some(mcvt) = &mcnk.mcvt {
             // get V9 height map
             for y in 0..ADT_CELL_SIZE + 1 {
                 let cy = mcnk.iy() * ADT_CELL_SIZE + y;
@@ -554,8 +561,7 @@ fn convert_adt(
 
         // Liquid data
         if mcnk.size_mclq > 8 {
-            if let Some(chunk) = chunk.sub_chunks.get(b"MCLQ") {
-                let liquid = AdtChunkMcnkSubchunkMclq::from(chunk.clone());
+            if let Some(liquid) = &mcnk.mclq {
                 let mut count = 0usize;
                 for y in 0..ADT_CELL_SIZE {
                     let cy = mcnk.iy() * ADT_CELL_SIZE + y;
@@ -634,8 +640,13 @@ fn convert_adt(
     }
 
     // Get liquid map for grid (in WOTLK used MH2O chunk)
-    if let Some(chunk) = adt.chunks.get(b"MH2O") {
-        let mut h2o = AdtChunkMh2o::from(chunk.clone());
+    if let Some(mut h2o) = adt.chunks().find_map(|(fcc, data)| {
+        if fcc == b"MH2O" {
+            Some(AdtChunkMh2o::from((fcc, data)))
+        } else {
+            None
+        }
+    }) {
         for i in 0..ADT_CELLS_PER_GRID {
             for j in 0..ADT_CELLS_PER_GRID {
                 if h2o.liquid[i][j].used == 0 && h2o.liquid[i][j].offset_instances == 0 {
@@ -701,8 +712,13 @@ fn convert_adt(
         }
     }
 
-    if let Some(chunk) = adt.chunks.get(b"MFBO") {
-        let mfbo = AdtChunkMfbo::from(chunk.clone());
+    if let Some(mfbo) = adt.chunks().find_map(|(fcc, data)| {
+        if fcc == b"MFBO" {
+            Some(AdtChunkMfbo::from((fcc, data)))
+        } else {
+            None
+        }
+    }) {
         map_height_flight_box_max_min = Some((mfbo.max, mfbo.min));
     }
     let mut f = fs::File::create(output_path)?;

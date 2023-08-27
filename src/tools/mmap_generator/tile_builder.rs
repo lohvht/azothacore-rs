@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use bvh::aabb::AABB;
+use parry3d::bounding_volume::Aabb;
 use tracing::{error, info, instrument, warn};
 
 use crate::{
@@ -105,16 +105,19 @@ impl TileBuilder<'_> {
         if self.should_skip_tile(map_id, tile_x, tile_y) {
             return Ok(());
         }
-        info!("Building tile");
+        info!("Start building tile");
         // get heightmap data
-        let mut mesh_data = self.terrain_builder.load_map(map_id, tile_x, tile_y, self.skip_liquid)?;
+        let mut mesh_data = MeshData::default();
+        self.terrain_builder
+            .load_map(map_id, tile_x, tile_y, self.skip_liquid, &mut mesh_data)?;
 
         // get model data
-        mesh_data.merge_mesh_data([self.terrain_builder.load_vmap(map_id, tile_y, tile_x)?]);
+        self.terrain_builder.load_vmap(map_id, tile_y, tile_x, &mut mesh_data)?;
 
         // if there is no data, give up now
         if mesh_data.solid_verts.is_empty() && mesh_data.liquid_verts.is_empty() {
-            return Err("No vertices found".into());
+            warn!("No vertices found");
+            return Ok(());
         }
 
         // remove unused vertices
@@ -130,7 +133,7 @@ impl TileBuilder<'_> {
         // float bmin[3], bmax[3];
         let b_max_min = get_tile_bounds(tile_x, tile_y, &all_verts);
 
-        mesh_data.merge_mesh_data([load_off_mesh_connections(map_id, tile_x, tile_y, self.off_mesh_file_path.as_ref())?]);
+        load_off_mesh_connections(map_id, tile_x, tile_y, self.off_mesh_file_path.as_ref(), &mut mesh_data)?;
 
         // build navmesh tile
         self.build_move_map_tile(map_id, tile_x, tile_y, &mesh_data, &b_max_min, nav_mesh)?;
@@ -144,13 +147,13 @@ impl TileBuilder<'_> {
         tile_x: u16,
         tile_y: u16,
         mesh_data: &MeshData,
-        b_max_min: &AABB,
+        b_max_min: &Aabb,
         nav_mesh: &mut DetourNavMesh,
     ) -> AzResult<()> {
         // console output
         info!("Building movemap tiles...");
 
-        let AABB { min: bmin, max: bmax } = b_max_min;
+        let Aabb { mins: bmin, maxs: bmax } = b_max_min;
         let MeshData {
             solid_verts,
             solid_tris,
@@ -191,8 +194,8 @@ impl TileBuilder<'_> {
         let tiles_per_map = vertex_per_map / vertex_per_tile;
 
         let mut config = RecastConfig::default();
-        config.bmin = b_max_min.min.into();
-        config.bmax = b_max_min.max.into();
+        config.bmin = b_max_min.mins.into();
+        config.bmax = b_max_min.maxs.into();
 
         config.maxVertsPerPoly = DT_VERTS_PER_POLYGON;
         config.cs = base_unit_dim;
@@ -419,7 +422,12 @@ impl TileBuilder<'_> {
                 // we have flat tiles with no actual geometry - don't build those, its useless
                 // keep in mind that we do output those into debug info
                 // drop tiles with only exact count - some tiles may have geometry while having less tiles
-                error!("No polygons to build on tile");
+                warn!(
+                    poly_count = params.polyCount,
+                    poly_is_null = params.polys.is_null(),
+                    tiles_per_map_sq = tiles_per_map * tiles_per_map,
+                    "No polygons to build on tile.",
+                );
                 break;
             }
 
@@ -428,7 +436,7 @@ impl TileBuilder<'_> {
 
             info!("Building navmesh tile...");
             if let Err(e) = params.create_nav_mesh_data(&mut nav_data.as_mut_slice()) {
-                error!(e);
+                warn!(e);
                 break;
             }
 
@@ -436,12 +444,12 @@ impl TileBuilder<'_> {
 
             let tile_ref = match nav_mesh.add_tile(nav_data, 0) {
                 Err(e) => {
-                    error!("failed to add tile to navmesh! {e}");
+                    warn!("failed to add tile to navmesh! {e}");
                     break;
                 },
                 Ok((r, ..)) => {
                     if r == 0 {
-                        error!("navmesh add tile potential error as resultant tile_ref is zero");
+                        warn!("navmesh add tile potential error as resultant tile_ref is zero");
                         break;
                     }
                     r
@@ -460,7 +468,7 @@ impl TileBuilder<'_> {
             }
             // now that tile is written to disk, we can unload it
             if let Err(e2) = nav_mesh.remove_tile(tile_ref) {
-                error!("[Map {map_id:04}] unable to free tile on cleanup! err: {e2}");
+                warn!("[Map {map_id:04}] unable to free tile on cleanup! err: {e2}");
             }
 
             if true {

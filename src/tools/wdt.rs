@@ -5,7 +5,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 use crate::{
     tools::{
         adt::AdtChunkModf,
-        extractor_common::{casc_handles::CascStorageHandle, cstr_bytes_to_string, ChunkedFile, FileChunk},
+        extractor_common::{casc_handles::CascStorageHandle, cstr_bytes_to_string, ChunkedFile},
     },
     AzResult,
 };
@@ -19,18 +19,17 @@ pub struct WdtChunkMainSMAreaInfo {
 }
 
 pub struct WdtChunkMain {
-    pub fcc:      [u8; 4],
-    pub size:     u32,
     pub adt_list: [[WdtChunkMainSMAreaInfo; WDT_MAP_SIZE]; WDT_MAP_SIZE],
 }
 
-impl From<FileChunk> for WdtChunkMain {
-    fn from(value: FileChunk) -> Self {
-        if value.fcc != *b"MAIN" {
-            panic!("value.fcc must be MAIN, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
+impl From<(&[u8; 4], &[u8])> for WdtChunkMain {
+    fn from(value: (&[u8; 4], &[u8])) -> Self {
+        let (fcc, data) = value;
+        if fcc != b"MAIN" {
+            panic!("fcc must be MAIN, got {}", std::str::from_utf8(&fcc[..]).unwrap());
         }
         let d = WdtChunkMainSMAreaInfo::default();
-        let mut cursor = io::Cursor::new(value.data);
+        let mut cursor = io::Cursor::new(data);
         let mut adt_list = [[d; WDT_MAP_SIZE]; WDT_MAP_SIZE];
         for (_y, row) in adt_list.iter_mut().enumerate() {
             for (_x, col_val) in row.iter_mut().enumerate() {
@@ -39,11 +38,7 @@ impl From<FileChunk> for WdtChunkMain {
             }
         }
 
-        Self {
-            fcc: value.fcc,
-            size: value.size,
-            adt_list,
-        }
+        Self { adt_list }
     }
 }
 
@@ -62,11 +57,11 @@ impl WDTFile {
         let mut wmo_paths = Vec::new();
         let mut modf = vec![];
 
-        for (fourcc, chunk) in file.chunks {
-            match &fourcc {
+        for (fourcc, chunk) in file.chunks() {
+            match fourcc {
                 b"MAIN" => {},
                 b"MWMO" => {
-                    for raw in chunk.data.split_inclusive(|b| *b == 0) {
+                    for raw in chunk.split_inclusive(|b| *b == 0) {
                         // We dont anticipate a panic here as the strings will always be nul-terminated
                         let s = cstr_bytes_to_string(raw).unwrap();
                         wmo_paths.push(s);
@@ -74,7 +69,7 @@ impl WDTFile {
                 },
                 b"MODF" => {
                     // global wmo instance data
-                    modf.push(AdtChunkModf::from(chunk));
+                    modf.push(AdtChunkModf::from((fourcc, chunk)));
                 },
                 _ => {},
             }

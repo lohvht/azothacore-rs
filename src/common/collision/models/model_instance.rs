@@ -1,11 +1,8 @@
 use std::{ops::Deref, sync::Arc};
 
-use bvh::{
-    aabb::{Bounded, AABB},
-    bounding_hierarchy::BHShape,
-};
 use flagset::{flags, FlagSet};
 use nalgebra::{Rotation, Rotation3, Vector3};
+use parry3d::bounding_volume::Aabb;
 
 use crate::common::collision::models::world_model::WorldModel;
 
@@ -18,9 +15,8 @@ pub struct VmapModelSpawn {
     pub i_pos:   Vector3<f32>,
     pub i_rot:   Vector3<f32>,
     pub i_scale: f32,
-    pub bound:   Option<[Vector3<f32>; 2]>,
+    pub bound:   Option<Aabb>,
     pub name:    String,
-    node_index:  usize,
 }
 
 #[allow(clippy::too_many_arguments)]
@@ -44,29 +40,9 @@ impl VmapModelSpawn {
             i_pos,
             i_rot,
             i_scale,
-            bound,
+            bound: bound.map(|[min, max]| Aabb::new(min.into(), max.into())),
             name,
-            node_index: 0,
         }
-    }
-}
-
-impl Bounded for VmapModelSpawn {
-    fn aabb(&self) -> AABB {
-        let b = self
-            .bound
-            .expect("bound for vmap spawn should have been set at this point, panicking");
-        AABB::with_bounds(b[0].into(), b[1].into())
-    }
-}
-
-impl BHShape for VmapModelSpawn {
-    fn set_bh_node_index(&mut self, index: usize) {
-        self.node_index = index;
-    }
-
-    fn bh_node_index(&self) -> usize {
-        self.node_index
     }
 }
 

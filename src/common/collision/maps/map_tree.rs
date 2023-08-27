@@ -8,8 +8,8 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use bvh::{bounding_hierarchy::BHShape, bvh::BVH};
 use num_traits::Num;
+use parry3d::partitioning::Qbvh;
 use tracing::{debug, error};
 
 use crate::{
@@ -48,7 +48,7 @@ fn file_stem_if_ext_matched<P: AsRef<Path>>(p: P, extension_to_match: &str) -> A
 
 pub struct StaticMapTree {
     map_id:             u32,
-    tree:               BVH,
+    tree:               Qbvh<usize>,
     /// a tuple containing the tree entry and their respective reference counts
     /// arranged by their respective BH indices
     pub tree_values:    HashMap<usize, (ModelInstance, usize)>,
@@ -105,7 +105,7 @@ impl StaticMapTree {
         parent_map_data: Arc<HashMap<u32, u32>>,
         model_store: Arc<Mutex<VMapModelStore>>,
     ) -> AzResult<()> {
-        let spawns = match Self::read_map_tile_spawns_file(&self.base_path, self.map_id, tile_y, tile_x, parent_map_data) {
+        let spawns = match Self::read_map_tile_spawns_file(&self.base_path, self.map_id, tile_x, tile_y, parent_map_data) {
             Err(e) => {
                 debug!(
                     "Error opening map tile, map may or may not have a map tile - map_id {} [x:{}, y:{}] err {e}",
@@ -135,12 +135,6 @@ impl StaticMapTree {
                 },
                 Some(i) => *i,
             };
-            if spawn.bh_node_index() != referenced_val {
-                error!("StaticMapTree::LoadMapTile() : WorldModel spawn is invalid {} [{tile_x}, {tile_y}]; spawn {} (name: {}) has tree ID of {} but spawn_indices contains {referenced_val}",
-                spawn.map_num, spawn.name, spawn.id, spawn.bh_node_index(),
-                );
-                continue;
-            }
             let (tree_val, count) = if let Some(e) = self.tree_values.get_mut(&referenced_val) {
                 e
             } else {
@@ -180,9 +174,8 @@ impl StaticMapTree {
         let tile_id = Self::pack_tile_id(tile_x, tile_y);
 
         let spawn_tree_ids = self.tile_to_bh_ids.entry(tile_id).or_default();
-        let mut new_tile_spawn_tree_ids = Vec::with_capacity(spawn_tree_ids.len());
-        while let Some(bvh_id) = spawn_tree_ids.pop() {
-            let mut has_reference = false;
+        for i in (0..spawn_tree_ids.len()).rev() {
+            let bvh_id = spawn_tree_ids[i];
             if let Some((spawn, reference_counts)) = self.tree_values.get_mut(&bvh_id) {
                 // release model instance
                 model_store.lock().unwrap().release_model_instance(&spawn.name);
@@ -195,19 +188,18 @@ impl StaticMapTree {
                     );
                 } else {
                     *reference_counts -= 1;
-                    has_reference = *reference_counts != 0;
+                    if *reference_counts == 0 {
+                        // Do the removal from tree values as well.
+                        self.tree_values.remove(&bvh_id);
+                        // do an in place removal from the spawn tree IDs. we dont need to actually care
+                        // about order
+                        spawn_tree_ids.swap_remove(i);
+                    }
                 }
             } else {
                 error!("misc: StaticMapTree::UnloadMapTile() : trying to a tree value that does not exist (tree_id:{bvh_id})");
             }
-            if has_reference {
-                new_tile_spawn_tree_ids.push(bvh_id);
-            } else {
-                // Do the removal from tree values as well.
-                self.tree_values.remove(&bvh_id);
-            }
         }
-        self.tile_to_bh_ids.insert(tile_id, new_tile_spawn_tree_ids);
     }
 
     pub fn pack_tile_id(tile_x: u16, tile_y: u16) -> u32 {
@@ -231,7 +223,7 @@ impl StaticMapTree {
         Ok(map_id)
     }
 
-    pub fn get_tile_file_name<P, M, X, Y>(dir: P, map_id: M, y: X, x: Y) -> PathBuf
+    pub fn get_tile_file_name<P, M, X, Y>(dir: P, map_id: M, x: X, y: Y) -> PathBuf
     where
         P: AsRef<Path>,
         M: Num + Display,
@@ -244,7 +236,7 @@ impl StaticMapTree {
     pub fn write_map_tree_to_file<P: AsRef<Path>, M: Num + Display>(
         dir: P,
         map_id: M,
-        ptree: &BVH,
+        ptree: &Qbvh<usize>,
         model_spawns_used: &[&VmapModelSpawn],
     ) -> AzResult<()> {
         let mapfilename = Self::map_file_name(dir, map_id);
@@ -255,7 +247,7 @@ impl StaticMapTree {
         Self::write_map_tree(&mut mapfile, ptree, model_spawns_used)
     }
 
-    fn write_map_tree<W: io::Write>(w: &mut W, ptree: &BVH, model_spawns_used: &[&VmapModelSpawn]) -> AzResult<()> {
+    fn write_map_tree<W: io::Write>(w: &mut W, ptree: &Qbvh<usize>, model_spawns_used: &[&VmapModelSpawn]) -> AzResult<()> {
         let mut w = w;
         //general info
         w.write_all(VMAP_MAGIC)?;
@@ -267,12 +259,12 @@ impl StaticMapTree {
         // spawn id to index map
         // uint32 map_spawnsSize = map_spawns.size();
         w.write_all(b"SIDX")?;
-        let map_spawn_id_to_bvh_id = model_spawns_used.iter().map(|m| (m.id, m.bh_node_index())).collect::<Vec<_>>();
+        let map_spawn_id_to_bvh_id = model_spawns_used.iter().enumerate().map(|(i, m)| (m.id, i)).collect::<Vec<_>>();
         bincode_serialise(w, &map_spawn_id_to_bvh_id)?;
         Ok(())
     }
 
-    pub fn read_map_tree<R: io::Read>(r: &mut R) -> AzResult<(BVH, HashMap<u32, usize>)> {
+    pub fn read_map_tree<R: io::Read>(r: &mut R) -> AzResult<(Qbvh<usize>, HashMap<u32, usize>)> {
         let mut r = r;
 
         cmp_or_return!(r, VMAP_MAGIC)?;
@@ -288,14 +280,14 @@ impl StaticMapTree {
         Ok((tree, map_spawn_id_to_bvh_id))
     }
 
-    pub fn write_map_tile_spawns_file<P, M, X, Y>(dir: P, map_id: M, y: X, x: Y, model_spawns: &[&VmapModelSpawn]) -> AzResult<()>
+    pub fn write_map_tile_spawns_file<P, M, X, Y>(dir: P, map_id: M, x: X, y: Y, model_spawns: &[&VmapModelSpawn]) -> AzResult<()>
     where
         P: AsRef<Path>,
         M: Num + Display,
         X: Num + Display,
         Y: Num + Display,
     {
-        let tile_file_name = Self::get_tile_file_name(dir, map_id, y, x);
+        let tile_file_name = Self::get_tile_file_name(dir, map_id, x, y);
         let mut tile_file = fs::File::create(tile_file_name)?;
         Self::write_map_tile_spawns(&mut tile_file, model_spawns)
     }
@@ -311,14 +303,14 @@ impl StaticMapTree {
     fn read_map_tile_spawns_file<P>(
         dir: P,
         map_id: u32,
-        y: u16,
         x: u16,
+        y: u16,
         parent_map_data: Arc<HashMap<u32, u32>>,
     ) -> AzResult<Vec<VmapModelSpawn>>
     where
         P: AsRef<Path>,
     {
-        let file_name = Self::get_tile_file_name(&dir, map_id, y, x);
+        let file_name = Self::get_tile_file_name(&dir, map_id, x, y);
         let mut file = fs::File::open(file_name).or_else(|e| match parent_map_data.get(&map_id) {
             None => Err(e),
             Some(parent_id) => {

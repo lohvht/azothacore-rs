@@ -10,7 +10,7 @@ use crate::{
         shared::data_stores::db2_structure::{LiquidType, Map},
     },
     tools::{
-        extractor_common::{get_dir_contents, ExtractorConfig},
+        extractor_common::{get_dir_contents, ExtractorConfig, MapIdTileXY},
         mmap_generator::map_builder::MapBuilder,
     },
     AzResult,
@@ -60,10 +60,7 @@ fn check_directories(args: &ExtractorConfig, first_installed_locale: Locale) -> 
 
 pub fn main_path_generator(args: &ExtractorConfig, first_installed_locale: Locale) -> AzResult<()> {
     if args.mmap_path_generator.map_id_tile_x_y.is_none() && args.mmap_path_generator.debug_output {
-        warn!(
-            "You have specifed debug output, but didn't specify a map to generate.
-This will generate debug output for ALL maps."
-        );
+        warn!("You have specifed debug output, but didn't specify a map to generate. This will generate debug output for ALL maps.");
     }
     check_directories(args, first_installed_locale)?;
 
@@ -105,9 +102,13 @@ This will generate debug output for ALL maps."
     let start = Instant::now();
     if let Some(file) = &args.mmap_path_generator.file {
         builder.build_mesh_from_file(file)?;
-    } else if let Some((map_id, Some((tile_x, tile_y)))) = args.mmap_path_generator.map_id_tile_x_y {
+    } else if let Some(MapIdTileXY {
+        map_id,
+        tile_x_y: Some((tile_x, tile_y)),
+    }) = args.mmap_path_generator.map_id_tile_x_y
+    {
         builder.build_single_tile(map_id, tile_x, tile_y)?;
-    } else if let Some((map_id, ..)) = args.mmap_path_generator.map_id_tile_x_y {
+    } else if let Some(MapIdTileXY { map_id, .. }) = args.mmap_path_generator.map_id_tile_x_y {
         builder.build_maps(Some(map_id))?;
     } else {
         builder.build_maps(None)?;

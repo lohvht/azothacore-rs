@@ -1,11 +1,11 @@
 use std::{collections::HashMap, fs, path::Path};
 
-use bvh::aabb::AABB;
 use nalgebra::{Vector3, Vector6};
+use parry3d::bounding_volume::Aabb;
 
 use crate::{
     common::collision::maps::map_defines::MmapNavTerrainFlag,
-    server::shared::recastnavigation_handles::{DetourNavMesh, DetourNavMeshParams},
+    server::shared::recastnavigation_handles::DetourNavMeshParams,
     tools::adt::{ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
     AzResult,
 };
@@ -21,7 +21,7 @@ pub const GRID_PART_SIZE: f32 = GRID_SIZE / V8_SIZE as f32;
 // static const float self.use_min_height = -2000.f;
 pub const INVALID_MAP_LIQ_HEIGHT_MAX: f32 = 5000.0;
 
-pub fn get_tile_bounds(tile_x: u16, tile_y: u16, verts: &Vec<Vector3<f32>>) -> AABB {
+pub fn get_tile_bounds(tile_x: u16, tile_y: u16, verts: &Vec<Vector3<f32>>) -> Aabb {
     // this is for elevation
     let (min_elevation, max_elevation) = if verts.is_empty() {
         verts
@@ -33,10 +33,7 @@ pub fn get_tile_bounds(tile_x: u16, tile_y: u16, verts: &Vec<Vector3<f32>>) -> A
     // this is for width and depth
     let bmax = Vector3::new((32 - tile_x) as f32 * GRID_SIZE, max_elevation, (32 - tile_y) as f32 * GRID_SIZE);
     let bmin = Vector3::new(bmax.x - GRID_SIZE, min_elevation, bmax.z - GRID_SIZE);
-    AABB {
-        min: bmax.into(),
-        max: bmin.into(),
-    }
+    Aabb::new(bmin.into(), bmax.into())
 }
 
 pub struct TileInfo {
@@ -46,19 +43,19 @@ pub struct TileInfo {
     pub nav_mesh_params: DetourNavMeshParams,
 }
 
-pub fn load_off_mesh_connections<P: AsRef<Path>>(map_id: u32, tile_x: u16, tile_y: u16, offmesh_path: Option<P>) -> AzResult<MeshData> {
+pub fn load_off_mesh_connections<P: AsRef<Path>>(
+    map_id: u32,
+    tile_x: u16,
+    tile_y: u16,
+    offmesh_path: Option<P>,
+    mesh_data: &mut MeshData,
+) -> AzResult<()> {
     // no meshfile input given?
     let offmesh_path = match offmesh_path {
-        None => return Ok(MeshData::default()),
+        None => return Ok(()),
         Some(f) => f,
     };
     let buf = fs::read_to_string(&offmesh_path)?;
-
-    let mut offset_mesh_connections = vec![];
-    let mut offset_mesh_connection_rads = vec![];
-    let mut offset_mesh_connection_dirs = vec![];
-    let mut offset_mesh_connections_areas = vec![];
-    let mut offset_mesh_connections_flags = vec![];
 
     // pretty silly thing, as we parse entire file and load only the tile we need
     // but we don't expect this file to be too large
@@ -82,23 +79,16 @@ pub fn load_off_mesh_connections<P: AsRef<Path>>(map_id: u32, tile_x: u16, tile_
         };
         let (mid, tx, ty, p0x, p0y, p0z, p1x, p1y, p1z, size) = scanned;
         if map_id == mid && tile_x == tx && tile_y == ty {
-            offset_mesh_connections.push(Vector6::new(p0y, p0z, p0x, p1y, p1z, p1x));
-            offset_mesh_connection_dirs.push(1); // 1 - both direction, 0 - one sided
-            offset_mesh_connection_rads.push(size); // agent size equivalent
-                                                    // can be used same way as polygon flags
-            offset_mesh_connections_areas.push(0xFF);
-            offset_mesh_connections_flags.push(0xFF); // all movement masks can make this path
+            mesh_data.offset_mesh_connections.push(Vector6::new(p0y, p0z, p0x, p1y, p1z, p1x));
+            mesh_data.offset_mesh_connection_dirs.push(1); // 1 - both direction, 0 - one sided
+            mesh_data.offset_mesh_connection_rads.push(size); // agent size equivalent
+                                                              // can be used same way as polygon flags
+            mesh_data.offset_mesh_connections_areas.push(0xFF);
+            mesh_data.offset_mesh_connections_flags.push(0xFF); // all movement masks can make this path
         }
     }
 
-    Ok(MeshData {
-        offset_mesh_connections,
-        offset_mesh_connection_rads,
-        offset_mesh_connection_dirs,
-        offset_mesh_connections_areas,
-        offset_mesh_connections_flags,
-        ..Default::default()
-    })
+    Ok(())
 }
 
 // see following files:
@@ -120,47 +110,6 @@ pub struct MeshData {
     pub offset_mesh_connection_dirs:   Vec<u8>,
     pub offset_mesh_connections_areas: Vec<u8>,
     pub offset_mesh_connections_flags: Vec<u16>,
-}
-
-impl MeshData {
-    pub fn merge_mesh_data<M>(&mut self, other_mesh_datas: M)
-    where
-        M: IntoIterator<Item = MeshData>,
-    {
-        for MeshData {
-            solid_verts: mut other_solid_verts,
-            solid_tris: other_solid_tris,
-            liquid_verts: mut other_liquid_verts,
-            liquid_tris: other_liquid_tris,
-            liquid_types: mut other_liquid_types,
-            offset_mesh_connections: mut other_offset_mesh_connections,
-            offset_mesh_connection_rads: mut other_offset_mesh_connection_rads,
-            offset_mesh_connection_dirs: mut other_offset_mesh_connection_dirs,
-            offset_mesh_connections_areas: mut other_offset_mesh_connections_areas,
-            offset_mesh_connections_flags: mut other_offset_mesh_connections_flags,
-        } in other_mesh_datas
-        {
-            // Get the vertices counts first, this is mainly to ensure that the  triangles that reference
-            // these vertices later have the correct indices.
-            let solid_verts_counts = self.solid_verts.len();
-            let liquid_verts_counts = self.liquid_verts.len();
-
-            self.solid_verts.append(&mut other_solid_verts);
-            self.liquid_verts.append(&mut other_liquid_verts);
-            self.liquid_types.append(&mut other_liquid_types);
-            self.offset_mesh_connections.append(&mut other_offset_mesh_connections);
-            self.offset_mesh_connection_rads.append(&mut other_offset_mesh_connection_rads);
-            self.offset_mesh_connection_dirs.append(&mut other_offset_mesh_connection_dirs);
-            self.offset_mesh_connections_areas.append(&mut other_offset_mesh_connections_areas);
-            self.offset_mesh_connections_flags.append(&mut other_offset_mesh_connections_flags);
-
-            // Handle triangle indices separately. these are indices to the triangle
-            self.solid_tris
-                .extend(other_solid_tris.into_iter().map(|t| t.add_scalar(solid_verts_counts as u16)));
-            self.liquid_tris
-                .extend(other_liquid_tris.into_iter().map(|t| t.add_scalar(liquid_verts_counts as u16)));
-        }
-    }
 }
 
 pub fn clean_vertices(verts: &mut Vec<Vector3<f32>>, tris: &mut [Vector3<u16>]) {

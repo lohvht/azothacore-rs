@@ -4,14 +4,11 @@ use std::{
     env,
     ffi::CStr,
     io::{self, Read},
-    marker::PhantomData,
     path::{Path, PathBuf},
 };
 
 use bincode::Options;
-use byteorder::{LittleEndian, ReadBytesExt};
 use flagset::{flags, FlagSet};
-use ordered_multimap::ListOrderedMultimap;
 use serde::{Deserialize, Serialize};
 use serde_default::DefaultFromSerde;
 use serde_inline_default::serde_inline_default;
@@ -75,6 +72,14 @@ pub fn get_fixed_plain_name(p: &str) -> String {
     plain_name.chars().rev().collect()
 }
 
+flags! {
+    pub enum RunStagesFlag: u8 {
+        DB2Extraction,
+        VmapExtraction,
+        MmapGeneration,
+    }
+}
+
 structstruck::strike! {
     #[strikethrough[serde_inline_default]]
     #[strikethrough[derive(Deserialize, DefaultFromSerde, Serialize, Clone, Debug,  PartialEq)]]
@@ -83,6 +88,8 @@ structstruck::strike! {
         pub input_path: String,
         #[serde_inline_default(env::current_dir().unwrap().to_string_lossy().to_string())]
         pub output_path: String,
+        #[serde(default)]
+        pub run_stage_flags: FlagSet<RunStagesFlag>,
         #[serde_inline_default(FlagSet::full())]
         pub locales: FlagSet<Locale>,
         #[serde_inline_default(Db2AndMapExtract::default())]
@@ -102,16 +109,12 @@ structstruck::strike! {
             pub precise_vector_data: bool,
             #[serde_inline_default(false)]
             pub override_cached: bool,
-            /// Validate the extracted files as we go
-            /// THIS WILL INCREASE THE WRITE TIMES SO DO AT YOUR OWN RISK
-            #[serde_inline_default(false)]
-            pub debug_validation: bool,
         },
         #[serde_inline_default(MmapPathGenerator::default())]
         pub mmap_path_generator: struct{
             /// If not specified, run for all
             #[serde(default)]
-            pub map_id_tile_x_y: Option<(u32, Option<(u16, u16)>)>,
+            pub map_id_tile_x_y: Option<MapIdTileXY>,
             #[serde(default)]
             pub file: Option<String>,
             #[serde_inline_default(70.0)]
@@ -211,12 +214,21 @@ impl ExtractorConfig {
     }
 }
 
+#[serde_inline_default]
+#[derive(Deserialize, DefaultFromSerde, Serialize, Clone, Debug, PartialEq)]
+pub struct MapIdTileXY {
+    #[serde(default)]
+    pub map_id:   u32,
+    #[serde(default)]
+    pub tile_x_y: Option<(u16, u16)>,
+}
+
 macro_rules! bincode_cfg {
     () => {{
         bincode::DefaultOptions::new()
             .with_no_limit()
             .with_little_endian()
-            .with_fixint_encoding()
+            .with_varint_encoding()
             .allow_trailing_bytes()
     }};
 }
@@ -229,70 +241,32 @@ pub fn bincode_deserialise<R: io::Read, T: ?Sized + serde::de::DeserializeOwned>
     bincode_cfg!().deserialize_from(r)
 }
 
-#[derive(Clone)]
-pub struct FileChunk {
-    pub fcc:        [u8; 4],
-    pub size:       u32,
-    pub data:       Vec<u8>,
-    /// Sub-chunks. If the data contains chunks, sub_chunks will be populated as well.
-    pub sub_chunks: ListOrderedMultimap<[u8; 4], FileChunk>,
-    /// Makes it impossible to construct this manually
-    phantom:        PhantomData<()>,
-}
-
-impl FileChunk {
-    fn build(fcc: [u8; 4], size: u32, data: Vec<u8>) -> AzResult<Self> {
-        let mut s = Self {
-            fcc,
-            size,
-            data,
-            sub_chunks: ListOrderedMultimap::new(),
-            phantom: PhantomData,
-        };
-
-        let mut ptr = io::Cursor::new(&s.data);
-        while !ptr.is_empty() {
-            let mut fcc = [0u8; 4];
-            let fcc_read = ptr.read(&mut fcc[..]).inspect_err(|e| {
-                use tracing::error;
-                error!("FileChunk::build: error reading fcc from chunk: {e}");
-            })?;
-            if fcc_read < fcc.len() {
-                continue;
-            };
-            fcc.reverse();
-            if !INTERESTING_CHUNKS.iter().any(|e| *e == &fcc) {
-                continue;
-            };
-            let size = ptr.read_u32::<LittleEndian>()?;
-            if size == 0 || size as usize > ptr.remaining_slice().len() {
-                continue;
-            }
-            let mut data = vec![0u8; size as usize];
-            ptr.read_exact(&mut data[..]).inspect_err(|e| {
-                use tracing::error;
-                let sub_chunk_fcc = String::from_utf8_lossy(&fcc);
-                let sub_chunk_size = size;
-                let chunk_fcc = String::from_utf8_lossy(&s.fcc);
-                let chunk_size = s.size;
-                let chunk_data_size = s.data.len();
-                error!("FileChunk::build: error reading data from chunk, chunk_fcc {chunk_fcc}, chunk_size {chunk_size}, chunk_data_size {chunk_data_size}; sub_chunk_fcc {sub_chunk_fcc} sub_chunk_size {sub_chunk_size}: {e}");
-            })?;
-            s.sub_chunks.append(fcc, FileChunk::build(fcc, size, data)?);
-        }
-        Ok(s)
+pub fn chunked_data_offsets(chunk_data: &[u8]) -> AzResult<Vec<([u8; 4], usize, usize)>> {
+    let mut chunks_offsets = vec![];
+    let mut pos = 0;
+    while pos < chunk_data.len() {
+        let mut fcc: [u8; 4] = chunk_data[pos..pos + 4]
+            .try_into()
+            .map_err(|e| az_error!("error getting fcc: {e}"))?;
+        fcc.reverse();
+        let size = u32::from_le_bytes(
+            chunk_data[pos + 4..pos + 8]
+                .try_into()
+                .map_err(|e| az_error!("error getting size: {e}"))?,
+        );
+        let start = pos + 8;
+        let end = start + size as usize;
+        chunks_offsets.push((fcc, start, end));
+        pos += 8 + size as usize;
     }
+    Ok(chunks_offsets)
 }
 
 pub struct ChunkedFile {
-    pub filename: PathBuf,
-    pub chunks:   ListOrderedMultimap<[u8; 4], FileChunk>,
+    pub filename:   PathBuf,
+    chunk_data:     Vec<u8>,
+    chunks_offsets: Vec<([u8; 4], usize, usize)>,
 }
-
-const INTERESTING_CHUNKS: [&[u8; 4]; 18] = [
-    b"MVER", b"MAIN", b"MH2O", b"MCNK", b"MCVT", b"MWMO", b"MCLQ", b"MFBO", b"MOGP", b"MOGP", b"MOPY", b"MOVI", b"MOVT", b"MONR", b"MOTV",
-    b"MOBA", b"MODR", b"MLIQ",
-];
 
 impl ChunkedFile {
     pub fn build<P>(storage: &CascStorageHandle, filename: P) -> AzResult<Self>
@@ -306,8 +280,8 @@ impl ChunkedFile {
             error!("ChunkedFile::build: error reading filesize from file {f_display}: {e}");
         })? as usize;
 
-        let mut buf: Vec<u8> = vec![];
-        let read_file_size = file.read_to_end(&mut buf).inspect_err(|e| {
+        let mut chunk_data: Vec<u8> = vec![];
+        let read_file_size = file.read_to_end(&mut chunk_data).inspect_err(|e| {
             use tracing::error;
             let f_display = filename.as_ref().display();
             error!("ChunkedFile::build: error reading file {f_display}: {e}");
@@ -318,35 +292,19 @@ impl ChunkedFile {
                 "Unexpected file sizes while reading chunked file. expect {file_size}, got {read_file_size}"
             ));
         }
-        let mut ptr = io::Cursor::new(buf);
+        let chunks_offsets = chunked_data_offsets(&chunk_data)?;
 
-        let mut s = Self {
+        Ok(Self {
             filename: filename.as_ref().to_owned(),
-            chunks:   ListOrderedMultimap::new(),
-        };
-        while !ptr.is_empty() {
-            let mut fcc = [0u8; 4];
-            ptr.read_exact(&mut fcc[..])?;
-            fcc.reverse();
-            let size = ptr.read_u32::<LittleEndian>()?;
-            let mut data = vec![0u8; size as usize];
-            ptr.read_exact(&mut data[..]).inspect_err(|e| {
-                use tracing::error;
-                let f_display = filename.as_ref().display();
-                error!("ChunkedFile::build: error reading data from file {f_display}: {e}");
-            })?;
+            chunk_data,
+            chunks_offsets,
+        })
+    }
 
-            s.chunks.append(
-                fcc,
-                FileChunk::build(fcc, size, data).inspect_err(|e| {
-                    use tracing::error;
-                    let f_display = filename.as_ref().display();
-                    error!("ChunkedFile::build: error building filechunk from file {f_display}: {e}");
-                })?,
-            );
-        }
-
-        Ok(s)
+    pub fn chunks(&self) -> impl Iterator<Item = (&[u8; 4], &[u8])> {
+        self.chunks_offsets
+            .iter()
+            .map(|(fcc, start, end)| (fcc, &self.chunk_data[*start..*end]))
     }
 }
 

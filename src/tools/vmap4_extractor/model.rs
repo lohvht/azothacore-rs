@@ -1,8 +1,7 @@
 use std::{io, path::Path};
 
-use bvh::aabb::AABB;
 use nalgebra::Vector3;
-use tracing::error;
+use parry3d::bounding_volume::Aabb;
 
 use crate::{
     az_error,
@@ -39,9 +38,9 @@ pub struct Model {
     tex_units: M2Array,           // nTexUnits, ofsTexUnits
     trans_lookup: M2Array,        // nTransLookup, ofsTransLookup
     tex_anim_lookup: M2Array,     // nTexAnimLookup, ofsTexAnimLookup
-    bounding_box: AABB,           // boundingBox
+    bounding_box: Aabb,           // boundingBox
     bounding_sphere_radius: f32,  // boundingSphereRadius
-    collision_box: AABB,          // collisionBox
+    collision_box: Aabb,          // collisionBox
     collision_sphere_radius: f32, // collisionSphereRadius
     bounding_triangles: M2Array,  // nBoundingTriangles, ofsBoundingTriangles
     bounding_vertices: M2Array,   // nBoundingVertices, ofsBoundingVertices
@@ -81,8 +80,11 @@ fn fix_coord_system(v: Vector3<f32>) -> Vector3<f32> {
 impl Model {
     pub fn build<P: AsRef<Path>>(storage: &CascStorageHandle, filename: P) -> AzResult<Self> {
         let f = ChunkedFile::build(storage, &filename)?;
-        let md21 = f.chunks.get(b"12DM").expect("MD21 chunk should exist in this version of WoW");
-        let mut md20data = io::Cursor::new(md21.data.clone());
+        let md21 = f
+            .chunks()
+            .find_map(|(fcc, data)| if fcc == b"12DM" { Some(data) } else { None })
+            .expect("MD21 chunk should exist in this version of WoW");
+        let mut md20data = io::Cursor::new(md21);
 
         let id = read_buf!(md20data, 4)?;
         if &id != b"MD20" {
@@ -114,12 +116,12 @@ impl Model {
         let trans_lookup = M2Array::read(&mut md20data)?;
         let tex_anim_lookup = M2Array::read(&mut md20data)?;
 
-        let bounding_box = AABB::with_bounds(
+        let bounding_box = Aabb::new(
             Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?).into(),
             Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?).into(),
         );
         let bounding_sphere_radius = read_le!(md20data, f32)?;
-        let collision_box = AABB::with_bounds(
+        let collision_box = Aabb::new(
             Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?).into(),
             Vector3::new(read_le!(md20data, f32)?, read_le!(md20data, f32)?, read_le!(md20data, f32)?).into(),
         );
@@ -135,6 +137,10 @@ impl Model {
         let camera_lookup = M2Array::read(&mut md20data)?;
         let ribbon_emitters = M2Array::read(&mut md20data)?;
         let particle_emitters = M2Array::read(&mut md20data)?;
+
+        if bounding_triangles.number == 0 {
+            return Err(az_error!("Model {} has no bounding triangles", filename.as_ref().display()));
+        }
 
         let mut val_vertices = Vec::with_capacity(bounding_vertices.number as usize);
         md20data.set_position(bounding_vertices.offset_elements.into());
@@ -215,23 +221,10 @@ impl Model {
             groups:      vec![GroupModel_Raw {
                 mogp_flags: 0,
                 group_wmo_id: 0,
-                bbcorn1: self.bounding_box.min.into(),
-                bbcorn2: self.bounding_box.max.into(),
-                liquidflags: 0,
-                n_bounding_triangles: vec![self
-                    .bounding_triangles
-                    .number
-                    .try_into()
-                    .inspect_err(|e| {
-                        error!(
-                            "bounding_triangles.number cannot be coerced into u16: it was {}, error was {e}",
-                            self.bounding_triangles.number,
-                        )
-                    })
-                    .unwrap()],
+                bbcorn: self.collision_box,
+                n_bounding_triangles: vec![self.bounding_triangles.number as u16],
                 mesh_triangle_indices, // INDX
                 vertices_chunks,       // VERT
-                liquid_type: 0,
                 liquid: None,
             }],
         }

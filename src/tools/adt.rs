@@ -4,12 +4,11 @@ use std::{
     path::Path,
 };
 
-use byteorder::{LittleEndian, ReadBytesExt};
 use nalgebra::{Matrix3, Vector3};
 
 use crate::{
     read_le_unwrap,
-    tools::extractor_common::{casc_handles::CascStorageHandle, cstr_bytes_to_string, ChunkedFile, FileChunk},
+    tools::extractor_common::{casc_handles::CascStorageHandle, chunked_data_offsets, cstr_bytes_to_string, ChunkedFile},
     AzResult,
 };
 
@@ -19,26 +18,21 @@ pub const ADT_GRID_SIZE: usize = ADT_CELLS_PER_GRID * ADT_CELL_SIZE;
 pub const ADT_GRID_SIZE_PLUS_ONE: usize = ADT_GRID_SIZE + 1;
 
 pub struct AdtChunkMcnkSubchunkMcvt {
-    pub fcc:        [u8; 4],
-    pub size:       u32,
     pub height_map: [f32; (ADT_CELL_SIZE + 1) * (ADT_CELL_SIZE + 1) + ADT_CELL_SIZE * ADT_CELL_SIZE],
 }
 
-impl From<FileChunk> for AdtChunkMcnkSubchunkMcvt {
-    fn from(value: FileChunk) -> Self {
-        if value.fcc != *b"MCVT" {
-            panic!("value.fcc must be MCVT, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
+impl From<(&[u8; 4], &[u8])> for AdtChunkMcnkSubchunkMcvt {
+    fn from(value: (&[u8; 4], &[u8])) -> Self {
+        let (fcc, data) = value;
+        if fcc != b"MCVT" {
+            panic!("fcc must be MCVT, got {}", std::str::from_utf8(&fcc[..]).unwrap());
         }
         let mut height_map = [0f32; (ADT_CELL_SIZE + 1) * (ADT_CELL_SIZE + 1) + ADT_CELL_SIZE * ADT_CELL_SIZE];
-        let mut cursor = io::Cursor::new(value.data);
+        let mut cursor = io::Cursor::new(data);
         for h in height_map.iter_mut() {
-            *h = cursor.read_f32::<LittleEndian>().unwrap();
+            *h = read_le_unwrap!(cursor, f32);
         }
-        Self {
-            fcc: value.fcc,
-            size: value.size,
-            height_map,
-        }
+        Self { height_map }
     }
 }
 
@@ -61,8 +55,6 @@ pub struct AdtChunkMcnkSubchunkMclqLiquidData {
 /// Adt file liquid map chunk (old)
 ///
 pub struct AdtChunkMcnkSubchunkMclq {
-    pub fcc:     [u8; 4],
-    pub size:    u32,
     pub height1: f32,
     pub height2: f32,
     pub liquid:  [[AdtChunkMcnkSubchunkMclqLiquidData; ADT_CELL_SIZE + 1]; ADT_CELL_SIZE + 1],
@@ -79,23 +71,24 @@ pub struct AdtChunkMcnkSubchunkMclq {
     pub data:  [u8; 84],
 }
 
-impl From<FileChunk> for AdtChunkMcnkSubchunkMclq {
-    fn from(value: FileChunk) -> Self {
-        if value.fcc != *b"MCLQ" {
-            panic!("value.fcc must be MCLQ, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
+impl From<(&[u8; 4], &[u8])> for AdtChunkMcnkSubchunkMclq {
+    fn from(value: (&[u8; 4], &[u8])) -> Self {
+        let (fcc, data) = value;
+        if fcc != b"MCLQ" {
+            panic!("fcc must be MCLQ, got {}", std::str::from_utf8(&fcc[..]).unwrap());
         }
+        let mut cursor = io::Cursor::new(data);
         let mut liquid = [[AdtChunkMcnkSubchunkMclqLiquidData::default(); ADT_CELL_SIZE + 1]; ADT_CELL_SIZE + 1];
         let mut flags = [[0u8; ADT_CELL_SIZE]; ADT_CELL_SIZE];
         let mut data = [0u8; 84];
 
         // start reading
-        let mut cursor = io::Cursor::new(value.data);
-        let height1 = cursor.read_f32::<LittleEndian>().unwrap();
-        let height2 = cursor.read_f32::<LittleEndian>().unwrap();
+        let height1 = read_le_unwrap!(cursor, f32);
+        let height2 = read_le_unwrap!(cursor, f32);
         for liqy in liquid.iter_mut() {
             for liquid_data in liqy.iter_mut() {
-                liquid_data.light = cursor.read_u32::<LittleEndian>().unwrap();
-                liquid_data.height = cursor.read_f32::<LittleEndian>().unwrap();
+                liquid_data.light = read_le_unwrap!(cursor, u32);
+                liquid_data.height = read_le_unwrap!(cursor, f32);
             }
         }
         for flags_row in flags.iter_mut() {
@@ -103,8 +96,6 @@ impl From<FileChunk> for AdtChunkMcnkSubchunkMclq {
         }
         cursor.read_exact(&mut data[..]).unwrap();
         Self {
-            fcc: value.fcc,
-            size: value.size,
             height1,
             height2,
             liquid,
@@ -180,29 +171,28 @@ pub struct AdtChunkMh2oLiquidAttributes {
 //
 // Adt file liquid data chunk (new)
 //
-pub struct AdtChunkMh2o {
-    pub fcc:               [u8; 4],
-    pub size:              u32,
+pub struct AdtChunkMh2o<'a> {
     pub liquid:            [[AdtChunkMh2oSmLiquidChunk; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
     pub liquid_instance:   [[AdtChunkMh2oLiquidInstance; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
     pub liquid_attributes: [[AdtChunkMh2oLiquidAttributes; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
-    pub raw_data:          io::Cursor<Vec<u8>>,
+    pub raw_data:          io::Cursor<&'a [u8]>,
 }
 
-impl From<FileChunk> for AdtChunkMh2o {
-    fn from(value: FileChunk) -> Self {
-        if value.fcc != *b"MH2O" {
-            panic!("value.fcc must be MH2O, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
+impl<'a> From<(&[u8; 4], &'a [u8])> for AdtChunkMh2o<'a> {
+    fn from(value: (&[u8; 4], &'a [u8])) -> Self {
+        let (fcc, data) = value;
+        if fcc != b"MH2O" {
+            panic!("fcc must be MH2O, got {}", std::str::from_utf8(&fcc[..]).unwrap());
         }
-        let mut cursor = io::Cursor::new(value.data);
+        let mut cursor = io::Cursor::new(data);
         let mut liquid = [[AdtChunkMh2oSmLiquidChunk::default(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
         let mut liquid_instance = [[AdtChunkMh2oLiquidInstance::default(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
         let mut liquid_attributes = [[AdtChunkMh2oLiquidAttributes::default(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
         for (_i, liq_row) in liquid.iter_mut().enumerate() {
             for (_j, liq) in liq_row.iter_mut().enumerate() {
-                liq.offset_instances = cursor.read_u32::<LittleEndian>().unwrap();
-                liq.used = cursor.read_u32::<LittleEndian>().unwrap();
-                liq.offset_attributes = cursor.read_u32::<LittleEndian>().unwrap();
+                liq.offset_instances = read_le_unwrap!(cursor, u32);
+                liq.used = read_le_unwrap!(cursor, u32);
+                liq.offset_attributes = read_le_unwrap!(cursor, u32);
             }
         }
 
@@ -213,21 +203,21 @@ impl From<FileChunk> for AdtChunkMh2o {
                 }
                 if liquid[i][j].offset_instances > 0 {
                     cursor.set_position(liquid[i][j].offset_instances as u64);
-                    liquid_instance[i][j].liquid_type = cursor.read_u16::<LittleEndian>().unwrap();
-                    liquid_instance[i][j].liquid_vertex_format = cursor.read_u16::<LittleEndian>().unwrap();
-                    liquid_instance[i][j].min_height_level = cursor.read_f32::<LittleEndian>().unwrap();
-                    liquid_instance[i][j].max_height_level = cursor.read_f32::<LittleEndian>().unwrap();
-                    liquid_instance[i][j].offset_x = cursor.read_u8().unwrap();
-                    liquid_instance[i][j].offset_y = cursor.read_u8().unwrap();
-                    liquid_instance[i][j].width = cursor.read_u8().unwrap();
-                    liquid_instance[i][j].height = cursor.read_u8().unwrap();
-                    liquid_instance[i][j].offset_exists_bitmap = cursor.read_u32::<LittleEndian>().unwrap();
-                    liquid_instance[i][j].offset_vertex_data = cursor.read_u32::<LittleEndian>().unwrap();
+                    liquid_instance[i][j].liquid_type = read_le_unwrap!(cursor, u16);
+                    liquid_instance[i][j].liquid_vertex_format = read_le_unwrap!(cursor, u16);
+                    liquid_instance[i][j].min_height_level = read_le_unwrap!(cursor, f32);
+                    liquid_instance[i][j].max_height_level = read_le_unwrap!(cursor, f32);
+                    liquid_instance[i][j].offset_x = read_le_unwrap!(cursor, u8);
+                    liquid_instance[i][j].offset_y = read_le_unwrap!(cursor, u8);
+                    liquid_instance[i][j].width = read_le_unwrap!(cursor, u8);
+                    liquid_instance[i][j].height = read_le_unwrap!(cursor, u8);
+                    liquid_instance[i][j].offset_exists_bitmap = read_le_unwrap!(cursor, u32);
+                    liquid_instance[i][j].offset_vertex_data = read_le_unwrap!(cursor, u32);
                 }
                 if liquid[i][j].offset_attributes > 0 {
                     cursor.set_position(liquid[i][j].offset_attributes as u64);
-                    liquid_attributes[i][j].fishable = cursor.read_u64::<LittleEndian>().unwrap();
-                    liquid_attributes[i][j].deep = cursor.read_u64::<LittleEndian>().unwrap();
+                    liquid_attributes[i][j].fishable = read_le_unwrap!(cursor, u64);
+                    liquid_attributes[i][j].deep = read_le_unwrap!(cursor, u64);
                 } else {
                     liquid_attributes[i][j].fishable = 0xFFFFFFFFFFFFFFFF;
                     liquid_attributes[i][j].deep = 0xFFFFFFFFFFFFFFFF;
@@ -236,8 +226,6 @@ impl From<FileChunk> for AdtChunkMh2o {
         }
         cursor.set_position(0);
         Self {
-            fcc: value.fcc,
-            size: value.size,
             liquid,
             liquid_instance,
             liquid_attributes,
@@ -246,12 +234,12 @@ impl From<FileChunk> for AdtChunkMh2o {
     }
 }
 
-impl AdtChunkMh2o {
+impl<'a> AdtChunkMh2o<'a> {
     pub fn get_exists_bitmap(&mut self, i: usize, j: usize) -> u64 {
         let offset = self.liquid_instance[i][j].offset_exists_bitmap as u64;
         if offset > 0 {
             self.raw_data.set_position(self.liquid_instance[i][j].offset_exists_bitmap as u64);
-            self.raw_data.read_u64::<LittleEndian>().unwrap()
+            read_le_unwrap!(self.raw_data, u64)
         } else {
             u64::MAX
         }
@@ -259,43 +247,35 @@ impl AdtChunkMh2o {
 }
 
 pub struct AdtChunkMfbo {
-    pub fcc:  [u8; 4],
-    pub size: u32,
-    pub max:  Matrix3<i16>,
-    pub min:  Matrix3<i16>,
+    pub max: Matrix3<i16>,
+    pub min: Matrix3<i16>,
 }
 
-impl From<FileChunk> for AdtChunkMfbo {
-    fn from(value: FileChunk) -> Self {
-        if value.fcc != *b"MFBO" {
-            panic!("value.fcc must be MFBO, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
+impl From<(&[u8; 4], &[u8])> for AdtChunkMfbo {
+    fn from(value: (&[u8; 4], &[u8])) -> Self {
+        let (fcc, data) = value;
+        if fcc != b"MFBO" {
+            panic!("fcc must be MFBO, got {}", std::str::from_utf8(&fcc[..]).unwrap());
         }
-        let mut cursor = io::Cursor::new(value.data);
+        let mut cursor = io::Cursor::new(data);
         let mut max = Matrix3::zeros();
         for mut row in max.row_iter_mut() {
             for v in row.iter_mut() {
-                *v = cursor.read_i16::<LittleEndian>().unwrap();
+                *v = read_le_unwrap!(cursor, i16);
             }
         }
         let mut min = Matrix3::zeros();
         for mut row in min.row_iter_mut() {
             for v in row.iter_mut() {
-                *v = cursor.read_i16::<LittleEndian>().unwrap();
+                *v = read_le_unwrap!(cursor, i16);
             }
         }
-        Self {
-            fcc: value.fcc,
-            size: value.size,
-            max,
-            min,
-        }
+        Self { max, min }
     }
 }
 
 #[derive(Default)]
 pub struct AdtChunkMcnk {
-    pub fcc:              [u8; 4],
-    pub size:             u32,
     pub flags:            u32,
     ix:                   u32,
     iy:                   u32,
@@ -340,50 +320,104 @@ pub struct AdtChunkMcnk {
     pub offs_mccv:        u32,
     pub props:            u32,
     pub effect_id:        u32,
+    pub mcvt:             Option<AdtChunkMcnkSubchunkMcvt>,
+    pub mclq:             Option<AdtChunkMcnkSubchunkMclq>,
 }
 
-impl From<FileChunk> for AdtChunkMcnk {
+impl From<(&[u8; 4], &[u8])> for AdtChunkMcnk {
     // allow field reassing with default as cursor reading order matters
-    #[allow(clippy::field_reassign_with_default)]
-    fn from(value: FileChunk) -> Self {
-        if value.fcc != *b"MCNK" {
-            panic!("value.fcc must be MCNK, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
+    fn from(value: (&[u8; 4], &[u8])) -> Self {
+        let (fcc, data) = value;
+        if fcc != b"MCNK" {
+            panic!("value.fcc must be MCNK, got {}", std::str::from_utf8(&fcc[..]).unwrap());
         }
-        let mut cursor = io::Cursor::new(value.data);
-        let mut data = Self::default();
-        data.fcc = value.fcc;
-        data.size = value.size;
+        let mut cursor = io::Cursor::new(data);
 
-        data.flags = cursor.read_u32::<LittleEndian>().unwrap();
-        data.ix = cursor.read_u32::<LittleEndian>().unwrap();
-        data.iy = cursor.read_u32::<LittleEndian>().unwrap();
-        data.n_layers = cursor.read_u32::<LittleEndian>().unwrap();
-        data.n_doodad_refs = cursor.read_u32::<LittleEndian>().unwrap();
-        cursor.read_exact(&mut data.high_res_holes[..]).unwrap();
-        data.offs_mcly = cursor.read_u32::<LittleEndian>().unwrap();
-        data.offs_mcrf = cursor.read_u32::<LittleEndian>().unwrap();
-        data.offs_mcal = cursor.read_u32::<LittleEndian>().unwrap();
-        data.size_mcal = cursor.read_u32::<LittleEndian>().unwrap();
-        data.offs_mcsh = cursor.read_u32::<LittleEndian>().unwrap();
-        data.size_mcsh = cursor.read_u32::<LittleEndian>().unwrap();
-        data.areaid = cursor.read_u32::<LittleEndian>().unwrap();
-        data.n_map_obj_refs = cursor.read_u32::<LittleEndian>().unwrap();
-        data.holes_low_res = cursor.read_u16::<LittleEndian>().unwrap();
-        data.unknown_but_used = cursor.read_u16::<LittleEndian>().unwrap();
-        cursor.read_exact(&mut data.pred_tex[..]).unwrap();
-        cursor.read_exact(&mut data.no_effect_doodad[..]).unwrap();
-        data.offs_mcse = cursor.read_u32::<LittleEndian>().unwrap();
-        data.n_snd_emitters = cursor.read_u32::<LittleEndian>().unwrap();
-        data.offs_mclq = cursor.read_u32::<LittleEndian>().unwrap();
-        data.size_mclq = cursor.read_u32::<LittleEndian>().unwrap();
-        data.zpos = cursor.read_f32::<LittleEndian>().unwrap();
-        data.xpos = cursor.read_f32::<LittleEndian>().unwrap();
-        data.ypos = cursor.read_f32::<LittleEndian>().unwrap();
-        data.offs_mccv = cursor.read_u32::<LittleEndian>().unwrap();
-        data.props = cursor.read_u32::<LittleEndian>().unwrap();
-        data.effect_id = cursor.read_u32::<LittleEndian>().unwrap();
+        let flags = read_le_unwrap!(cursor, u32);
+        let ix = read_le_unwrap!(cursor, u32);
+        let iy = read_le_unwrap!(cursor, u32);
+        let n_layers = read_le_unwrap!(cursor, u32);
+        let n_doodad_refs = read_le_unwrap!(cursor, u32);
+        let mut high_res_holes = [0u8; 8];
+        cursor.read_exact(&mut high_res_holes[..]).unwrap();
+        let offs_mcly = read_le_unwrap!(cursor, u32);
+        let offs_mcrf = read_le_unwrap!(cursor, u32);
+        let offs_mcal = read_le_unwrap!(cursor, u32);
+        let size_mcal = read_le_unwrap!(cursor, u32);
+        let offs_mcsh = read_le_unwrap!(cursor, u32);
+        let size_mcsh = read_le_unwrap!(cursor, u32);
+        let areaid = read_le_unwrap!(cursor, u32);
+        let n_map_obj_refs = read_le_unwrap!(cursor, u32);
+        let holes_low_res = read_le_unwrap!(cursor, u16);
+        let unknown_but_used = read_le_unwrap!(cursor, u16);
+        let mut pred_tex = [0u8; 16];
+        cursor.read_exact(&mut pred_tex[..]).unwrap();
+        let mut no_effect_doodad = [0u8; 8];
+        cursor.read_exact(&mut no_effect_doodad[..]).unwrap();
+        let offs_mcse = read_le_unwrap!(cursor, u32);
+        let n_snd_emitters = read_le_unwrap!(cursor, u32);
+        let offs_mclq = read_le_unwrap!(cursor, u32);
+        let size_mclq = read_le_unwrap!(cursor, u32);
+        let zpos = read_le_unwrap!(cursor, f32);
+        let xpos = read_le_unwrap!(cursor, f32);
+        let ypos = read_le_unwrap!(cursor, f32);
+        let offs_mccv = read_le_unwrap!(cursor, u32);
+        let props = read_le_unwrap!(cursor, u32);
+        let effect_id = read_le_unwrap!(cursor, u32);
 
-        data
+        // Process the rest of the subchunks
+        let chunk_data = cursor.remaining_slice();
+        let mut mcvt = None;
+        let mut mclq = None;
+        for (fourcc, start, end) in chunked_data_offsets(chunk_data).unwrap().into_iter() {
+            match &fourcc {
+                b"MCVT" => {
+                    if mcvt.is_some() {
+                        panic!("MCVT IS ALREADY SET");
+                    }
+                    mcvt = Some(AdtChunkMcnkSubchunkMcvt::from((&fourcc, &chunk_data[start..end])));
+                },
+                b"MCLQ" => {
+                    if mclq.is_some() {
+                        panic!("MCLQ IS ALREADY SET");
+                    }
+                    mclq = Some(AdtChunkMcnkSubchunkMclq::from((&fourcc, &chunk_data[start..end])));
+                },
+                _ => {},
+            }
+        }
+        Self {
+            flags,
+            ix,
+            iy,
+            n_layers,
+            n_doodad_refs,
+            high_res_holes,
+            offs_mcly,
+            offs_mcrf,
+            offs_mcal,
+            size_mcal,
+            offs_mcsh,
+            size_mcsh,
+            areaid,
+            n_map_obj_refs,
+            holes_low_res,
+            unknown_but_used,
+            pred_tex,
+            no_effect_doodad,
+            offs_mcse,
+            n_snd_emitters,
+            offs_mclq,
+            size_mclq,
+            zpos,
+            xpos,
+            ypos,
+            offs_mccv,
+            props,
+            effect_id,
+            mcvt,
+            mclq,
+        }
     }
 }
 
@@ -416,13 +450,14 @@ pub struct AdtMapObjectDefs {
     pub scale:      u16,
 }
 
-impl From<FileChunk> for AdtChunkModf {
-    fn from(value: FileChunk) -> Self {
-        if value.fcc != *b"MODF" {
-            panic!("value.fcc must be MODF, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
+impl From<(&[u8; 4], &[u8])> for AdtChunkModf {
+    fn from(value: (&[u8; 4], &[u8])) -> Self {
+        let (fcc, data) = value;
+        if fcc != b"MODF" {
+            panic!("fcc must be MODF, got {}", std::str::from_utf8(&fcc[..]).unwrap());
         }
-        let data_len: usize = value.data.len();
-        let mut cursor = io::Cursor::new(value.data);
+        let data_len: usize = data.len();
+        let mut cursor = io::Cursor::new(data);
         let mut map_object_defs = Vec::new();
 
         while cursor.position() < data_len as u64 {
@@ -484,12 +519,13 @@ pub struct AdtDoodadDef {
     pub flags:     u16,
 }
 
-impl From<FileChunk> for AdtChunkMddf {
-    fn from(value: FileChunk) -> Self {
-        if value.fcc != *b"MDDF" {
-            panic!("value.fcc must be MDDF, got {}", std::str::from_utf8(&value.fcc[..]).unwrap());
+impl From<(&[u8; 4], &[u8])> for AdtChunkMddf {
+    fn from(value: (&[u8; 4], &[u8])) -> Self {
+        let (fcc, data) = value;
+        if fcc != b"MDDF" {
+            panic!("fcc must be MDDF, got {}", std::str::from_utf8(&fcc[..]).unwrap());
         }
-        let mut cursor = io::Cursor::new(value.data);
+        let mut cursor = io::Cursor::new(data);
         let mut doodad_defs = Vec::new();
         while !cursor.is_empty() {
             let id = read_le_unwrap!(cursor, u32);
@@ -537,14 +573,13 @@ impl ADTFile {
         let mut model_paths = HashMap::new();
         let mut wmo_paths = HashMap::new();
 
-        for (fourcc, chunk) in file.chunks {
-            match &fourcc {
+        for (fourcc, chunk) in file.chunks() {
+            match fourcc {
                 b"MCIN" => {},
                 b"MTEX" => {},
                 b"MMDX" => {
                     let mut offset = 0;
                     let paths = chunk
-                        .data
                         .split_inclusive(|b| *b == 0)
                         .map(|raw| {
                             // We dont anticipate a panic here as the strings will always be nul-terminated
@@ -559,7 +594,6 @@ impl ADTFile {
                 b"MWMO" => {
                     let mut offset = 0;
                     let paths = chunk
-                        .data
                         .split_inclusive(|b| *b == 0)
                         .map(|raw| {
                             // We dont anticipate a panic here as the strings will always be nul-terminated
@@ -573,10 +607,10 @@ impl ADTFile {
                 },
                 //======================
                 b"MDDF" => {
-                    mddf.push(AdtChunkMddf::from(chunk));
+                    mddf.push(AdtChunkMddf::from((fourcc, chunk)));
                 },
                 b"MODF" => {
-                    modf.push(AdtChunkModf::from(chunk));
+                    modf.push(AdtChunkModf::from((fourcc, chunk)));
                 },
                 _ => {},
             }

@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, HashMap},
     io::{self, Read},
     path::Path,
 };
@@ -7,12 +7,16 @@ use std::{
 use byteorder::{LittleEndian, ReadBytesExt};
 use flagset::{flags, FlagSet};
 use nalgebra::{Vector3, Vector4};
+use parry3d::bounding_volume::Aabb;
 use tracing::{debug, error};
 
 use crate::{
     az_error,
-    common::collision::maps::tile_assembler::{GroupModel_Liquid_Raw, GroupModel_Raw, WorldModel_Raw},
-    tools::extractor_common::{casc_handles::CascStorageHandle, cstr_bytes_to_string, ChunkedFile},
+    common::collision::{
+        maps::tile_assembler::{GroupModel_Raw, WorldModel_Raw},
+        models::world_model::{WmoLiquid, WmoLiquidParams},
+    },
+    tools::extractor_common::{casc_handles::CascStorageHandle, chunked_data_offsets, cstr_bytes_to_string, ChunkedFile},
     AzResult,
 };
 
@@ -74,10 +78,10 @@ impl WmoRoot {
             ..Self::default()
         };
         let mut wmo_paths = HashMap::new();
-        for (fourcc, chunk) in cf.chunks {
-            match &fourcc {
+        for (fourcc, chunk) in cf.chunks() {
+            match fourcc {
                 b"MOHD" => {
-                    let mut f = io::Cursor::new(&chunk.data);
+                    let mut f = io::Cursor::new(chunk);
 
                     s.n_textures = f.read_u32::<LittleEndian>()?; // , 4
                     s.n_groups = f.read_u32::<LittleEndian>()?; // , 4
@@ -102,7 +106,7 @@ impl WmoRoot {
                     s.num_lod = f.read_u16::<LittleEndian>()?; // , 2
                 },
                 b"MODS" => {
-                    let mut f = io::Cursor::new(&chunk.data);
+                    let mut f = io::Cursor::new(chunk);
                     while !f.is_empty() {
                         let mut name = [0u8; 20];
                         f.read_exact(&mut name)?;
@@ -151,7 +155,7 @@ impl WmoRoot {
                 },
                 b"MODN" => {
                     let mut offset = 0;
-                    for raw in chunk.data.split_inclusive(|b| *b == 0) {
+                    for raw in chunk.split_inclusive(|b| *b == 0) {
                         // We dont anticipate a panic here as the strings will always be nul-terminated
                         let p = cstr_bytes_to_string(raw).unwrap();
                         if p.len() >= 4 {
@@ -161,7 +165,7 @@ impl WmoRoot {
                     }
                 },
                 b"MODD" => {
-                    let mut f = io::Cursor::new(&chunk.data);
+                    let mut f = io::Cursor::new(chunk);
                     while !f.is_empty() {
                         s.doodad_data.spawns.push(WmoModd {
                             name_index: f.read_u32::<LittleEndian>()?,
@@ -182,7 +186,7 @@ impl WmoRoot {
                     }
                 },
                 b"GFID" => {
-                    let mut f: io::Cursor<&Vec<u8>> = io::Cursor::new(&chunk.data);
+                    let mut f = io::Cursor::new(chunk);
                     // full LOD reading code for reference
                     // commented out as we are not interested in any of them beyond first, most detailed
 
@@ -223,12 +227,7 @@ impl WmoRoot {
         Ok(s)
     }
 
-    fn init_wmo_groups(
-        &mut self,
-        storage: &CascStorageHandle,
-        wmo_paths: HashMap<usize, String>,
-        // valid_doodad_name_indices: HashSet<usize>,
-    ) -> AzResult<()> {
+    fn init_wmo_groups(&mut self, storage: &CascStorageHandle, wmo_paths: HashMap<usize, String>) -> AzResult<()> {
         for group_file_data_id in self.group_file_data_ids.iter() {
             let s = format!("FILE{group_file_data_id:08X}.xxx");
             let fgroup = WmoGroup::build(self, storage, s).inspect_err(|e| {
@@ -249,23 +248,6 @@ impl WmoRoot {
                     },
                     Some(s) => s,
                 };
-
-                // let mut valid_doodad_name_indices = HashSet::new();
-                // for (doodad_name_index, s) in self.doodad_data.paths.iter() {
-                //     match self.extract_single_model(storage, s) {
-                //         Ok(_) => {
-                //             valid_doodad_name_indices.insert(*doodad_name_index);
-                //         },
-                //         Err(e) => {
-                //             warn!("extract_single_wmo extract_single_model err for path {s} due to err: {e}");
-                //         },
-                //     };
-                // }
-                // let doodad_name_index = self.doodad_data.spawns[*group_reference as usize].name_index;
-                // if valid_doodad_name_indices.get(&(doodad_name_index as usize)).is_none() {
-                //     continue;
-                // }
-
                 self.doodad_data.references.insert(*group_reference as u32, path.clone());
             }
             self.wmo_groups.push(fgroup);
@@ -317,7 +299,7 @@ impl WMOLiquidHeader {
 }
 
 #[allow(dead_code)]
-#[derive(Default)]
+#[derive(Default, Debug)]
 struct WMOLiquidVert {
     unk1:   u16,
     unk2:   u16,
@@ -369,7 +351,8 @@ struct WmoGroup {
 
     // n_triangles:       usize,
     // n_vertices:        usize,
-    liquflags:         u32,
+    liq_has_mogp_liq:  bool,
+    liq_has_mliq:      bool,
     doodad_references: Vec<u16>,
 }
 
@@ -400,8 +383,11 @@ impl WmoGroup {
         let mut s = Self::default();
 
         // MOGP should exist
-        let mogp = f.chunks.get(b"MOGP").unwrap();
-        let mut mogp_data = io::Cursor::new(&mogp.data);
+        let mogp = f
+            .chunks()
+            .find_map(|(fcc, data)| if fcc == b"MOGP" { Some(data) } else { None })
+            .unwrap();
+        let mut mogp_data = io::Cursor::new(&mogp);
         s.group_name = mogp_data.read_u32::<LittleEndian>()?; // , 4
         s.desc_group_name = mogp_data.read_u32::<LittleEndian>()?; // , 4
         s.mogp_flags = mogp_data.read_u32::<LittleEndian>()?; // , 4
@@ -435,14 +421,15 @@ impl WmoGroup {
             s.group_liquid = get_liquid_type_id(s.group_liquid + 1, s.mogp_flags);
         }
         if s.group_liquid > 0 {
-            s.liquflags |= 2;
+            s.liq_has_mogp_liq = true;
         }
-        let mut mopy_data_size = 0;
-        let mut movt_data_size = 0;
-        for (fourcc, subchunk) in mogp.sub_chunks.iter() {
+
+        let mogp_subchunks = mogp_data.remaining_slice();
+        for (fourcc, start, end) in &chunked_data_offsets(mogp_subchunks)? {
+            let subchunk_data = &mogp_subchunks[*start..*end];
             #[allow(clippy::if_same_then_else)]
             if fourcc == b"MOPY" {
-                let mut data = io::Cursor::new(&subchunk.data);
+                let mut data = io::Cursor::new(subchunk_data);
                 while !data.is_empty() {
                     s.mopy.push(WmoGroupMOPY {
                         flag:        FlagSet::new(data.read_u8()?)
@@ -451,9 +438,8 @@ impl WmoGroup {
                     });
                 }
                 // s.n_triangles = s.mopy.len();
-                mopy_data_size = subchunk.size;
             } else if fourcc == b"MOVI" {
-                let mut data = io::Cursor::new(&subchunk.data);
+                let mut data = io::Cursor::new(subchunk_data);
                 while !data.is_empty() {
                     s.movi.push(Vector3::new(
                         data.read_u16::<LittleEndian>()?,
@@ -462,7 +448,7 @@ impl WmoGroup {
                     ));
                 }
             } else if fourcc == b"MOVT" {
-                let mut data = io::Cursor::new(&subchunk.data);
+                let mut data = io::Cursor::new(subchunk_data);
                 while !data.is_empty() {
                     s.movt.push(Vector3::new(
                         data.read_f32::<LittleEndian>()?,
@@ -471,13 +457,12 @@ impl WmoGroup {
                     ));
                 }
                 // s.n_vertices = s.movt.len();
-                movt_data_size = subchunk.size;
             } else if fourcc == b"MONR" {
                 //
             } else if fourcc == b"MOTV" {
                 //
             } else if fourcc == b"MOBA" {
-                let mut data = io::Cursor::new(&subchunk.data);
+                let mut data = io::Cursor::new(subchunk_data);
                 while !data.is_empty() {
                     let mut unknown_box = [0u8; 10];
                     data.read_exact(&mut unknown_box)?;
@@ -493,13 +478,13 @@ impl WmoGroup {
                     });
                 }
             } else if fourcc == b"MODR" {
-                let mut data = io::Cursor::new(&subchunk.data);
+                let mut data = io::Cursor::new(subchunk_data);
                 while !data.is_empty() {
                     s.doodad_references.push(data.read_u16::<LittleEndian>()?);
                 }
             } else if fourcc == b"MLIQ" {
-                let mut data = io::Cursor::new(&subchunk.data);
-                s.liquflags |= 1;
+                let mut data = io::Cursor::new(subchunk_data);
+                s.liq_has_mliq = true;
                 s.hlq = WMOLiquidHeader {
                     xverts:   data.read_i32::<LittleEndian>()?,
                     yverts:   data.read_i32::<LittleEndian>()?,
@@ -525,7 +510,7 @@ impl WmoGroup {
                 // f.read(LiquBytes, nLiquBytes);
 
                 // Determine legacy liquid type
-                if s.group_liquid > 0 {
+                if s.group_liquid == 0 {
                     for b in s.liqu_bytes.iter() {
                         if (*b & 0xF) != 15 {
                             let liquid_type_id = ((*b & 0xF) + 1).into();
@@ -559,9 +544,7 @@ impl WmoGroup {
             ))
         } else {
             Err(az_error!(
-                "SANITY CHECK FAILED: MOPY and MOVI should be the same, mopy_data_size={}, movt_data_size={}, s.mopy.len()={}, movi.len()={}",
-                mopy_data_size,
-                movt_data_size,
+                "SANITY CHECK FAILED: MOPY and MOVI should be the same, s.mopy.len()={}, movi.len()={}",
                 s.mopy.len(),
                 s.movi.len(),
             ))
@@ -574,18 +557,14 @@ impl WmoGroup {
         let mogp_flags = self.mogp_flags;
         let group_wmo_id = self.group_wmoid;
         // group bound
-        let bbcorn1 = self.bbcorn1;
-        let bbcorn2 = self.bbcorn2;
-        let liquidflags = self.liquflags;
-        let n_bounding_triangles = self.moba.iter().map(|m| m.index_count_movi).collect();
+        let bbcorn = Aabb::new(self.bbcorn1.into(), self.bbcorn2.into());
+        let n_bounding_triangles = self.moba.iter().map(|m| m.index_count_movi).collect::<Vec<_>>();
         #[allow(unused_assignments)]
         let mut mesh_triangle_indices = Vec::new();
         #[allow(unused_assignments)]
         let mut vertices_chunks = Vec::new();
-        let mut liquid = None;
         #[allow(unused_assignments)]
         let mut n_col_triangles = 0;
-        let mut liquid_type = 0;
         if precise_vector_data {
             mesh_triangle_indices = self.movi.clone();
             vertices_chunks = self.movt.clone();
@@ -593,7 +572,7 @@ impl WmoGroup {
         } else {
             //-------INDX------------------------------------
             //-------MOPY--------
-            let mut index_renum = BTreeSet::new();
+            let mut index_renum = vec![-1; self.movt.len()];
             let mut movi_ex = Vec::with_capacity(self.movi.len());
             for (i, mopy) in self.mopy.iter().enumerate() {
                 use MopyFlags::*;
@@ -605,58 +584,64 @@ impl WmoGroup {
                     continue;
                 }
                 // Use this triangle
-                index_renum.insert(self.movi[i].x);
-                index_renum.insert(self.movi[i].y);
-                index_renum.insert(self.movi[i].z);
+                // For now use a dummy number
+                index_renum[self.movi[i].x as usize] = 1i32;
+                index_renum[self.movi[i].y as usize] = 1i32;
+                index_renum[self.movi[i].z as usize] = 1i32;
                 movi_ex.push(self.movi[i]);
             }
             // assign new vertex index numbers
-            let index_renum = index_renum
-                .into_iter()
-                .enumerate()
-                .map(|(new_vert_idx, old_vert_idx)| (old_vert_idx, new_vert_idx as u16))
-                .collect::<BTreeMap<_, _>>();
+            let mut n_col_vertices = 0;
+            for i in index_renum.iter_mut() {
+                if *i == 1 {
+                    *i = n_col_vertices;
+                    n_col_vertices += 1;
+                }
+            }
 
             // translate triangle indices to new numbers
-            let mut triangles_to_use = Vec::with_capacity(movi_ex.len());
-            for movi in movi_ex {
-                // unwrap here is fine, we know that we pushed in these keys.
-                triangles_to_use.push(Vector3::new(
-                    *index_renum.get(&movi.x).unwrap(),
-                    *index_renum.get(&movi.y).unwrap(),
-                    *index_renum.get(&movi.z).unwrap(),
-                ));
+            for movi in movi_ex.iter_mut() {
+                movi.x = index_renum[usize::try_from(movi.x).unwrap()] as u16;
+                movi.y = index_renum[usize::try_from(movi.y).unwrap()] as u16;
+                movi.z = index_renum[usize::try_from(movi.z).unwrap()] as u16;
             }
-            let mut vertices_to_use = vec![Vector3::zeros(); index_renum.len()];
-            for (old_vert_idx, new_vert_idx) in index_renum {
-                vertices_to_use[new_vert_idx as usize] = self.movt[old_vert_idx as usize]
+            let mut check = n_col_vertices;
+            let mut vertices_to_use = Vec::with_capacity(self.movt.len());
+            for idx in index_renum {
+                if idx >= 0 {
+                    vertices_to_use.push(self.movt[usize::try_from(idx).unwrap()]);
+                    check -= 1;
+                }
             }
-            mesh_triangle_indices = triangles_to_use;
+            assert!(check == 0);
+            mesh_triangle_indices = movi_ex;
             vertices_chunks = vertices_to_use;
             n_col_triangles = mesh_triangle_indices.len();
         }
-        if (self.liquflags & 3) > 0 {
-            liquid_type = self.group_liquid;
-            if (self.liquflags & 1) > 0 {
-                let liq = GroupModel_Liquid_Raw {
-                    header:         self.hlq.clone(),
+        let liquid = if self.liq_has_mliq {
+            Some(WmoLiquid::new(
+                self.group_liquid,
+                Ok(WmoLiquidParams {
                     // only need height values, the other values are unknown anyway
-                    liquid_heights: self.liqu_ex.iter().map(|l| l.height).collect(),
-                    liquid_flags:   self.liqu_bytes.clone(),
-                };
-                liquid = Some(liq);
-            }
-        }
+                    i_height: self.liqu_ex.iter().map(|l| l.height).collect(),
+                    i_flags:  self.liqu_bytes.clone(),
+                    width:    self.hlq.xtiles as usize,
+                    height:   self.hlq.ytiles as usize,
+                    corner:   Vector3::new(self.hlq.pos_x, self.hlq.pos_y, self.hlq.pos_z),
+                }),
+            ))
+        } else if self.liq_has_mogp_liq {
+            Some(WmoLiquid::new(self.group_liquid, Err(bbcorn.maxs.z)))
+        } else {
+            None
+        };
         let raw = GroupModel_Raw {
             mogp_flags,
             group_wmo_id,
-            bbcorn1,
-            bbcorn2,
-            liquidflags,
+            bbcorn,
             n_bounding_triangles,
             mesh_triangle_indices,
             vertices_chunks,
-            liquid_type,
             liquid,
         };
         (n_col_triangles, raw)

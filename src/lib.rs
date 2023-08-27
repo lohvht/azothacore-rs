@@ -36,29 +36,29 @@ use tools::extractor_common::casc_handles::CascHandlerError;
 
 #[derive(Error, Debug)]
 pub enum AzothaError {
-    #[error("DB Error")]
+    #[error("DB Error: {0}")]
     Db(#[from] sqlx::Error),
-    #[error("DB Loader Error")]
+    #[error("DB Loader Error: {0}")]
     DbLoad(#[from] DatabaseLoaderError),
-    #[error("World Error")]
+    #[error("World Error: {0}")]
     World(#[from] WorldError),
-    #[error("io error")]
+    #[error("io error: {0}")]
     Io(#[from] std::io::Error),
-    #[error("bincode serialisation/deserialisation error")]
+    #[error("bincode serialisation/deserialisation error: {0}")]
     Bincode(#[from] bincode::Error),
-    #[error("casc_handler error")]
+    #[error("casc_handler error: {0}")]
     CascHandler(#[from] CascHandlerError),
-    #[error("error parsing Integer from string")]
+    #[error("error parsing Integer from string: {0}")]
     StrToIntParse(#[from] num::ParseIntError),
-    #[error("config error")]
+    #[error("config error: {0}")]
     Config(#[from] ConfigError),
-    #[error("tokio join error")]
+    #[error("tokio join error: {0}")]
     TokioJoin(#[from] tokio::task::JoinError),
-    #[error("VMAP FACTORY LOAD ERROR")]
+    #[error("VMAP FACTORY LOAD ERROR: {0}")]
     VmapFactory(#[from] VmapFactoryLoadError),
-    #[error("Detour error")]
+    #[error("Detour error: {0}")]
     Detour(#[from] DetourStatus),
-    #[error("Invalid bits")]
+    #[error("Invalid bits: {0}")]
     InvalidBits(InvalidBits),
     #[error("err: {0}")]
     General(String),

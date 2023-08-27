@@ -1,15 +1,15 @@
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet},
     fs,
     io,
     path::Path,
     sync::mpsc::channel,
 };
 
-use bvh::{aabb::AABB, bounding_hierarchy::BHShape, bvh::BVH};
 use flagset::FlagSet;
 use futures::future;
 use nalgebra::{Matrix3, Rotation, Vector2, Vector3};
+use parry3d::{bounding_volume::Aabb, math::Point, partitioning::Qbvh};
 use rayon::prelude::*;
 use tracing::{error, info, warn};
 
@@ -28,12 +28,12 @@ use crate::{
     sanity_check_read_all_bytes_from_reader,
     tools::{
         extractor_common::{bincode_deserialise, bincode_serialise, get_fixed_plain_name, ExtractorConfig},
-        vmap4_extractor::{wmo::WMOLiquidHeader, TempGameObjectModel},
+        vmap4_extractor::TempGameObjectModel,
     },
     AzResult,
 };
 
-pub fn read_map_spawns(map_spawns: Vec<VmapModelSpawn>) -> BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>> {
+pub fn read_map_spawns(map_spawns: impl Iterator<Item = VmapModelSpawn>) -> BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>> {
     // retrieve the unique entries
     let mut map_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>> = BTreeMap::new();
     for spawn in map_spawns {
@@ -48,8 +48,8 @@ pub fn read_map_spawns(map_spawns: Vec<VmapModelSpawn>) -> BTreeMap<u32, BTreeMa
 
 pub fn tile_assembler_convert_world2(
     args: &ExtractorConfig,
-    map_spawns: Vec<VmapModelSpawn>,
-    temp_gameobject_models: Vec<TempGameObjectModel>,
+    map_spawns: impl Iterator<Item = VmapModelSpawn>,
+    temp_gameobject_models: impl Iterator<Item = TempGameObjectModel>,
 ) -> AzResult<()> {
     let src = args.output_vmap_sz_work_dir_wmo();
     let dst = args.output_vmap_output_path();
@@ -85,15 +85,8 @@ pub fn tile_assembler_convert_world2(
                 &mut tile_entries
             };
             let bounds = entry.bound.expect("By here bounds should never be unset");
-            let bounds = AABB::with_bounds(bounds[0].into(), bounds[1].into());
-            let low = Vector2::new(
-                (bounds.min.x * inv_tile_size).floor() as u16,
-                (bounds.min.y * inv_tile_size).floor() as u16,
-            );
-            let high = Vector2::new(
-                (bounds.max.x * inv_tile_size).ceil() as u16,
-                (bounds.max.y * inv_tile_size).ceil() as u16,
-            );
+            let low = Vector2::new((bounds.mins.x * inv_tile_size) as u16, (bounds.mins.y * inv_tile_size) as u16);
+            let high = Vector2::new((bounds.maxs.x * inv_tile_size) as u16, (bounds.maxs.y * inv_tile_size) as u16);
 
             for x in low.x..=high.x {
                 for y in low.y..=high.y {
@@ -112,75 +105,15 @@ pub fn tile_assembler_convert_world2(
         }
 
         info!("Creating map tree for map {map_id}. map_spawns len is {}...", map_spawns.len());
-        let ptree = BVH::build(&mut map_spawns);
+        let mut ptree = Qbvh::new();
         // unborrow map_spawns
         let map_spawns = map_spawns.into_iter().map(|m| &*m).collect::<Vec<_>>();
+        let map_data = map_spawns.iter().enumerate().map(|(idx, m)| (idx, m.bound.unwrap()));
+        ptree.clear_and_rebuild(map_data, 0.0);
 
         // write map tree file
         StaticMapTree::write_map_tree_to_file(&dst, map_id, &ptree, &map_spawns)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("write map tree to file err: {e}")))?;
-
-        if args.vmap_extract_and_generate.debug_validation {
-            info!("Debug validating map tree {map_id}");
-            let mapfilename = StaticMapTree::map_file_name(&dst, map_id);
-            let mut mapfile = fs::File::open(&mapfilename).inspect_err(|e| {
-                error!("cannot open {}, err was: {e}", mapfilename.display());
-            })?;
-            let (r_bvh, r_spawn_id_to_bvh_id) = StaticMapTree::read_map_tree(&mut mapfile)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("read map tree to file err: {e}")))?;
-
-            if r_bvh.nodes.len() != ptree.nodes.len() {
-                error!(
-                    "NODES FOR MAP BVH SHOULD MATCH IN LEN, CALCULATED: {}, READ: {}",
-                    ptree.nodes.len(),
-                    r_bvh.nodes.len()
-                )
-            }
-            if map_spawns.len() != r_spawn_id_to_bvh_id.len() {
-                error!(
-                    "SPAWN IDS FOR MAP SHOULD MATCH IN LEN, CALCULATED: {}, READ: {}",
-                    map_spawns.len(),
-                    r_spawn_id_to_bvh_id.len()
-                )
-            }
-            for m in map_spawns.iter() {
-                match r_spawn_id_to_bvh_id.get(&m.id) {
-                    None => {
-                        error!("CALCULATED SPAWN ID SHOULD BE IN READ SPAWN ID, CALCULATED: ID: {}", m.id)
-                    },
-                    Some(bvh_id) if *bvh_id != m.bh_node_index() => {
-                        error!(
-                            "CALCULATED SPAWN ID MISMATCH, CALCULATED: ID: {}, READ ID: {}",
-                            m.bh_node_index(),
-                            bvh_id
-                        )
-                    },
-                    _ => {},
-                }
-            }
-            let calc_spawn_id_to_bvh_id = map_spawns.iter().map(|v| (v.id, v.bh_node_index())).collect::<HashMap<_, _>>();
-            if r_spawn_id_to_bvh_id != calc_spawn_id_to_bvh_id {
-                error!(
-                    "SPAWN IDS FOR MAP SHOULD MATCH IN LEN, CALCULATED: {}, READ: {}",
-                    calc_spawn_id_to_bvh_id.len(),
-                    r_spawn_id_to_bvh_id.len()
-                )
-            }
-            for (spawn_id, r_bh_id) in r_spawn_id_to_bvh_id.iter() {
-                let has_r_bh_id = r_bvh.nodes.iter().any(|n| match n {
-                    bvh::bvh::BVHNode::Leaf { shape_index, .. } => *shape_index == *r_bh_id,
-                    bvh::bvh::BVHNode::Node {
-                        child_l_index,
-                        child_r_index,
-                        ..
-                    } => *child_l_index == *r_bh_id || *child_r_index == *r_bh_id,
-                });
-                if !has_r_bh_id {
-                    error!("Spawn ID may be invalid as its respective BH ID isnt found. spawn_id {spawn_id}, bh_id: {r_bh_id}");
-                }
-            }
-            info!("Debug validating map tree done {map_id}")
-        }
 
         // write map tile files, similar to ADT files, only with extra BVH tree node info
         for (tile_id, tile_entries) in tile_entries.iter() {
@@ -203,34 +136,8 @@ pub fn tile_assembler_convert_world2(
                     all_tile_entries.push(model_spawn);
                 }
             }
-            StaticMapTree::write_map_tile_spawns_file(&dst, map_id, y, x, &all_tile_entries)
+            StaticMapTree::write_map_tile_spawns_file(&dst, map_id, x, y, &all_tile_entries)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("write_map_tile_spawns_file err: {e}")))?;
-            if args.vmap_extract_and_generate.debug_validation {
-                let tilefilename = StaticMapTree::get_tile_file_name(&dst, map_id, y, x);
-                let mut tilefile = fs::File::open(&tilefilename).inspect_err(|e| {
-                    error!("cannot open {}, err was: {e}", tilefilename.display());
-                })?;
-                let r_spawns = StaticMapTree::read_map_tile_spawns(&mut tilefile)
-                    .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("read map tree to file err: {e}")))?;
-
-                if r_spawns.len() != all_tile_entries.len() {
-                    error!(
-                        "SPAWNS FOR MAP TILE SHOULD MATCH IN LEN, CALCULATED: {}, READ: {}",
-                        all_tile_entries.len(),
-                        r_spawns.len(),
-                    )
-                }
-
-                for (i, te) in all_tile_entries.iter().enumerate() {
-                    if te.id != r_spawns[i].id {
-                        error!(
-                            "SPAWNS FOR MAP TILE SHOULD IN ID AND POS, CALCULATED: {}, READ: {}",
-                            all_tile_entries.len(),
-                            r_spawns.len(),
-                        )
-                    }
-                }
-            }
         }
         io::Result::Ok(())
     })?;
@@ -252,7 +159,7 @@ pub fn tile_assembler_convert_world2(
         let dest = dst.clone();
         jhs.push(rt.spawn_blocking(|| {
             info!("Converting {mfile_name}");
-            convert_raw_file(src, dest, mfile_name.into())
+            convert_raw_file(src, dest, mfile_name)
         }))
     }
     rt.block_on(async {
@@ -273,10 +180,6 @@ pub fn tile_assembler_convert_world2(
 }
 
 fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpawn) -> AzResult<()> {
-    if spawn.bound.is_some() {
-        return Ok(());
-    }
-
     let model_filename = src.as_ref().join(&spawn.name);
 
     let model_position = ModelPosition::new(spawn.i_rot, spawn.i_scale);
@@ -292,21 +195,19 @@ fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpaw
     if groups != 1 {
         warn!("Warning: '{}' does not seem to be a M2 model!", model_filename.display());
     }
-    let mut model_bound = AABB::empty();
+    let mut model_bound = Aabb::new_invalid();
 
-    model_bound.grow_mut(&model_position.transform(&raw_model.groups[0].bbcorn1).into());
-    model_bound.grow_mut(&model_position.transform(&raw_model.groups[0].bbcorn2).into());
+    model_bound.take_point(model_position.transform(raw_model.groups[0].bbcorn.mins));
+    model_bound.take_point(model_position.transform(raw_model.groups[0].bbcorn.maxs));
 
-    let mut min = model_bound.min.into();
-    let mut max = model_bound.max.into();
-    min += spawn.i_pos;
-    max += spawn.i_pos;
+    model_bound.mins += spawn.i_pos;
+    model_bound.maxs += spawn.i_pos;
 
-    spawn.bound = Some([min, max]);
+    spawn.bound = Some(model_bound);
     Ok(())
 }
 
-fn convert_raw_file<P: AsRef<Path>>(src: P, dst: P, p_model_filename: P) -> io::Result<()> {
+pub fn convert_raw_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(src: P1, dst: P2, p_model_filename: P3) -> io::Result<()> {
     let filename = src.as_ref().join(p_model_filename.as_ref());
     let out = dst.as_ref().join(format!("{}.vmo", p_model_filename.as_ref().display()));
     if out.try_exists()? {
@@ -325,32 +226,13 @@ fn convert_raw_file<P: AsRef<Path>>(src: P, dst: P, p_model_filename: P) -> io::
         .groups
         .into_iter()
         .map(|raw_group| {
-            let liq = raw_group
-                .liquid
-                .map(|raw_liq| {
-                    WmoLiquid::new(
-                        raw_liq.header.xtiles as u32,
-                        raw_liq.header.ytiles as u32,
-                        Vector3::new(raw_liq.header.pos_x, raw_liq.header.pos_y, raw_liq.header.pos_z),
-                        raw_group.liquid_type,
-                        raw_liq.liquid_heights,
-                        raw_liq.liquid_flags,
-                    )
-                })
-                .or_else(|| {
-                    if (raw_group.liquidflags & 3) > 0 && (raw_group.liquidflags & 1) == 0 {
-                        Some(WmoLiquid::new_without_flags(raw_group.bbcorn2.z))
-                    } else {
-                        None
-                    }
-                });
             GroupModel::new(
                 raw_group.mogp_flags,
                 raw_group.group_wmo_id,
-                AABB::with_bounds(raw_group.bbcorn1.into(), raw_group.bbcorn2.into()),
+                raw_group.bbcorn,
                 raw_group.mesh_triangle_indices,
                 raw_group.vertices_chunks,
-                liq,
+                raw_group.liquid,
             )
         })
         .collect();
@@ -369,13 +251,13 @@ fn convert_raw_file<P: AsRef<Path>>(src: P, dst: P, p_model_filename: P) -> io::
 fn export_gameobject_models<P: AsRef<Path> + std::marker::Sync>(
     src: P,
     dst: P,
-    temp_gameobject_models: Vec<TempGameObjectModel>,
+    temp_gameobject_models: impl Iterator<Item = TempGameObjectModel>,
     spawned_model_files: &mut BTreeSet<String>,
 ) -> AzResult<()> {
+    let temp_gameobject_models = temp_gameobject_models.collect::<Vec<_>>();
     let total_count = temp_gameobject_models.len();
     let (model_file_send, model_file_receive) = channel();
     let (model_list_send, model_list_receive) = channel();
-
     temp_gameobject_models
         .into_par_iter()
         .for_each_with((model_file_send, model_list_send), |(s1, s2), tmp| {
@@ -409,14 +291,24 @@ fn export_gameobject_models<P: AsRef<Path> + std::marker::Sync>(
             if s1.send(model_name.clone()).is_err() {
                 return;
             }
-            let mut bounds = AABB::empty();
+            let mut bounds = Aabb::new(Point::new(f32::NAN, f32::NAN, f32::NAN), Point::new(f32::NAN, f32::NAN, f32::NAN));
+            let mut bound_empty = true;
             for grp in raw_model.groups {
                 for v in grp.vertices_chunks {
-                    bounds.grow_mut(&v.into());
+                    if bound_empty {
+                        bounds = Aabb::new(v.into(), v.into());
+                        bound_empty = false;
+                    } else {
+                        bounds.take_point(v.into());
+                    }
                 }
             }
-            if bounds.is_empty() {
-                warn!("Model {model_name} has empty bounding box or has an invalid bounding box");
+            if bounds.maxs.iter().any(|x| x.is_nan()) || bounds.mins.iter().any(|x| x.is_nan()) {
+                warn!("Model {model_name} has empty bounding box");
+                return;
+            }
+            if !(bounds.maxs.iter().all(|x| x.is_finite()) && bounds.mins.iter().all(|x| x.is_finite())) {
+                warn!("Model {model_name} has invalid bounding box");
                 return;
             }
             _ = s2.send((
@@ -472,7 +364,7 @@ impl ModelPosition {
         self.i_pos -= p_base_pos;
     }
 
-    fn transform(&self, p_in: &Vector3<f32>) -> Vector3<f32> {
+    fn transform(&self, p_in: Point<f32>) -> Point<f32> {
         let mut out = p_in * self.i_scale;
         out = self.i_rotation * out;
         out
@@ -537,16 +429,6 @@ impl WorldModel_Raw {
             n_vectors,
             groups,
         };
-        for g in s.groups.iter() {
-            if let Some(GroupModel_Liquid_Raw { header: hlq, .. }) = &g.liquid {
-                if hlq.xverts != hlq.xtiles + 1 {
-                    panic!("SANITY CHECK, xverts {} must be 1 more than xtiles {}", hlq.xverts, hlq.xtiles);
-                }
-                if hlq.yverts != hlq.ytiles + 1 {
-                    panic!("SANITY CHECK, yverts {} must be 1 more than ytiles {}", hlq.yverts, hlq.ytiles);
-                }
-            }
-        }
         Ok(s)
     }
 }
@@ -556,9 +438,7 @@ impl WorldModel_Raw {
 pub struct GroupModel_Raw {
     pub mogp_flags:            u32,
     pub group_wmo_id:          u32,
-    pub bbcorn1:               Vector3<f32>,
-    pub bbcorn2:               Vector3<f32>,
-    pub liquidflags:           u32,
+    pub bbcorn:                Aabb,
     /// Either from MOBA's MOVI indices count or from M2 collisionIndices size
     /// 1 group have at least 1 of these (group models can have >= 1 MOBAs)
     pub n_bounding_triangles:  Vec<u16>,
@@ -566,14 +446,5 @@ pub struct GroupModel_Raw {
     pub mesh_triangle_indices: Vec<Vector3<u16>>,
     /// Either from MOVT or  in (X,Z,-Y) order
     pub vertices_chunks:       Vec<Vector3<f32>>,
-    pub liquid_type:           u32,
-    pub liquid:                Option<GroupModel_Liquid_Raw>,
-}
-
-#[allow(non_camel_case_types)]
-#[derive(serde::Deserialize, serde::Serialize)]
-pub struct GroupModel_Liquid_Raw {
-    pub header:         WMOLiquidHeader,
-    pub liquid_heights: Vec<f32>,
-    pub liquid_flags:   Vec<u8>,
+    pub liquid:                Option<WmoLiquid>,
 }

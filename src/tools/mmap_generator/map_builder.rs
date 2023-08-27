@@ -5,11 +5,10 @@ use std::{
     sync::{Arc, RwLock},
 };
 
-use bvh::aabb::AABB;
-use indicatif::ParallelProgressIterator;
 use nalgebra::Vector3;
+use parry3d::bounding_volume::Aabb;
 use rayon::prelude::*;
-use tracing::{error, info, instrument, warn};
+use tracing::{error, info, info_span, instrument, warn};
 
 use crate::{
     az_error,
@@ -75,22 +74,21 @@ impl<'tb> MapBuilder<'tb> {
                 },
                 Some(i) => i,
             };
-            tiles.entry(map_id).or_insert(HashSet::new());
+            tiles.entry(map_id).or_default();
         }
         info!("found {} maps", tiles.len());
 
         let mut count = 0;
         for (map_id, map_tiles) in tiles.iter_mut() {
-            for f in get_dir_contents(args.output_vmap_output_path(), "{map_id:04}_*.vmtile")? {
-                let (calc_map_id, tile_id) = match f.file_stem().and_then(|file_stem| file_stem.to_str()).and_then(|f| {
+            for f in get_dir_contents(args.output_vmap_output_path(), &format!("{map_id:04}_*.vmtile"))? {
+                let tile_id = match f.file_stem().and_then(|file_stem| file_stem.to_str()).map(|f| {
                     let splitted = f.splitn(3, '_').collect::<Vec<_>>();
-                    let (map_id, y, x) = (splitted[0], splitted[1], splitted[2]);
+                    let (_map_id, first, second) = (splitted[0], splitted[1], splitted[2]);
 
-                    let map_id = map_id.parse::<u32>().ok()?;
-                    let tile_y = y.parse::<u16>().ok()?;
-                    let tile_x = x.parse::<u16>().ok()?;
+                    let first = first.parse::<u16>().ok().unwrap(); // tileY
+                    let second = second.parse::<u16>().ok().unwrap(); // tileX
 
-                    Some((map_id, StaticMapTree::pack_tile_id(tile_y, tile_x)))
+                    StaticMapTree::pack_tile_id(first, second)
                 }) {
                     None => {
                         warn!("cannot take tileID from vmap tree tile file: {}", f.display());
@@ -98,23 +96,17 @@ impl<'tb> MapBuilder<'tb> {
                     },
                     Some(i) => i,
                 };
-                // Sanity check
-                if calc_map_id != *map_id {
-                    warn!("vmap tree tile file doesnt have matching map_ids?: got {calc_map_id}; expected {map_id}");
-                    continue;
-                }
                 map_tiles.insert(tile_id);
             }
-            for f in get_dir_contents(args.output_map_path(), "{map_id:04}*")? {
-                let (calc_map_id, tile_id) = match f.file_stem().and_then(|file_stem| file_stem.to_str()).and_then(|f| {
+            for f in get_dir_contents(args.output_map_path(), &format!("{map_id:04}*"))? {
+                let tile_id = match f.file_stem().and_then(|file_stem| file_stem.to_str()).map(|f| {
                     let splitted = f.splitn(3, '_').collect::<Vec<_>>();
-                    let (map_id, y, x) = (splitted[0], splitted[1], splitted[2]);
+                    let (_map_id, first, second) = (splitted[0], splitted[1], splitted[2]);
 
-                    let map_id = map_id.parse::<u32>().ok()?;
-                    let tile_y = y.parse::<u16>().ok()?;
-                    let tile_x = x.parse::<u16>().ok()?;
+                    let first = first.parse::<u16>().ok().unwrap(); // tileY
+                    let second = second.parse::<u16>().ok().unwrap(); // tileX
 
-                    Some((map_id, StaticMapTree::pack_tile_id(tile_y, tile_x)))
+                    StaticMapTree::pack_tile_id(second, first)
                 }) {
                     None => {
                         warn!("cannot take tileID from vmap tree tile file: {}", f.display());
@@ -122,22 +114,20 @@ impl<'tb> MapBuilder<'tb> {
                     },
                     Some(i) => i,
                 };
-                // Sanity check
-                if calc_map_id != *map_id {
-                    warn!("vmap tree tile file doesnt have matching map_ids?: got {calc_map_id}; expected {map_id}");
-                    continue;
-                }
                 map_tiles.insert(tile_id);
             }
             // make sure we process maps which don't have tiles
             if map_tiles.is_empty() {
+                info!("No map data found so far, try getting grid bounds: {map_id}");
                 // convert coord bounds to grid bounds
-                let (min_x, min_y, max_x, max_y) = get_grid_bounds(tb, *map_id)?;
-
-                // add all tiles within bounds to tile list.
-                for i in min_x..max_x {
-                    for j in min_y..max_y {
-                        map_tiles.insert(StaticMapTree::pack_tile_id(i, j));
+                // FIXME: This function call to get_grid_bounds will always fail as its trying to get from 64_64, for now we assume
+                //that we dont do anything (like how it silently fails for AC / TC)
+                if let Ok((min_x, min_y, max_x, max_y)) = get_grid_bounds(tb, *map_id) {
+                    // add all tiles within bounds to tile list.
+                    for i in min_x..max_x {
+                        for j in min_y..max_y {
+                            map_tiles.insert(StaticMapTree::pack_tile_id(i, j));
+                        }
                     }
                 }
             }
@@ -244,18 +234,27 @@ impl<'tb> MapBuilder<'tb> {
             // Build all maps if no map id has been specified
             let mut res = vec![];
             for map_id in self.tiles.keys() {
-                if self.should_skip_map(*map_id) {
+                if !self.should_skip_map(*map_id) {
                     res.extend(self.gather_map_tiles(*map_id)?);
                 }
             }
             res
         };
 
-        let num_tiles = tiles_to_build.len() as _;
+        let num_tiles = tiles_to_build.len();
+        let header_span = info_span!("build_maps");
+        let _header_span_enter = header_span.enter();
         let result: AzResult<Vec<_>> = tiles_to_build
             .into_par_iter()
-            .progress_count(num_tiles)
-            .map(|(ti, tp)| build_tile_work(ti, tp))
+            .enumerate()
+            .map(|(count, (ti, tp))| {
+                info!(
+                    "{}/{} building for Map {:04} - {:02},{:02}",
+                    count, num_tiles, ti.map_id, ti.tile_x, ti.tile_y
+                );
+                // Span::current().pb_inc(1);
+                build_tile_work(ti, tp)
+            })
             .collect();
 
         result?;
@@ -327,8 +326,8 @@ impl<'tb> MapBuilder<'tb> {
 
         /***       now create the navmesh       ***/
         // navmesh creation params
-        let nav_mesh_params = DetourNavMeshParams::new(&b_min_max.min.into(), GRID_SIZE, GRID_SIZE, max_tiles as i32, max_polys_per_tile);
-        info!("[Map {map_id:04}] Creating nav_mesh...");
+        let nav_mesh_params = DetourNavMeshParams::new(&b_min_max.mins.into(), GRID_SIZE, GRID_SIZE, max_tiles as i32, max_polys_per_tile);
+        info!("Creating nav_mesh...");
         let (nav_mesh, _) = DetourNavMesh::init(&nav_mesh_params)?;
 
         let file_name = self.tile_builder_params.mmap_output_path.join(format!("{map_id:04}.mmap"));
@@ -430,6 +429,7 @@ impl<'tb> MapBuilder<'tb> {
     }
 }
 
+#[instrument(skip_all, fields(tile = format!("[Map {:04}] [{:02},{:02}]", ti.map_id, ti.tile_x, ti.tile_y)))]
 fn build_tile_work(ti: TileInfo, tp: TileBuilderParams) -> AzResult<()> {
     let tb = match tp.try_to_builder() {
         Err(e) => {
@@ -453,35 +453,41 @@ fn build_tile_work(ti: TileInfo, tp: TileBuilderParams) -> AzResult<()> {
         },
         Ok(n) => n,
     };
-    tb.build_tile(ti.map_id, ti.tile_x, ti.tile_y, &mut nav_mesh)?;
+    tb.build_tile(ti.map_id, ti.tile_x, ti.tile_y, &mut nav_mesh).map_err(|e| {
+        error!("Build tile failed because of error: {e}");
+        e
+    })?;
     Ok(())
 }
 
 fn get_grid_bounds(tb: &TerrainBuilder<'_>, map_id: u32) -> AzResult<(u16, u16, u16, u16)> {
     // make sure we process maps which don't have tiles
     // initialize the static tree, which loads WDT models
-    let mesh_data = tb.load_vmap(map_id, 64, 64)?;
+    //
+    // TODO: Fix me! now this fails because tile_x and tile_y cannot be > 63
+    let mut mesh_data = MeshData::default();
+    tb.load_vmap(map_id, 64, 64, &mut mesh_data)?;
 
     if mesh_data.solid_verts.is_empty() && mesh_data.liquid_verts.is_empty() {
         return Err(az_error!("no mesh verticals found for map_id {map_id}"));
     }
 
-    let mut bounding = AABB::empty();
+    let mut bounding = Aabb::new_invalid();
     for vertex in mesh_data.solid_verts {
-        bounding.grow_mut(&vertex.into());
+        bounding.take_point(vertex.into());
     }
 
     for vertex in mesh_data.liquid_verts {
-        bounding.grow_mut(&vertex.into());
+        bounding.take_point(vertex.into());
     }
 
     // convert coord bounds to grid bounds
     // Axes are flipped somehow here.
-    let min_x = 32 - (bounding.min.x / GRID_SIZE).ceil() as u16;
-    let max_x = 32 - (bounding.max.x / GRID_SIZE).floor() as u16;
+    let min_x = 32 - (bounding.mins.x / GRID_SIZE).floor() as u16;
+    let max_x = 32 - (bounding.maxs.x / GRID_SIZE).floor() as u16;
 
-    let min_y = 32 - (bounding.min.z / GRID_SIZE).ceil() as u16;
-    let max_y = 32 - (bounding.max.z / GRID_SIZE).floor() as u16;
+    let min_y = 32 - (bounding.mins.z / GRID_SIZE).floor() as u16;
+    let max_y = 32 - (bounding.maxs.z / GRID_SIZE).floor() as u16;
 
     Ok((min_x, min_y, max_x, max_y))
 }

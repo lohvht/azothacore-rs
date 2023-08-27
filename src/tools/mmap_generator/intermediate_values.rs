@@ -53,7 +53,7 @@ impl IntermediateValues {
             }};
         }
 
-        let dest_filename_tmpl = meshes_base_dir.as_ref().join("{map_id:04}{tile_x:02}{tile_y:02}.xxx");
+        let dest_filename_tmpl = meshes_base_dir.as_ref().join(format!("{map_id:04}{tile_x:02}{tile_y:02}.xxx"));
 
         // if let Some(v) = &self.heightfield {
         //     debug_write!(dest_filename_tmpl, "hf", v, debug_write_recast_heightfield);
@@ -118,9 +118,7 @@ impl IntermediateValues {
         };
         _ = obj_file.write_all(&[0]);
 
-        let obj_file_name = meshes_base_dir
-            .as_ref()
-            .join(format!("meshes/{map_id:04}{tile_y:02}{tile_x:2}.mesh"));
+        let obj_file_name = meshes_base_dir.as_ref().join(format!("{map_id:04}{tile_y:02}{tile_x:2}.mesh"));
         let mut obj_file = match fs::File::create(&obj_file_name) {
             Err(e) => {
                 tracing::error!("Failed to open for writing: {}; e {e}", obj_file_name.display());
