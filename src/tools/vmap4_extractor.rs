@@ -230,6 +230,17 @@ impl VmapExtractor {
                 return Ok(());
             }
         }
+        if wmo_doodads.get(&plain_name).is_some() {
+            // This is to catch when extract_single_wmo is called again but the doodad data is
+            // already populated. We dont need to do the below
+            // If it isnt therem it can mean 2 things:
+            // 1. File does not exist yet => i.e. its not extracted yet, do the extraction.
+            // 2. file exists => i.e. re-running the vmap extractor function. Re-retrieve the doodad
+            //                  data from WMO Root. We will not save the WMO again, but the doodad
+            //                  data will be re-populated as the extracted WMO data does not
+            //                  contain doodad data that can be retrieved.
+            return Ok(());
+        }
         let file_exist = sz_local_file.exists();
         if !file_exist {
             info!("Extracting to vmap: {}", file_name);
