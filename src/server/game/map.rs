@@ -11,12 +11,11 @@ use num_traits::Num;
 use tracing::warn;
 
 use crate::{
+    bincode_deserialise,
+    bincode_serialise,
     cmp_or_return,
     sanity_check_read_all_bytes_from_reader,
-    tools::{
-        adt::{ADT_CELLS_PER_GRID, ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
-        extractor_common::{bincode_deserialise, bincode_serialise},
-    },
+    tools::adt::{ADT_CELLS_PER_GRID, ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
     AzResult,
 };
 

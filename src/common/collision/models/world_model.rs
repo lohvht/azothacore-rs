@@ -4,10 +4,11 @@ use nalgebra::{DMatrix, Vector3};
 use parry3d::{bounding_volume::Aabb, partitioning::Qbvh, shape::TriMesh};
 
 use crate::{
+    bincode_deserialise,
+    bincode_serialise,
     cmp_or_return,
     common::collision::vmap_definitions::{LIQUID_TILE_SIZE, VMAP_MAGIC},
     read_le,
-    tools::extractor_common::{bincode_deserialise, bincode_serialise},
     AzResult,
 };
 

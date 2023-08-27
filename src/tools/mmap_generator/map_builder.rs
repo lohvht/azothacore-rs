@@ -12,10 +12,12 @@ use tracing::{error, info, info_span, instrument, warn};
 
 use crate::{
     az_error,
+    bincode_deserialise,
+    bincode_serialise,
     common::collision::{management::vmap_mgr2::VMapMgr2, maps::map_tree::StaticMapTree},
     server::shared::recastnavigation_handles::{DetourNavMesh, DetourNavMeshParams, DT_POLY_BITS},
     tools::{
-        extractor_common::{bincode_deserialise, bincode_serialise, get_dir_contents, ExtractorConfig},
+        extractor_common::{get_dir_contents, ExtractorConfig},
         mmap_generator::{
             common::{clean_vertices, get_tile_bounds, MeshData, TileInfo, GRID_SIZE},
             terrain_builder::TerrainBuilder,

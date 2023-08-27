@@ -7,7 +7,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bincode::Options;
 use flagset::{flags, FlagSet};
 use serde::{Deserialize, Serialize};
 use serde_default::DefaultFromSerde;
@@ -221,24 +220,6 @@ pub struct MapIdTileXY {
     pub map_id:   u32,
     #[serde(default)]
     pub tile_x_y: Option<(u16, u16)>,
-}
-
-macro_rules! bincode_cfg {
-    () => {{
-        bincode::DefaultOptions::new()
-            .with_no_limit()
-            .with_little_endian()
-            .with_varint_encoding()
-            .allow_trailing_bytes()
-    }};
-}
-
-pub fn bincode_serialise<W: io::Write, T: ?Sized + serde::Serialize>(w: &mut W, t: &T) -> bincode::Result<()> {
-    bincode_cfg!().serialize_into(w, t)
-}
-
-pub fn bincode_deserialise<R: io::Read, T: ?Sized + serde::de::DeserializeOwned>(r: &mut R) -> bincode::Result<T> {
-    bincode_cfg!().deserialize_from(r)
 }
 
 pub fn chunked_data_offsets(chunk_data: &[u8]) -> AzResult<Vec<([u8; 4], usize, usize)>> {

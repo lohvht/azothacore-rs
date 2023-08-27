@@ -14,6 +14,8 @@ use tracing::{debug, error};
 
 use crate::{
     az_error,
+    bincode_deserialise,
+    bincode_serialise,
     cmp_or_return,
     common::collision::{
         management::vmap_mgr2::VMapModelStore,
@@ -21,7 +23,6 @@ use crate::{
         vmap_definitions::VMAP_MAGIC,
     },
     sanity_check_read_all_bytes_from_reader,
-    tools::extractor_common::{bincode_deserialise, bincode_serialise},
     AzResult,
 };
 

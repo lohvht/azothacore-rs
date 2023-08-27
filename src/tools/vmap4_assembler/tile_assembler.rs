@@ -14,6 +14,8 @@ use rayon::prelude::*;
 use tracing::{error, info, warn};
 
 use crate::{
+    bincode_deserialise,
+    bincode_serialise,
     cmp_or_return,
     common::collision::{
         maps::map_tree::StaticMapTree,
@@ -27,7 +29,7 @@ use crate::{
     read_le,
     sanity_check_read_all_bytes_from_reader,
     tools::{
-        extractor_common::{bincode_deserialise, bincode_serialise, get_fixed_plain_name, ExtractorConfig},
+        extractor_common::{get_fixed_plain_name, ExtractorConfig},
         vmap4_extractor::TempGameObjectModel,
     },
     AzResult,

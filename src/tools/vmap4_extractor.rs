@@ -14,6 +14,8 @@ use wow_db2::wdc1;
 
 use crate::{
     az_error,
+    bincode_deserialise,
+    bincode_serialise,
     cmp_or_return,
     common::{
         collision::{
@@ -26,8 +28,6 @@ use crate::{
     tools::{
         adt::{ADTFile, AdtDoodadDef, AdtMapObjectDefs},
         extractor_common::{
-            bincode_deserialise,
-            bincode_serialise,
             casc_handles::{CascLocale, CascStorageHandle},
             get_fixed_plain_name,
             ExtractorConfig,

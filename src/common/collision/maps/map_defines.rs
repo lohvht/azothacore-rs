@@ -7,9 +7,10 @@ use std::{
 use flagset::FlagSet;
 
 use crate::{
+    bincode_deserialise,
+    bincode_serialise,
     sanity_check_read_all_bytes_from_reader,
     server::shared::recastnavigation_handles::{DT_NAVMESH_VERSION, RC_WALKABLE_AREA},
-    tools::extractor_common::{bincode_deserialise, bincode_serialise},
     AzResult,
 };
 
