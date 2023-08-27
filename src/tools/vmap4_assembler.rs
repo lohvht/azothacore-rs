@@ -1,8 +1,14 @@
 use tracing::{error, info};
 
+pub mod tile_assembler;
+
 use crate::{
-    common::collision::{maps::tile_assembler::tile_assembler_convert_world2, models::model_instance::VmapModelSpawn},
-    tools::{extractor_common::ExtractorConfig, vmap4_extractor::TempGameObjectModel},
+    common::collision::models::model_instance::VmapModelSpawn,
+    tools::{
+        extractor_common::ExtractorConfig,
+        vmap4_assembler::tile_assembler::tile_assembler_convert_world2,
+        vmap4_extractor::TempGameObjectModel,
+    },
     AzResult,
 };
 

@@ -17,7 +17,6 @@ use crate::{
     cmp_or_return,
     common::{
         collision::{
-            maps::tile_assembler::WorldModel_Raw,
             models::model_instance::{ModelFlags, VmapModelSpawn},
             vmap_definitions::RAW_VMAP_MAGIC,
         },
@@ -34,6 +33,7 @@ use crate::{
             ExtractorConfig,
             VmapExtractAndGenerate,
         },
+        vmap4_assembler::tile_assembler::WorldModel_Raw,
         vmap4_extractor::{
             model::Model,
             wmo::{WmoDoodadData, WmoMods, WmoRoot},

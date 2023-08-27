@@ -5,10 +5,12 @@ use parry3d::bounding_volume::Aabb;
 
 use crate::{
     az_error,
-    common::collision::maps::tile_assembler::{GroupModel_Raw, WorldModel_Raw},
     read_buf,
     read_le,
-    tools::extractor_common::{casc_handles::CascStorageHandle, ChunkedFile},
+    tools::{
+        extractor_common::{casc_handles::CascStorageHandle, ChunkedFile},
+        vmap4_assembler::tile_assembler::{GroupModel_Raw, WorldModel_Raw},
+    },
     AzResult,
 };
 

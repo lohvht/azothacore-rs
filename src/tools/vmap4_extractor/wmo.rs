@@ -12,11 +12,11 @@ use tracing::{debug, error};
 
 use crate::{
     az_error,
-    common::collision::{
-        maps::tile_assembler::{GroupModel_Raw, WorldModel_Raw},
-        models::world_model::{WmoLiquid, WmoLiquidParams},
+    common::collision::models::world_model::{WmoLiquid, WmoLiquidParams},
+    tools::{
+        extractor_common::{casc_handles::CascStorageHandle, chunked_data_offsets, cstr_bytes_to_string, ChunkedFile},
+        vmap4_assembler::tile_assembler::{GroupModel_Raw, WorldModel_Raw},
     },
-    tools::extractor_common::{casc_handles::CascStorageHandle, chunked_data_offsets, cstr_bytes_to_string, ChunkedFile},
     AzResult,
 };
 
