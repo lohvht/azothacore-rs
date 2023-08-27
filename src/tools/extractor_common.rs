@@ -261,7 +261,7 @@ impl ChunkedFile {
             error!("ChunkedFile::build: error reading filesize from file {f_display}: {e}");
         })? as usize;
 
-        let mut chunk_data: Vec<u8> = vec![];
+        let mut chunk_data: Vec<u8> = Vec::with_capacity(file_size);
         let read_file_size = file.read_to_end(&mut chunk_data).inspect_err(|e| {
             use tracing::error;
             let f_display = filename.as_ref().display();

@@ -1,7 +1,6 @@
 use tracing::{subscriber::set_global_default, Level};
 use tracing_subscriber::{filter::filter_fn, prelude::*, Registry};
 
-
 /// Compose multiple layers into a `tracing`'s subscriber.
 ///
 /// Then register the subscriber as global default to process span data.

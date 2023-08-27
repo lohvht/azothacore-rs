@@ -34,6 +34,11 @@ pub struct WmoMods {
 pub struct WmoModd {
     // 24
     pub name_index: u32,
+    // Bit flags - https://wowdev.wiki/WMO#MODD_chunk
+    // first 4 bits are related to textures:
+    // flag_AcceptProjTex, flag_0x2, flag_0x4, flag_0x8
+    // Rest of the 4 bits are unused as of 7.0.1.20994
+    pub flags:      u8,
     pub position:   Vector3<f32>,
     pub rotation:   Vector4<f32>,
     pub scale:      f32,
@@ -168,7 +173,8 @@ impl WmoRoot {
                     let mut f = io::Cursor::new(chunk);
                     while !f.is_empty() {
                         s.doodad_data.spawns.push(WmoModd {
-                            name_index: f.read_u32::<LittleEndian>()?,
+                            name_index: f.read_u24::<LittleEndian>()?,
+                            flags:      f.read_u8()?,
                             position:   Vector3::new(
                                 f.read_f32::<LittleEndian>()?,
                                 f.read_f32::<LittleEndian>()?,
