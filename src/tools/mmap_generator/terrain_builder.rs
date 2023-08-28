@@ -12,7 +12,7 @@ use crate::{
     az_error,
     common::collision::{management::vmap_mgr2::VMapMgr2, maps::map_defines::MmapNavTerrainFlag, models::model_instance::ModelFlags},
     row_vector_to_matrix_index,
-    server::game::map::{Map, MapFile, MapHeightV9V8, MapLiquidTypeFlag},
+    server::game::map::{map_file::MapFile, GridMap, MapLiquidTypeFlag},
     tools::mmap_generator::common::{
         MeshData,
         GRID_PART_SIZE,
@@ -149,14 +149,14 @@ impl TerrainBuilder<'_> {
         skip_liquid: bool,
         mesh_data: &mut MeshData,
     ) -> AzResult<()> {
-        let mut map_file_name = Map::map_file_name(&self.maps_path, map_id, tile_y, tile_x);
+        let mut map_file_name = GridMap::file_name(&self.maps_path, map_id, tile_y, tile_x);
         let map_file = match MapFile::read(&mut fs::File::open(&map_file_name)?) {
             Err(e) => {
                 let parent_id = self.vmap_mgr.read().unwrap().get_parent_map_id(map_id);
                 if parent_id == map_id {
                     return Err(format!("Unable to open map file: {e}").into());
                 }
-                map_file_name = Map::map_file_name(&self.maps_path, parent_id, tile_y, tile_x);
+                map_file_name = GridMap::file_name(&self.maps_path, parent_id, tile_y, tile_x);
                 MapFile::read(&mut fs::File::open(&map_file_name)?)?
             },
             Ok(f) => f,
@@ -175,18 +175,19 @@ impl TerrainBuilder<'_> {
         let mut ttriangles = vec![];
 
         // terrain data
-        if let Some(MapHeightV9V8 { v9, v8 }) = &map_file.map_height_data.map_heights {
+        if let Some(v9v8) = &map_file.map_height_data.map_heights {
+            let (v9, v8) = v9v8.to_v9v8(map_file.map_height_data.grid_height, map_file.map_height_data.grid_max_height);
             let count = mesh_data.solid_verts.len();
             let x_offset = (tile_x - 32) as f32 * GRID_SIZE;
             let y_offset = (tile_y - 32) as f32 * GRID_SIZE;
 
             let mut coord = [0.0; 3];
             for i in 0..V9_SIZE_SQ {
-                terrain_builder_get_height_coord(i, x_offset, y_offset, true, &mut coord, v9);
+                terrain_builder_get_height_coord(i, x_offset, y_offset, true, &mut coord, &v9);
                 mesh_data.solid_verts.push(Vector3::new(coord[0], coord[2], coord[1]));
             }
             for i in 0..V8_SIZE_SQ {
-                terrain_builder_get_height_coord(i, x_offset, y_offset, false, &mut coord, v8);
+                terrain_builder_get_height_coord(i, x_offset, y_offset, false, &mut coord, &v8);
                 mesh_data.solid_verts.push(Vector3::new(coord[0], coord[2], coord[1]));
             }
 

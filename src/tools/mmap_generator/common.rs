@@ -5,8 +5,10 @@ use parry3d::bounding_volume::Aabb;
 
 use crate::{
     common::collision::maps::map_defines::MmapNavTerrainFlag,
-    server::shared::recastnavigation_handles::DetourNavMeshParams,
-    tools::adt::{ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
+    server::{
+        game::map::{ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
+        shared::recastnavigation_handles::DetourNavMeshParams,
+    },
     AzResult,
 };
 

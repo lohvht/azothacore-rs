@@ -13,27 +13,24 @@ use azothacore_rs::{
     common::{banner, Locale},
     logging::init_logging,
     server::{
-        game::map::{Map, MapFile, MapLiquidTypeFlag},
-        shared::data_stores::db2_structure::{CinematicCamera, LiquidMaterial, LiquidObject, LiquidType, Map as MapDb2},
-    },
-    tools::{
-        adt::{
-            AdtChunkMcnk,
-            AdtChunkMfbo,
-            AdtChunkMh2o,
-            AdtChunkMh2oLiquidInstance,
-            LiquidVertexFormatType,
+        game::map::{
+            map_file::{MapFile, MapFileParams},
+            GridMap,
+            MapLiquidTypeFlag,
             ADT_CELLS_PER_GRID,
             ADT_CELL_SIZE,
             ADT_GRID_SIZE,
             ADT_GRID_SIZE_PLUS_ONE,
         },
+        shared::data_stores::db2_structure::{CinematicCamera, LiquidMaterial, LiquidObject, LiquidType, Map as MapDb2},
+    },
+    tools::{
+        adt::{AdtChunkMcnk, AdtChunkMfbo, AdtChunkMh2o, AdtChunkMh2oLiquidInstance, LiquidVertexFormatType},
         basic_extractor::DB_FILES_CLIENT_LIST,
         extractor_common::{
             casc_handles::{CascFileHandle, CascLocale, CascStorageHandle},
             ChunkedFile,
             DB2AndMapExtractFlags,
-            Db2AndMapExtract,
             ExtractorConfig,
             RunStagesFlag,
         },
@@ -358,6 +355,11 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> AzResu
 
     info!("Convert map files");
 
+    let map_file_params = MapFileParams {
+        allow_float_to_int: args.db2_and_map_extract.allow_float_to_int,
+        allow_height_limit: args.db2_and_map_extract.allow_height_limit,
+        use_min_height:     args.db2_and_map_extract.use_min_height,
+    };
     for (z, map) in maps.enumerate() {
         let map_id = map.id;
         let map_name = &map.directory.def_str();
@@ -390,18 +392,17 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> AzResu
                     continue;
                 }
 
-                let output_file_name = Map::map_file_name(&output_path, map_id, y, x);
+                let output_file_name = GridMap::file_name(&output_path, map_id, y, x);
                 if output_file_name.exists() {
                     continue;
                 }
                 // TODO: Verify if the indices are correct? seems to be reversed here
                 let ignore_deep_water = map.is_deep_water_ignored(y, x);
                 let adt = ChunkedFile::build(&storage, &storage_path)?;
-                let args = args.db2_and_map_extract.clone();
                 let liquid_types = liquid_types.clone();
                 let liquid_materials = liquid_materials.clone();
                 let _ = convert_adt(
-                    &args,
+                    &map_file_params,
                     adt,
                     output_file_name.as_ref(),
                     build_no,
@@ -498,7 +499,7 @@ fn get_liquid_height(
 
 #[allow(clippy::too_many_arguments, non_snake_case)]
 fn convert_adt(
-    args: &Db2AndMapExtract,
+    args: &MapFileParams,
     adt: ChunkedFile,
     output_path: &Path,
     build_no: u32,
@@ -732,10 +733,9 @@ fn convert_adt(
         map_liquid_entry,
         map_holes,
         map_height_flight_box_max_min,
-        args.allow_height_limit,
         liquid_show,
         map_liquid_height,
-        args.use_min_height,
+        args,
     );
 
     map_file.write(&mut f)?;

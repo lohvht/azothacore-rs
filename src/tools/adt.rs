@@ -8,14 +8,10 @@ use nalgebra::{Matrix3, Vector3};
 
 use crate::{
     read_le_unwrap,
+    server::game::map::{ADT_CELLS_PER_GRID, ADT_CELL_SIZE},
     tools::extractor_common::{casc_handles::CascStorageHandle, chunked_data_offsets, cstr_bytes_to_string, ChunkedFile},
     AzResult,
 };
-
-pub const ADT_CELLS_PER_GRID: usize = 16;
-pub const ADT_CELL_SIZE: usize = 8;
-pub const ADT_GRID_SIZE: usize = ADT_CELLS_PER_GRID * ADT_CELL_SIZE;
-pub const ADT_GRID_SIZE_PLUS_ONE: usize = ADT_GRID_SIZE + 1;
 
 pub struct AdtChunkMcnkSubchunkMcvt {
     pub height_map: [f32; (ADT_CELL_SIZE + 1) * (ADT_CELL_SIZE + 1) + ADT_CELL_SIZE * ADT_CELL_SIZE],
