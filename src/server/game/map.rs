@@ -17,7 +17,7 @@ pub const ADT_GRID_SIZE_PLUS_ONE: usize = ADT_GRID_SIZE + 1;
 
 pub mod map_file;
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct MapLiquidData {
     /// header flags are different from liquid_flags
     pub map_liquid_entry_flags: Result<MapLiquidDataEntryFlags, MapLiquidDataGlobalEntryFlags>,
@@ -43,13 +43,13 @@ impl MapLiquidData {
     }
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct MapLiquidDataGlobalEntryFlags {
     pub liquid_flags: FlagSet<MapLiquidTypeFlag>,
     pub liquid_type:  u16,
 }
 
-#[derive(Debug, serde::Deserialize, serde::Serialize)]
+#[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct MapLiquidDataEntryFlags {
     pub liquid_entry: [[u16; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
     pub liquid_flags: [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
