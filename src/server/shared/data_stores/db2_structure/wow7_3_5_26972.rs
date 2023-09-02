@@ -1934,8 +1934,8 @@ pub struct Map {
 }
 
 impl Map {
-    pub fn is_deep_water_ignored(&self, x: usize, y: usize) -> bool {
-        if self.id == 0 {
+    pub fn is_deep_water_ignored(map_id: u32, x: usize, y: usize) -> bool {
+        if map_id == 0 {
             //                                                                                                GRID(39, 24) || GRID(39, 25) || GRID(39, 26) ||
             //                                                                                                GRID(40, 24) || GRID(40, 25) || GRID(40, 26) ||
             //GRID(41, 18) || GRID(41, 19) || GRID(41, 20) || GRID(41, 21) || GRID(41, 22) || GRID(41, 23) || GRID(41, 24) || GRID(41, 25) || GRID(41, 26) ||
@@ -1948,7 +1948,7 @@ impl Map {
             // Vashj'ir grids completely ignore fatigue
             return ((39..=40).contains(&x) && (24..=26).contains(&y)) || ((41..=46).contains(&x) && (18..=26).contains(&y));
         }
-        if self.id == 1 {
+        if map_id == 1 {
             // GRID(43, 39) || GRID(43, 40)
             // Thousand Needles
             return x == 43 && (y == 39 || y == 40);

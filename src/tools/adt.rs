@@ -1,14 +1,18 @@
 use std::{
-    collections::HashMap,
+    collections::{BTreeMap, HashMap},
     io::{self, Read},
     path::Path,
 };
 
 use nalgebra::{Matrix3, Vector3};
+use zerocopy::FromBytes;
 
 use crate::{
     read_le_unwrap,
-    server::game::map::{ADT_CELLS_PER_GRID, ADT_CELL_SIZE},
+    server::{
+        game::map::{ADT_CELLS_PER_GRID, ADT_CELL_SIZE},
+        shared::data_stores::db2_structure::{LiquidMaterial, LiquidType},
+    },
     tools::extractor_common::{casc_handles::CascStorageHandle, chunked_data_offsets, cstr_bytes_to_string, ChunkedFile},
     AzResult,
 };
@@ -32,14 +36,17 @@ impl From<(&[u8; 4], &[u8])> for AdtChunkMcnkSubchunkMcvt {
     }
 }
 
-pub enum LiquidVertexFormatType {
-    HeightDepth = 0,
-    HeightTextureCoord = 1,
-    Depth = 2,
-    HeightDepthTextureCoord = 3,
-    Unk4 = 4,
-    Unk5 = 5,
-}
+const LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_DEPTH: u16 = 0;
+const LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_TEXTURE_COORD: u16 = 1;
+const LIQUID_VERTEX_FORMAT_TYPE_DEPTH: u16 = 2;
+const LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_DEPTH_TEXTURE_COORD: u16 = 3;
+const LIQUID_VERTEX_FORMAT_TYPE_UNK4: u16 = 4;
+const LIQUID_VERTEX_FORMAT_TYPE_UNK5: u16 = 5;
+
+pub const ADT_LIQUID_TYPE_WATER: u8 = 0;
+pub const ADT_LIQUID_TYPE_OCEAN: u8 = 1;
+pub const ADT_LIQUID_TYPE_MAGMA: u8 = 2;
+pub const ADT_LIQUID_TYPE_SLIME: u8 = 3;
 
 #[derive(Default, Clone, Copy)]
 pub struct AdtChunkMcnkSubchunkMclqLiquidData {
@@ -103,30 +110,31 @@ impl From<(&[u8; 4], &[u8])> for AdtChunkMcnkSubchunkMclq {
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct AdtChunkMh2oSmLiquidChunk {
-    pub offset_instances: u32,
-    pub used:             u32,
-    offset_attributes:    u32,
+    offset_instances:  u32,
+    used:              u32,
+    offset_attributes: u32,
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, zerocopy_derive::FromZeroes, zerocopy_derive::FromBytes, zerocopy_derive::Unaligned)]
+#[repr(C)]
 pub struct AdtChunkMh2oLiquidInstance {
     // Index from LiquidType.db2
-    pub liquid_type:          u16,
+    pub liquid_type:      zerocopy::little_endian::U16,
     // Id from LiquidObject.db2 if >= 42
-    pub liquid_vertex_format: u16,
-    pub min_height_level:     f32,
-    pub max_height_level:     f32,
-    pub offset_x:             u8,
-    pub offset_y:             u8,
-    pub width:                u8,
-    pub height:               u8,
-    offset_exists_bitmap:     u32,
-    pub offset_vertex_data:   u32,
+    liquid_vertex_format: zerocopy::little_endian::U16,
+    min_height_level:     zerocopy::little_endian::F32,
+    max_height_level:     zerocopy::little_endian::F32,
+    offset_x:             u8,
+    offset_y:             u8,
+    width:                u8,
+    height:               u8,
+    offset_exists_bitmap: zerocopy::little_endian::U32,
+    offset_vertex_data:   zerocopy::little_endian::U32,
 }
 
 impl AdtChunkMh2oLiquidInstance {
     pub fn get_offset_x(&self) -> usize {
-        if self.liquid_vertex_format < 42 {
+        if self.liquid_vertex_format.get() < 42 {
             self.offset_x as usize
         } else {
             0
@@ -134,7 +142,7 @@ impl AdtChunkMh2oLiquidInstance {
     }
 
     pub fn get_offset_y(&self) -> usize {
-        if self.liquid_vertex_format < 42 {
+        if self.liquid_vertex_format.get() < 42 {
             self.offset_y as usize
         } else {
             0
@@ -142,7 +150,7 @@ impl AdtChunkMh2oLiquidInstance {
     }
 
     pub fn get_width(&self) -> usize {
-        if self.liquid_vertex_format < 42 {
+        if self.liquid_vertex_format.get() < 42 {
             self.width as usize
         } else {
             8
@@ -150,7 +158,7 @@ impl AdtChunkMh2oLiquidInstance {
     }
 
     pub fn get_height(&self) -> usize {
-        if self.liquid_vertex_format < 42 {
+        if self.liquid_vertex_format.get() < 42 {
             self.height as usize
         } else {
             8
@@ -158,86 +166,140 @@ impl AdtChunkMh2oLiquidInstance {
     }
 }
 
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, Copy, zerocopy_derive::FromZeroes, zerocopy_derive::FromBytes, zerocopy_derive::Unaligned)]
+#[repr(C)]
 pub struct AdtChunkMh2oLiquidAttributes {
-    pub fishable: u64,
-    pub deep:     u64,
+    pub fishable: zerocopy::little_endian::U64,
+    pub deep:     zerocopy::little_endian::U64,
 }
 
 //
 // Adt file liquid data chunk (new)
 //
 pub struct AdtChunkMh2o<'a> {
-    pub liquid:            [[AdtChunkMh2oSmLiquidChunk; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
-    pub liquid_instance:   [[AdtChunkMh2oLiquidInstance; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
-    pub liquid_attributes: [[AdtChunkMh2oLiquidAttributes; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
-    pub raw_data:          io::Cursor<&'a [u8]>,
+    liquid:   [[AdtChunkMh2oSmLiquidChunk; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID],
+    raw_data: &'a [u8],
 }
 
 impl<'a> From<(&[u8; 4], &'a [u8])> for AdtChunkMh2o<'a> {
     fn from(value: (&[u8; 4], &'a [u8])) -> Self {
-        let (fcc, data) = value;
+        let (fcc, raw_data) = value;
         if fcc != b"MH2O" {
             panic!("fcc must be MH2O, got {}", std::str::from_utf8(&fcc[..]).unwrap());
         }
-        let mut cursor = io::Cursor::new(data);
+        let mut cursor = io::Cursor::new(raw_data);
         let mut liquid = [[AdtChunkMh2oSmLiquidChunk::default(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
-        let mut liquid_instance = [[AdtChunkMh2oLiquidInstance::default(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
-        let mut liquid_attributes = [[AdtChunkMh2oLiquidAttributes::default(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
-        for (_i, liq_row) in liquid.iter_mut().enumerate() {
-            for (_j, liq) in liq_row.iter_mut().enumerate() {
-                liq.offset_instances = read_le_unwrap!(cursor, u32);
-                liq.used = read_le_unwrap!(cursor, u32);
-                liq.offset_attributes = read_le_unwrap!(cursor, u32);
-            }
-        }
 
-        for i in 0..liquid.len() {
-            for j in 0..liquid[i].len() {
-                if liquid[i][j].used == 0 {
-                    continue;
-                }
-                if liquid[i][j].offset_instances > 0 {
-                    cursor.set_position(liquid[i][j].offset_instances as u64);
-                    liquid_instance[i][j].liquid_type = read_le_unwrap!(cursor, u16);
-                    liquid_instance[i][j].liquid_vertex_format = read_le_unwrap!(cursor, u16);
-                    liquid_instance[i][j].min_height_level = read_le_unwrap!(cursor, f32);
-                    liquid_instance[i][j].max_height_level = read_le_unwrap!(cursor, f32);
-                    liquid_instance[i][j].offset_x = read_le_unwrap!(cursor, u8);
-                    liquid_instance[i][j].offset_y = read_le_unwrap!(cursor, u8);
-                    liquid_instance[i][j].width = read_le_unwrap!(cursor, u8);
-                    liquid_instance[i][j].height = read_le_unwrap!(cursor, u8);
-                    liquid_instance[i][j].offset_exists_bitmap = read_le_unwrap!(cursor, u32);
-                    liquid_instance[i][j].offset_vertex_data = read_le_unwrap!(cursor, u32);
-                }
-                if liquid[i][j].offset_attributes > 0 {
-                    cursor.set_position(liquid[i][j].offset_attributes as u64);
-                    liquid_attributes[i][j].fishable = read_le_unwrap!(cursor, u64);
-                    liquid_attributes[i][j].deep = read_le_unwrap!(cursor, u64);
-                } else {
-                    liquid_attributes[i][j].fishable = 0xFFFFFFFFFFFFFFFF;
-                    liquid_attributes[i][j].deep = 0xFFFFFFFFFFFFFFFF;
-                }
+        #[expect(clippy::needless_range_loop)]
+        for i in 0..ADT_CELLS_PER_GRID {
+            for j in 0..ADT_CELLS_PER_GRID {
+                liquid[i][j].offset_instances = read_le_unwrap!(cursor, u32);
+                liquid[i][j].used = read_le_unwrap!(cursor, u32);
+                liquid[i][j].offset_attributes = read_le_unwrap!(cursor, u32);
             }
         }
-        cursor.set_position(0);
-        Self {
-            liquid,
-            liquid_instance,
-            liquid_attributes,
-            raw_data: cursor,
-        }
+        Self { liquid, raw_data }
     }
 }
 
 impl<'a> AdtChunkMh2o<'a> {
-    pub fn get_exists_bitmap(&mut self, i: usize, j: usize) -> u64 {
-        let offset = self.liquid_instance[i][j].offset_exists_bitmap as u64;
-        if offset > 0 {
-            self.raw_data.set_position(self.liquid_instance[i][j].offset_exists_bitmap as u64);
-            read_le_unwrap!(self.raw_data, u64)
+    pub fn get_liquid_instance(&self, x: usize, y: usize) -> Option<AdtChunkMh2oLiquidInstance> {
+        if self.liquid[x][y].used > 0 && self.liquid[x][y].offset_instances > 0 {
+            AdtChunkMh2oLiquidInstance::read_from_prefix(&self.raw_data[self.liquid[x][y].offset_instances as usize..])
+        } else {
+            None
+        }
+    }
+
+    pub fn get_liquid_attributes(&self, x: usize, y: usize) -> AdtChunkMh2oLiquidAttributes {
+        if self.liquid[x][y].used == 0 {
+            AdtChunkMh2oLiquidAttributes::default()
+        } else if self.liquid[x][y].offset_attributes == 0 {
+            AdtChunkMh2oLiquidAttributes {
+                deep:     zerocopy::little_endian::U64::new(u64::MAX),
+                fishable: zerocopy::little_endian::U64::new(u64::MAX),
+            }
+        } else {
+            AdtChunkMh2oLiquidAttributes::read_from_prefix(&self.raw_data[self.liquid[x][y].offset_attributes as usize..]).unwrap()
+        }
+    }
+
+    pub fn get_exists_bitmap(&self, h: &AdtChunkMh2oLiquidInstance) -> u64 {
+        if h.offset_exists_bitmap.get() > 0 {
+            u64::from_le_bytes(
+                self.raw_data[h.offset_exists_bitmap.get() as usize..h.offset_exists_bitmap.get() as usize + 8]
+                    .try_into()
+                    .unwrap(),
+            )
         } else {
             u64::MAX
+        }
+    }
+
+    pub fn get_liquid_vertex_format(
+        &self,
+        liquid_instance: &AdtChunkMh2oLiquidInstance,
+        liquid_types_db2: &BTreeMap<u32, LiquidType>,
+        liquid_materials_db2: &BTreeMap<u32, LiquidMaterial>,
+    ) -> Option<u16> {
+        if liquid_instance.liquid_vertex_format.get() < 42 {
+            return Some(liquid_instance.liquid_vertex_format.get());
+        }
+        if liquid_instance.liquid_type.get() == LIQUID_VERTEX_FORMAT_TYPE_DEPTH {
+            return Some(LIQUID_VERTEX_FORMAT_TYPE_DEPTH);
+        }
+
+        if let Some(liquid_type) = liquid_types_db2.get(&(liquid_instance.liquid_type.get().into())) {
+            if let Some(liquid_material) = liquid_materials_db2.get(&(liquid_type.material_id.into())) {
+                return Some(liquid_material.lvf as u16);
+            }
+        }
+        None
+    }
+
+    pub fn get_liquid_type(
+        &self,
+        h: &AdtChunkMh2oLiquidInstance,
+        liquid_types_db2: &BTreeMap<u32, LiquidType>,
+        liquid_materials_db2: &BTreeMap<u32, LiquidMaterial>,
+    ) -> u16 {
+        match self.get_liquid_vertex_format(h, liquid_types_db2, liquid_materials_db2) {
+            Some(t) if t == LIQUID_VERTEX_FORMAT_TYPE_DEPTH => 2,
+            _ => h.liquid_type.get(),
+        }
+    }
+
+    pub fn get_liquid_height(
+        &self,
+        h: &AdtChunkMh2oLiquidInstance,
+        pos: usize,
+        liquid_types_db2: &BTreeMap<u32, LiquidType>,
+        liquid_materials_db2: &BTreeMap<u32, LiquidMaterial>,
+    ) -> f32 {
+        if h.offset_vertex_data.get() == 0 {
+            return 0.0;
+        }
+        let lvf = match self.get_liquid_vertex_format(h, liquid_types_db2, liquid_materials_db2) {
+            Some(t) if t == LIQUID_VERTEX_FORMAT_TYPE_DEPTH => {
+                return 0.0;
+            },
+            None => return 0.0,
+            Some(t) => t,
+        };
+
+        match lvf {
+            LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_DEPTH
+            | LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_TEXTURE_COORD
+            | LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_DEPTH_TEXTURE_COORD => {
+                let offset = h.offset_vertex_data.get() as usize + pos * 4;
+                f32::from_le_bytes(self.raw_data[offset..offset + 4].try_into().unwrap())
+            },
+            LIQUID_VERTEX_FORMAT_TYPE_DEPTH => 0.0,
+            LIQUID_VERTEX_FORMAT_TYPE_UNK4 | LIQUID_VERTEX_FORMAT_TYPE_UNK5 => {
+                let offset = h.offset_vertex_data.get() as usize + 4 + pos * 4 * 2;
+                f32::from_le_bytes(self.raw_data[offset..offset + 4].try_into().unwrap())
+            },
+            _ => 0.0,
         }
     }
 }

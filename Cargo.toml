@@ -59,4 +59,5 @@ recastnavigation-sys = { version = "1.0.1", features = [ "detour", "recast", "de
 glob = "0.3.1"
 sscanf = "0.4.1"
 parry3d = { version = "0.13.5", features = ["serde-serialize"] }
-
+zerocopy = { version = "0.7.1" }
+zerocopy-derive = { version = "0.7.1" }

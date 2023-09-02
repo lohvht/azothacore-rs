@@ -259,6 +259,8 @@ dependencies = [
  "walkdir",
  "wow-db2",
  "wow-db2-proc-macros",
+ "zerocopy",
+ "zerocopy-derive",
 ]
 
 [[package]]
@@ -3102,6 +3104,27 @@ name = "wow-db2-proc-macros"
 version = "0.1.0"
 dependencies = [
  "itertools",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.22",
+]
+
+[[package]]
+name = "zerocopy"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2f00a66029e63d181fa590cc5694cf2afbc0974a4604824e80017b1789f99c07"
+dependencies = [
+ "byteorder",
+ "zerocopy-derive",
+]
+
+[[package]]
+name = "zerocopy-derive"
+version = "0.7.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e9c682f46403e5d567cb27b79f6279c145759528ba9450fe371f43b921b452bd"
+dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.22",
