@@ -6,8 +6,12 @@ use tracing_subscriber::{filter::filter_fn, prelude::*, Registry};
 /// Then register the subscriber as global default to process span data.
 ///
 /// It should only be called once!
-pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
+pub fn init_logging() -> (
+    tracing_appender::non_blocking::WorkerGuard,
+    tracing_appender::non_blocking::WorkerGuard,
+) {
     let (fw, fwguard) = tracing_appender::non_blocking(tracing_appender::rolling::never("logs", "log.txt"));
+    let (fw2, fwguard2) = tracing_appender::non_blocking(tracing_appender::rolling::never("logs", "debug.txt"));
 
     let subscriber = Registry::default()
         .with(
@@ -17,6 +21,12 @@ pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
                 .with_filter(filter_fn(|metadata| metadata.level().cmp(&Level::DEBUG).is_lt())),
         )
         .with(
+            tracing_subscriber::fmt::Layer::default()
+                .with_writer(fw2)
+                .with_ansi(false)
+                .with_filter(filter_fn(|metadata| metadata.level().cmp(&Level::DEBUG).is_ge())),
+        )
+        .with(
             tracing_subscriber::fmt::layer()
                 .with_ansi(true)
                 .with_filter(filter_fn(|metadata| metadata.level().cmp(&Level::DEBUG).is_lt())),
@@ -24,5 +34,5 @@ pub fn init_logging() -> tracing_appender::non_blocking::WorkerGuard {
         .with(console_subscriber::spawn());
     set_global_default(subscriber).expect("Failed to set subscriber");
 
-    fwguard
+    (fwguard, fwguard2)
 }

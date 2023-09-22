@@ -4,6 +4,7 @@ use tracing::{info, warn};
 use wow_db2::wdc1;
 
 use crate::{
+    buffered_file_open,
     common::{collision::management::vmap_mgr2::VMapMgr2, Locale},
     server::{
         game::map::MapLiquidTypeFlag,
@@ -64,11 +65,11 @@ pub fn main_path_generator(args: &ExtractorConfig, first_installed_locale: Local
     }
     check_directories(args, first_installed_locale)?;
 
-    let liquid_source = fs::File::open(args.output_dbc_path(first_installed_locale).join("LiquidType.db2"))?;
+    let liquid_source = buffered_file_open(args.output_dbc_path(first_installed_locale).join("LiquidType.db2"))?;
     let db2 = wdc1::FileLoader::<LiquidType>::from_reader(liquid_source, first_installed_locale as u32)?;
     let liquid_types = db2.produce_data()?;
 
-    let map_source = fs::File::open(args.output_dbc_path(first_installed_locale).join("Map.db2"))?;
+    let map_source = buffered_file_open(args.output_dbc_path(first_installed_locale).join("Map.db2"))?;
     let db2 = wdc1::FileLoader::<Map>::from_reader(map_source, first_installed_locale as u32)?;
     let map_data = db2.produce_data()?;
     let mut map_id_to_child_map_ids = HashMap::new();

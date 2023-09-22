@@ -1,8 +1,4 @@
-use std::{
-    fs,
-    path::PathBuf,
-    sync::{Arc, RwLock},
-};
+use std::{path::PathBuf, sync::Arc};
 
 use flagset::FlagSet;
 use nalgebra::{DMatrix, Rotation, SMatrix, Vector3};
@@ -10,6 +6,7 @@ use tracing::{debug, instrument, warn};
 
 use crate::{
     az_error,
+    buffered_file_open,
     common::collision::{management::vmap_mgr2::VMapMgr2, maps::map_defines::MmapNavTerrainFlag, models::model_instance::ModelFlags},
     row_vector_to_matrix_index,
     server::game::map::{map_file::MapFile, GridMap, MapLiquidTypeFlag},
@@ -37,16 +34,17 @@ enum Spot {
 
 impl Spot {
     fn get_loop_vars(&self) -> impl Iterator<Item = usize> {
-        match *self {
-            Spot::Entire => (0..V8_SIZE_SQ).step_by(1),
-            Spot::Top => (0..V8_SIZE).step_by(1),
-            Spot::Left => (0..V8_SIZE_SQ - V8_SIZE + 1).step_by(V8_SIZE),
-            Spot::Right => (V8_SIZE - 1..V8_SIZE_SQ).step_by(V8_SIZE),
-            Spot::Bottom => (V8_SIZE_SQ - V8_SIZE..V8_SIZE_SQ).step_by(1),
-        }
+        let (loop_start, loop_end, loop_incre) = match *self {
+            Spot::Entire => (0, V8_SIZE_SQ, 1),
+            Spot::Top => (0, V8_SIZE, 1),
+            Spot::Left => (0, V8_SIZE_SQ - V8_SIZE + 1, V8_SIZE),
+            Spot::Right => (V8_SIZE - 1, V8_SIZE_SQ, V8_SIZE),
+            Spot::Bottom => (V8_SIZE_SQ - V8_SIZE, V8_SIZE_SQ, 1),
+        };
+        (loop_start..loop_end).step_by(loop_incre)
     }
 
-    fn get_height_triangle(&self, square: usize, liquid: bool, out_indices: &mut [u16; 3]) {
+    fn get_height_triangle(&self, square: usize, liquid: bool, out_indices: &mut [i32; 3]) {
         let row_offset = square / V8_SIZE;
         if !liquid {
             //  0-----1 .... 128
@@ -64,24 +62,24 @@ impl Spot {
             // 258---259 ... 515
             match *self {
                 Spot::Top => {
-                    out_indices[0] = (square + row_offset) as u16;
-                    out_indices[1] = (square + 1 + row_offset) as u16;
-                    out_indices[2] = (V9_SIZE_SQ + square) as u16;
+                    out_indices[0] = (square + row_offset) as _;
+                    out_indices[1] = (square + 1 + row_offset) as _;
+                    out_indices[2] = (V9_SIZE_SQ + square) as _;
                 },
                 Spot::Left => {
-                    out_indices[0] = (square + row_offset) as u16;
-                    out_indices[1] = (V9_SIZE_SQ + square) as u16;
-                    out_indices[2] = (square + V9_SIZE + row_offset) as u16;
+                    out_indices[0] = (square + row_offset) as _;
+                    out_indices[1] = (V9_SIZE_SQ + square) as _;
+                    out_indices[2] = (square + V9_SIZE + row_offset) as _;
                 },
                 Spot::Right => {
-                    out_indices[0] = (square + 1 + row_offset) as u16;
-                    out_indices[1] = (square + V9_SIZE + 1 + row_offset) as u16;
-                    out_indices[2] = (V9_SIZE_SQ + square) as u16;
+                    out_indices[0] = (square + 1 + row_offset) as _;
+                    out_indices[1] = (square + V9_SIZE + 1 + row_offset) as _;
+                    out_indices[2] = (V9_SIZE_SQ + square) as _;
                 },
                 Spot::Bottom => {
-                    out_indices[0] = (V9_SIZE_SQ + square) as u16;
-                    out_indices[1] = (square + V9_SIZE + 1 + row_offset) as u16;
-                    out_indices[2] = (square + V9_SIZE + row_offset) as u16;
+                    out_indices[0] = (V9_SIZE_SQ + square) as _;
+                    out_indices[1] = (square + V9_SIZE + 1 + row_offset) as _;
+                    out_indices[2] = (square + V9_SIZE + row_offset) as _;
                 },
                 Spot::Entire => {},
             }
@@ -101,14 +99,14 @@ impl Spot {
             // 258---259 ... 515
             match *self {
                 Spot::Top => {
-                    out_indices[0] = (square + row_offset) as u16;
-                    out_indices[1] = (square + 1 + row_offset) as u16;
-                    out_indices[2] = (square + V9_SIZE + 1 + row_offset) as u16;
+                    out_indices[0] = (square + row_offset) as _;
+                    out_indices[1] = (square + 1 + row_offset) as _;
+                    out_indices[2] = (square + V9_SIZE + 1 + row_offset) as _;
                 },
                 Spot::Bottom => {
-                    out_indices[0] = (square + row_offset) as u16;
-                    out_indices[1] = (square + V9_SIZE + 1 + row_offset) as u16;
-                    out_indices[2] = (square + V9_SIZE + row_offset) as u16;
+                    out_indices[0] = (square + row_offset) as _;
+                    out_indices[1] = (square + V9_SIZE + 1 + row_offset) as _;
+                    out_indices[2] = (square + V9_SIZE + row_offset) as _;
                 },
                 Spot::Entire | Spot::Left | Spot::Right => {},
             }
@@ -119,52 +117,56 @@ impl Spot {
 pub struct TerrainBuilder<'vm> {
     pub vmaps_path:     PathBuf,
     pub maps_path:      PathBuf,
-    pub vmap_mgr:       Arc<RwLock<VMapMgr2<'vm, 'vm>>>,
+    pub vmap_mgr:       Arc<VMapMgr2<'vm, 'vm>>,
     pub use_min_height: f32,
+    pub skip_liquid:    bool,
 }
 
 impl TerrainBuilder<'_> {
     #[instrument(skip(self, mesh_data))]
-    pub fn load_map(&self, map_id: u32, tile_x: u16, tile_y: u16, skip_liquid: bool, mesh_data: &mut MeshData) -> AzResult<()> {
-        if let Err(e) = self.load_map_spot(map_id, tile_x, tile_y, Spot::Entire, skip_liquid, mesh_data) {
+    pub fn load_map(&self, map_id: u32, tile_x: u16, tile_y: u16, mesh_data: &mut MeshData) -> AzResult<()> {
+        if let Err(e) = self.load_map_spot(map_id, tile_x, tile_y, Spot::Entire, mesh_data) {
             tracing::trace!("error loading entire map spot for the map ID {map_id} [{tile_x}:{tile_y}]: err was {e}");
             return Ok(());
         };
 
-        _ = self.load_map_spot(map_id, tile_x + 1, tile_y, Spot::Left, skip_liquid, mesh_data);
-        _ = self.load_map_spot(map_id, tile_x - 1, tile_y, Spot::Right, skip_liquid, mesh_data);
-        _ = self.load_map_spot(map_id, tile_x, tile_y + 1, Spot::Top, skip_liquid, mesh_data);
-        _ = self.load_map_spot(map_id, tile_x, tile_y - 1, Spot::Bottom, skip_liquid, mesh_data);
+        _ = self.load_map_spot(map_id, tile_x + 1, tile_y, Spot::Left, mesh_data);
+        _ = self.load_map_spot(map_id, tile_x - 1, tile_y, Spot::Right, mesh_data);
+        _ = self.load_map_spot(map_id, tile_x, tile_y + 1, Spot::Top, mesh_data);
+        _ = self.load_map_spot(map_id, tile_x, tile_y - 1, Spot::Bottom, mesh_data);
 
         Ok(())
     }
 
     #[instrument(skip(self, mesh_data))]
-    fn load_map_spot(
-        &self,
-        map_id: u32,
-        tile_x: u16,
-        tile_y: u16,
-        portion: Spot,
-        skip_liquid: bool,
-        mesh_data: &mut MeshData,
-    ) -> AzResult<()> {
-        let mut map_file_name = GridMap::file_name(&self.maps_path, map_id, tile_y, tile_x);
-        let map_file = match MapFile::read(&mut fs::File::open(&map_file_name)?) {
-            Err(e) => {
-                let parent_id = self.vmap_mgr.read().unwrap().get_parent_map_id(map_id);
-                if parent_id == map_id {
-                    return Err(format!("Unable to open map file: {e}").into());
-                }
-                map_file_name = GridMap::file_name(&self.maps_path, parent_id, tile_y, tile_x);
-                MapFile::read(&mut fs::File::open(&map_file_name)?)?
-            },
-            Ok(f) => f,
-        };
+    fn load_map_spot(&self, map_id: u32, tile_x: u16, tile_y: u16, portion: Spot, mesh_data: &mut MeshData) -> AzResult<()> {
+        let mut tried_map_ids = vec![];
+        let mut used_map_id = Some(map_id);
+        let map_file = loop {
+            let map_id = match used_map_id {
+                None => {
+                    break Err(az_error!(
+                    "error retrieving map spot for the map {map_id:04}[{tile_x},{tile_y}], tried finding from these maps: {tried_map_ids:?}"
+                ))
+                },
+                Some(i) => i,
+            };
+            let map_file_name = GridMap::file_name(&self.maps_path, map_id, tile_y, tile_x);
+            let f = match MapFile::read(&mut buffered_file_open(&map_file_name)?) {
+                Err(_) => {
+                    tried_map_ids.push(map_id);
+                    let new_map_id = self.vmap_mgr.get_parent_map_id(map_id);
+                    used_map_id = if new_map_id == map_id { None } else { Some(new_map_id) };
+                    continue;
+                },
+                Ok(m) => m,
+            };
+            break Ok(f);
+        }?;
 
         // i.e. Has height
         let have_terrain = map_file.map_height_data.map_heights.is_some();
-        let have_liquid = !skip_liquid && map_file.map_liquid_data.is_some();
+        let have_liquid = !self.skip_liquid && map_file.map_liquid_data.is_some();
 
         if !have_terrain && !have_liquid {
             return Err("no data in this map file".into());
@@ -177,38 +179,40 @@ impl TerrainBuilder<'_> {
         // terrain data
         if let Some(v9v8) = &map_file.map_height_data.map_heights {
             let (v9, v8) = v9v8.to_v9v8(map_file.map_height_data.grid_height, map_file.map_height_data.grid_max_height);
-            let count = mesh_data.solid_verts.len();
-            let x_offset = (tile_x - 32) as f32 * GRID_SIZE;
-            let y_offset = (tile_y - 32) as f32 * GRID_SIZE;
+            let count = mesh_data.solid_verts.len() / 3;
+            let x_offset = (tile_x as f32 - 32.0) * GRID_SIZE;
+            let y_offset = (tile_y as f32 - 32.0) * GRID_SIZE;
 
             let mut coord = [0.0; 3];
             for i in 0..V9_SIZE_SQ {
                 terrain_builder_get_height_coord(i, x_offset, y_offset, true, &mut coord, &v9);
-                mesh_data.solid_verts.push(Vector3::new(coord[0], coord[2], coord[1]));
+                mesh_data.solid_verts.push(coord[0]);
+                mesh_data.solid_verts.push(coord[2]);
+                mesh_data.solid_verts.push(coord[1]);
             }
             for i in 0..V8_SIZE_SQ {
                 terrain_builder_get_height_coord(i, x_offset, y_offset, false, &mut coord, &v8);
-                mesh_data.solid_verts.push(Vector3::new(coord[0], coord[2], coord[1]));
+                mesh_data.solid_verts.push(coord[0]);
+                mesh_data.solid_verts.push(coord[2]);
+                mesh_data.solid_verts.push(coord[1]);
             }
 
             let mut indices = [0; 3];
             for i in portion.get_loop_vars() {
                 for j in [Spot::Top, Spot::Right, Spot::Left, Spot::Bottom] {
                     j.get_height_triangle(i, false, &mut indices);
-                    ttriangles.push(Vector3::new(
-                        indices[2] + count as u16,
-                        indices[1] + count as u16,
-                        indices[0] + count as u16,
-                    ));
+                    ttriangles.push(indices[2] + i32::try_from(count).unwrap());
+                    ttriangles.push(indices[1] + i32::try_from(count).unwrap());
+                    ttriangles.push(indices[0] + i32::try_from(count).unwrap());
                 }
             }
         }
 
         // liquid data
         if let Some(liq_data) = &map_file.map_liquid_data {
-            let count = mesh_data.liquid_verts.len();
-            let x_offset = (tile_x - 32) as f32 * GRID_SIZE;
-            let y_offset = (tile_y - 32) as f32 * GRID_SIZE;
+            let count = mesh_data.liquid_verts.len() / 3;
+            let x_offset = (tile_x as f32 - 32.0) * GRID_SIZE;
+            let y_offset = (tile_y as f32 - 32.0) * GRID_SIZE;
 
             let mut coord = [0.0; 3];
             // generate coordinates
@@ -228,26 +232,24 @@ impl TerrainBuilder<'_> {
                             || col >= liq_data.offset_x as usize + width
                         {
                             // dummy vert using invalid height
-                            mesh_data.liquid_verts.push(Vector3::new(
-                                (x_offset + col as f32 * GRID_PART_SIZE) * -1.0,
-                                self.use_min_height,
-                                (y_offset + row as f32 * GRID_PART_SIZE) * -1.0,
-                            ));
+                            mesh_data.liquid_verts.push((x_offset + col as f32 * GRID_PART_SIZE) * -1.0);
+                            mesh_data.liquid_verts.push(self.use_min_height);
+                            mesh_data.liquid_verts.push((y_offset + row as f32 * GRID_PART_SIZE) * -1.0);
                             continue;
                         }
                         terrain_builder_get_liquid_coord(i, j, x_offset, y_offset, &mut coord, liquid_map);
-                        mesh_data.liquid_verts.push(Vector3::new(coord[0], coord[2], coord[1]));
+                        mesh_data.liquid_verts.push(coord[0]);
+                        mesh_data.liquid_verts.push(coord[2]);
+                        mesh_data.liquid_verts.push(coord[1]);
                         j += 1;
                     }
                 },
                 Err(liquid_level) => {
                     for i in 0..V9_SIZE_SQ {
                         let (row, col) = row_vector_to_matrix_index!(S: (V9_SIZE, V9_SIZE), i);
-                        mesh_data.liquid_verts.push(Vector3::new(
-                            (x_offset + col as f32 * GRID_PART_SIZE) * -1.0,
-                            *liquid_level,
-                            (y_offset + row as f32 * GRID_PART_SIZE) * -1.0,
-                        ));
+                        mesh_data.liquid_verts.push((x_offset + col as f32 * GRID_PART_SIZE) * -1.0);
+                        mesh_data.liquid_verts.push(*liquid_level);
+                        mesh_data.liquid_verts.push((y_offset + row as f32 * GRID_PART_SIZE) * -1.0);
                     }
                 },
             }
@@ -257,11 +259,9 @@ impl TerrainBuilder<'_> {
             for i in portion.get_loop_vars() {
                 for j in [Spot::Top, Spot::Bottom] {
                     j.get_height_triangle(i, true, &mut indices);
-                    ltriangles.push(Vector3::new(
-                        indices[2] + count as u16,
-                        indices[1] + count as u16,
-                        indices[0] + count as u16,
-                    ));
+                    ltriangles.push(indices[2] + i32::try_from(count).unwrap());
+                    ltriangles.push(indices[1] + i32::try_from(count).unwrap());
+                    ltriangles.push(indices[0] + i32::try_from(count).unwrap());
                 }
             }
         }
@@ -286,21 +286,21 @@ impl TerrainBuilder<'_> {
                 // default is true, will change to false if needed
                 let mut use_terrain = true;
                 let mut use_liquid = true;
-                let mut liquid_type = None;
+                let mut liquid_type = 0;
 
                 // if there is no liquid, don't use liquid
                 if mesh_data.liquid_verts.is_empty() || ltriangles.is_empty() {
                     use_liquid = false;
                 } else {
                     let map_liq_flag = terrain_builder_get_liquid_type(i, &map_file);
-                    if map_liq_flag.contains(MapLiquidTypeFlag::DarkWater) {
+                    if (map_liq_flag & MapLiquidTypeFlag::DarkWater).bits() > 0 {
                         // players should not be here, so logically neither should creatures
                         use_terrain = false;
                         use_liquid = false;
-                    } else if map_liq_flag.contains(MapLiquidTypeFlag::Water | MapLiquidTypeFlag::Ocean) {
-                        liquid_type = Some(MmapNavTerrainFlag::Water);
-                    } else if map_liq_flag.contains(MapLiquidTypeFlag::Magma | MapLiquidTypeFlag::Slime) {
-                        liquid_type = Some(MmapNavTerrainFlag::MagmaSlime);
+                    } else if (map_liq_flag & (MapLiquidTypeFlag::Water | MapLiquidTypeFlag::Ocean)).bits() > 0 {
+                        liquid_type = MmapNavTerrainFlag::Water.area_id();
+                    } else if (map_liq_flag & (MapLiquidTypeFlag::Magma | MapLiquidTypeFlag::Slime)).bits() > 0 {
+                        liquid_type = MmapNavTerrainFlag::MagmaSlime.area_id();
                     } else {
                         use_liquid = false;
                     }
@@ -316,8 +316,8 @@ impl TerrainBuilder<'_> {
                 if use_liquid {
                     let mut quad_height = 0.0;
                     let mut valid_count = 0;
-                    for liq_idx in ltris[l_idx].iter() {
-                        let h = lverts_copy[*liq_idx as usize].y;
+                    for idx in 0..3 {
+                        let h = lverts_copy[ltris[l_idx + idx] as usize * 3 + 1];
                         if h != self.use_min_height && h < INVALID_MAP_LIQ_HEIGHT_MAX {
                             quad_height += h;
                             valid_count += 1;
@@ -327,10 +327,10 @@ impl TerrainBuilder<'_> {
                     // update vertex height data
                     if valid_count > 0 && valid_count < 3 {
                         quad_height /= valid_count as f32;
-                        for liq_idx in ltris[l_idx].iter() {
-                            let h = mesh_data.liquid_verts[*liq_idx as usize].y;
+                        for idx in 0..3 {
+                            let h = mesh_data.liquid_verts[ltris[l_idx + idx] as usize * 3 + 1];
                             if h == self.use_min_height || h > INVALID_MAP_LIQ_HEIGHT_MAX {
-                                mesh_data.liquid_verts[*liq_idx as usize].y = quad_height;
+                                mesh_data.liquid_verts[ltris[l_idx + idx] as usize * 3 + 1] = quad_height;
                             }
                         }
                     }
@@ -350,8 +350,8 @@ impl TerrainBuilder<'_> {
                 if use_terrain && use_liquid {
                     let mut min_l_level = INVALID_MAP_LIQ_HEIGHT_MAX;
                     let mut max_l_level = self.use_min_height;
-                    for liq_idx in ltris[l_idx].iter() {
-                        let h = mesh_data.liquid_verts[*liq_idx as usize].y;
+                    for x in 0..3 {
+                        let h = mesh_data.liquid_verts[ltris[l_idx + x] as usize * 3 + 1];
                         if min_l_level > h {
                             min_l_level = h;
                         }
@@ -363,16 +363,14 @@ impl TerrainBuilder<'_> {
 
                     let mut max_t_level = self.use_min_height;
                     let mut min_t_level = INVALID_MAP_LIQ_HEIGHT_MAX;
-                    for ttri in [&ttris[t_idx], &ttris[t_idx + 1]] {
-                        for terrain_idx in ttri {
-                            let h = mesh_data.solid_verts[*terrain_idx as usize].y;
-                            if max_t_level < h {
-                                max_t_level = h;
-                            }
+                    for x in 0..6 {
+                        let h = mesh_data.solid_verts[ttris[t_idx + x] as usize * 3 + 1];
+                        if max_t_level < h {
+                            max_t_level = h;
+                        }
 
-                            if min_t_level > h {
-                                min_t_level = h;
-                            }
+                        if min_t_level > h {
+                            min_t_level = h;
                         }
                     }
 
@@ -390,17 +388,20 @@ impl TerrainBuilder<'_> {
                 // store the result
                 if use_liquid {
                     mesh_data.liquid_types.push(liquid_type);
-                    mesh_data.liquid_tris.push(ltris[l_idx]);
+                    for k in 0..3 {
+                        mesh_data.liquid_tris.push(ltris[l_idx + k]);
+                    }
                 }
 
                 if use_terrain {
-                    mesh_data.solid_tris.push(ttris[t_idx]);
-                    mesh_data.solid_tris.push(ttris[t_idx + 1]);
+                    for k in 0..6 {
+                        mesh_data.solid_tris.push(ttris[t_idx + k]);
+                    }
                 }
 
                 // advance to next set of triangles
-                l_idx += 1;
-                t_idx += 2;
+                l_idx += 3;
+                t_idx += 6;
             }
         }
         if mesh_data.solid_tris.is_empty() && mesh_data.liquid_tris.is_empty() {
@@ -412,38 +413,15 @@ impl TerrainBuilder<'_> {
 
     #[instrument(skip(self, mesh_data))]
     pub fn load_vmap(&self, map_id: u32, tile_x: u16, tile_y: u16, mesh_data: &mut MeshData) -> AzResult<()> {
-        if let Err(e) = self
-            .vmap_mgr
-            .write()
-            .unwrap()
-            .load_single_map_tile(map_id, &self.vmaps_path, tile_x, tile_y)
-        {
-            debug!("Unable to load vmap tile. Tile reference may have been from Map instead; err was {e}");
-            return Ok(());
-        };
-
-        let tree_vals = {
-            let r_vmgr = self.vmap_mgr.read().unwrap();
-            let instance_tree = match r_vmgr.instance_map_trees.get(&map_id).and_then(|t| t.as_ref()) {
-                Some(t) => t,
-                None => {
-                    return Err(az_error!(
-                        "vmap tree cannot be loaded somehow: map_id was {map_id} [tile_x {tile_x}; tile_y {tile_y}]"
-                    ));
-                },
-            };
-            if instance_tree.tree_values.is_empty() {
-                return Err(az_error!(
-                    "vmap tree doesn't have any entries for some reason: map_id was {map_id} [tile_x {tile_x}; tile_y {tile_y}]"
-                ));
-            }
-            instance_tree.tree_values.values().map(|(i, _)| i.clone()).collect::<Vec<_>>()
-        };
-
-        for instance in tree_vals {
+        for instance in match self.vmap_mgr.load_single_map_tile(map_id, &self.vmaps_path, tile_x, tile_y) {
+            Err(e) => {
+                debug!("Unable to load vmap tile. Tile reference may have been from Map instead; err was {e}");
+                return Ok(());
+            },
+            Ok(t) => t,
+        } {
             // model instances exist in tree even though there are instances of that model in this tile
-            let world_model = instance.model.clone();
-            let group_models = &world_model.group_models;
+            let group_models = &instance.model.group_models;
 
             // all M2s need to have triangle indices reversed
             let is_m2 = instance.flags.contains(ModelFlags::ModM2);
@@ -473,32 +451,29 @@ impl TerrainBuilder<'_> {
                     })
                 });
 
-                let offset = mesh_data.solid_verts.len();
+                let offset = i32::try_from(mesh_data.solid_verts.len() / 3).unwrap();
 
                 // Similar to TerrainBuilder::copyVertices
-                mesh_data
-                    .solid_verts
-                    .extend(transformed_vertices.map(|v| Vector3::new(v.y, v.z, v.x)));
+                for v in transformed_vertices {
+                    mesh_data.solid_verts.push(v.y);
+                    mesh_data.solid_verts.push(v.z);
+                    mesh_data.solid_verts.push(v.x);
+                }
                 // Similar to TerrainBuilder::copyIndices
-                let transformed_indices = g.mesh.iter().flat_map(|mesh| {
-                    mesh.indices().iter().map(|tri| {
-                        // Flip if its an M2
-                        if is_m2 {
-                            Vector3::new(
-                                tri[2] as u16 + offset as u16,
-                                tri[1] as u16 + offset as u16,
-                                tri[0] as u16 + offset as u16,
-                            )
-                        } else {
-                            Vector3::new(
-                                tri[0] as u16 + offset as u16,
-                                tri[1] as u16 + offset as u16,
-                                tri[2] as u16 + offset as u16,
-                            )
-                        }
-                    })
-                });
-                mesh_data.solid_tris.extend(transformed_indices);
+                for tri in g.mesh.iter().flat_map(|mesh| mesh.indices().iter()) {
+                    // Flip if its an M2
+                    let tri = tri.map(|f| i32::try_from(f).unwrap());
+                    if is_m2 {
+                        mesh_data.solid_tris.push(tri[2] + offset);
+                        mesh_data.solid_tris.push(tri[1] + offset);
+                        mesh_data.solid_tris.push(tri[0] + offset);
+                    } else {
+                        mesh_data.solid_tris.push(tri[0] + offset);
+                        mesh_data.solid_tris.push(tri[1] + offset);
+                        mesh_data.solid_tris.push(tri[2] + offset);
+                    }
+                }
+
                 // now handle liquid data
                 if let Some(liq) = g.i_liquid.as_ref() {
                     let (data, tile_flags, corner) = match &liq.heights {
@@ -506,13 +481,13 @@ impl TerrainBuilder<'_> {
                         Ok(f) => (&f.i_height, &f.i_flags, &f.i_corner),
                     };
                     // convert liquid type to NavTerrain
-                    let liquid_flags = (self.vmap_mgr.read().unwrap().get_liquid_flags)(liq.i_type);
-                    let typ = if liquid_flags.contains(MapLiquidTypeFlag::Water | MapLiquidTypeFlag::Ocean) {
-                        Some(MmapNavTerrainFlag::Water)
-                    } else if liquid_flags.contains(MapLiquidTypeFlag::Magma | MapLiquidTypeFlag::Slime) {
-                        Some(MmapNavTerrainFlag::MagmaSlime)
+                    let liquid_flags = (self.vmap_mgr.get_liquid_flags)(liq.i_type);
+                    let typ = if (liquid_flags & (MapLiquidTypeFlag::Water | MapLiquidTypeFlag::Ocean)).bits() > 0 {
+                        MmapNavTerrainFlag::Water.area_id()
+                    } else if (liquid_flags & (MapLiquidTypeFlag::Magma | MapLiquidTypeFlag::Slime)).bits() > 0 {
+                        MmapNavTerrainFlag::MagmaSlime.area_id()
                     } else {
-                        None
+                        0
                     };
 
                     // indexing is weird...
@@ -560,25 +535,32 @@ impl TerrainBuilder<'_> {
                             let idx4 = square + tiles_y + 1 + x;
 
                             // top triangle
-                            liq_tris.push(Vector3::new(idx3 as u16, idx2 as u16, idx1 as u16));
+                            liq_tris.push(idx3 as u16);
+                            liq_tris.push(idx2 as u16);
+                            liq_tris.push(idx1 as u16);
                             // bottom triangle
-                            liq_tris.push(Vector3::new(idx4 as u16, idx3 as u16, idx1 as u16));
+                            liq_tris.push(idx4 as u16);
+                            liq_tris.push(idx3 as u16);
+                            liq_tris.push(idx1 as u16);
                         }
                     }
-                    let liq_offset = mesh_data.liquid_verts.len() as u16;
+                    let liq_offset = i32::try_from(mesh_data.liquid_verts.len() / 3).unwrap();
                     for liq_vert in liq_verts {
-                        mesh_data.liquid_verts.push(liq_vert.yzx());
+                        mesh_data.liquid_verts.push(liq_vert.y);
+                        mesh_data.liquid_verts.push(liq_vert.z);
+                        mesh_data.liquid_verts.push(liq_vert.x);
                     }
-                    for liq_tri in liq_tris {
-                        mesh_data.liquid_tris.push(liq_tri.add_scalar(liq_offset).yzx());
+                    for i in 0..(liq_tris.len() / 3) {
+                        mesh_data.liquid_tris.push(i32::try_from(liq_tris[i * 3 + 1]).unwrap() + liq_offset);
+                        mesh_data.liquid_tris.push(i32::try_from(liq_tris[i * 3 + 2]).unwrap() + liq_offset);
+                        mesh_data.liquid_tris.push(i32::try_from(liq_tris[i * 3]).unwrap() + liq_offset);
                         mesh_data.liquid_types.push(typ);
-                        // meshData.liquidTris.append(liqTris[i * 3 + 1] + liqOffset, liqTris[i * 3 + 2] + liqOffset, liqTris[i * 3] + liqOffset);
-                        // meshData.liquidType.append(type);
                     }
                 }
             }
         }
-        self.vmap_mgr.write().unwrap().unload_single_map_tile(map_id, tile_x, tile_y);
+
+        self.vmap_mgr.unload_single_map_tile(map_id, tile_x, tile_y);
 
         Ok(())
     }

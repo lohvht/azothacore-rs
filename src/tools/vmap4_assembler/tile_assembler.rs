@@ -16,12 +16,14 @@ use tracing::{error, info, warn};
 use crate::{
     bincode_deserialise,
     bincode_serialise,
+    buffered_file_create,
+    buffered_file_open,
     cmp_or_return,
     common::collision::{
         maps::map_tree::StaticMapTree,
         models::{
             game_object_model::GameObjectModelData,
-            model_instance::{ModelFlags, VmapModelSpawn},
+            model_instance::{ModelFlags, VmapModelSpawnWithMapId},
             world_model::{GroupModel, WmoLiquid, WorldModel},
         },
         vmap_definitions::RAW_VMAP_MAGIC,
@@ -35,9 +37,9 @@ use crate::{
     AzResult,
 };
 
-pub fn read_map_spawns(map_spawns: impl Iterator<Item = VmapModelSpawn>) -> BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>> {
+pub fn read_map_spawns(map_spawns: impl Iterator<Item = VmapModelSpawnWithMapId>) -> BTreeMap<u32, BTreeMap<u32, VmapModelSpawnWithMapId>> {
     // retrieve the unique entries
-    let mut map_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>> = BTreeMap::new();
+    let mut map_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawnWithMapId>> = BTreeMap::new();
     for spawn in map_spawns {
         let unique_entries = map_data.entry(spawn.map_num).or_default();
         if unique_entries.is_empty() {
@@ -50,7 +52,7 @@ pub fn read_map_spawns(map_spawns: impl Iterator<Item = VmapModelSpawn>) -> BTre
 
 pub fn tile_assembler_convert_world2(
     args: &ExtractorConfig,
-    map_spawns: impl Iterator<Item = VmapModelSpawn>,
+    map_spawns: impl Iterator<Item = VmapModelSpawnWithMapId>,
     temp_gameobject_models: impl Iterator<Item = TempGameObjectModel>,
 ) -> AzResult<()> {
     let src = args.output_vmap_sz_work_dir_wmo();
@@ -109,7 +111,7 @@ pub fn tile_assembler_convert_world2(
         info!("Creating map tree for map {map_id}. map_spawns len is {}...", map_spawns.len());
         let mut ptree = Qbvh::new();
         // unborrow map_spawns
-        let map_spawns = map_spawns.into_iter().map(|m| &*m).collect::<Vec<_>>();
+        let map_spawns = map_spawns.into_iter().map(|m| &m.spawn).collect::<Vec<_>>();
         let map_data = map_spawns.iter().enumerate().map(|(idx, m)| (idx, m.bound.unwrap()));
         ptree.clear_and_rebuild(map_data, 0.0);
 
@@ -138,6 +140,7 @@ pub fn tile_assembler_convert_world2(
                     all_tile_entries.push(model_spawn);
                 }
             }
+            let all_tile_entries = all_tile_entries.into_iter().map(|m| &m.spawn).collect::<Vec<_>>();
             StaticMapTree::write_map_tile_spawns_file(&dst, map_id, x, y, &all_tile_entries)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("write_map_tile_spawns_file err: {e}")))?;
         }
@@ -181,12 +184,12 @@ pub fn tile_assembler_convert_world2(
     Ok(())
 }
 
-fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpawn) -> AzResult<()> {
+fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpawnWithMapId) -> AzResult<()> {
     let model_filename = src.as_ref().join(&spawn.name);
 
     let model_position = ModelPosition::new(spawn.i_rot, spawn.i_scale);
 
-    let mut input = fs::File::open(&model_filename).inspect_err(|e| {
+    let mut input = buffered_file_open(&model_filename).inspect_err(|e| {
         error!("ERROR: Can't open raw model file: {} - err {e}", model_filename.display());
     })?;
     let raw_model = WorldModel_Raw::read(&mut input).inspect_err(|e| {
@@ -216,7 +219,7 @@ pub fn convert_raw_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(src: 
         return Ok(());
     }
 
-    let mut raw_model_file = fs::File::open(&filename).inspect_err(|e| {
+    let mut raw_model_file = buffered_file_open(&filename).inspect_err(|e| {
         error!("convert_raw_file err: {}; err was {e}", filename.display());
     })?;
 
@@ -241,7 +244,7 @@ pub fn convert_raw_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(src: 
 
     let model = WorldModel::new(raw_model.root_wmo_id, groups);
 
-    let mut outfile = fs::File::create(out).inspect_err(|e| {
+    let mut outfile = buffered_file_create(out).inspect_err(|e| {
         error!("create new  vmofile err: {}; err was {e}", filename.display());
     })?;
     model
@@ -270,7 +273,7 @@ fn export_gameobject_models<P: AsRef<Path> + std::marker::Sync>(
             } = tmp;
 
             let raw_model_file_path = src.as_ref().join(get_fixed_plain_name(&model_name));
-            let mut raw_model_file = match fs::File::open(&raw_model_file_path) {
+            let mut raw_model_file = match buffered_file_open(&raw_model_file_path) {
                 Err(e) => {
                     warn!(
                         "cannot open raw file for some reason: path: {}, err {e}",

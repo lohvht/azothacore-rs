@@ -25,6 +25,7 @@ const FLAT_LIQUID_DELTA_LIMIT: f32 = 0.001;
 
 use crate::{
     az_error,
+    buffered_file_create,
     common::Locale,
     server::{
         game::map::{
@@ -152,7 +153,7 @@ fn extract_db_files_client(storage: &CascStorageHandle, args: &ExtractorConfig, 
 fn extract_file(file_in_archive: &mut CascFileHandle, out_path: PathBuf) -> AzResult<()> {
     let file_size = file_in_archive.get_file_size()?;
 
-    let mut output = fs::File::create(&out_path).inspect_err(|e| {
+    let mut output = buffered_file_create(&out_path).inspect_err(|e| {
         error!("can't create the output file '{}', err was: {}", out_path.display(), e);
     })?;
 
@@ -368,7 +369,7 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> AzResu
                     },
                     Ok(f) => f,
                 };
-                let mut f = fs::File::create(&output_file_name)?;
+                let mut f = buffered_file_create(&output_file_name)?;
                 if let Err(e) = map_file.write(&mut f) {
                     let output_file_name_display = output_file_name.display();
                     error!("error saving mapfile to {output_file_name_display} due to err: {e}");

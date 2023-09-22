@@ -1,19 +1,25 @@
 use std::{
     collections::HashMap,
     ffi::OsStr,
-    fs,
     ops::{Deref, DerefMut},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{Arc, Mutex, RwLock},
 };
 
 use flagset::FlagSet;
 use tracing::{debug, error, instrument};
 
 use crate::{
-    common::collision::{management::VMapMgrTrait, maps::map_tree::StaticMapTree, models::world_model::WorldModel},
+    buffered_file_open,
+    common::collision::{
+        management::VMapMgrTrait,
+        maps::map_tree::StaticMapTree,
+        models::{model_instance::ModelInstance, world_model::WorldModel},
+    },
     server::game::map::MapLiquidTypeFlag,
 };
+
+pub type VmapInstanceMapTrees = HashMap<u32, Option<Arc<RwLock<StaticMapTree>>>>;
 
 pub struct VMapMgr2<'liq, 'vd> {
     enable_line_of_sight_calc: bool,
@@ -24,13 +30,13 @@ pub struct VMapMgr2<'liq, 'vd> {
     /// the caller must pass the list of all mapIds that will be used in the VMapManager2 lifetime
 
     /// Tree to check collision
-    model_store:            Arc<Mutex<VMapModelStore>>,
+    model_store:        Arc<Mutex<VMapModelStore>>,
     /// Child map data, containings map_ids to their children IDs.
-    child_map_data:         HashMap<u32, Vec<u32>>,
+    child_map_data:     HashMap<u32, Vec<u32>>,
     /// Parent map data, containings map_ids to their parent ID.
-    parent_map_data:        Arc<HashMap<u32, u32>>,
+    parent_map_data:    Arc<HashMap<u32, u32>>,
     ///
-    pub instance_map_trees: HashMap<u32, Option<StaticMapTree>>,
+    instance_map_trees: Arc<RwLock<VmapInstanceMapTrees>>,
 }
 
 impl<'liq, 'vd> Default for VMapMgr2<'liq, 'vd> {
@@ -42,7 +48,7 @@ impl<'liq, 'vd> Default for VMapMgr2<'liq, 'vd> {
             is_vmap_disabled_for:      Arc::new(|_, _| false),
             child_map_data:            HashMap::new(),
             parent_map_data:           Arc::new(HashMap::new()),
-            instance_map_trees:        HashMap::new(),
+            instance_map_trees:        Arc::new(RwLock::new(HashMap::new())),
             model_store:               Default::default(),
         };
         s.init_new();
@@ -53,11 +59,11 @@ impl<'liq, 'vd> Default for VMapMgr2<'liq, 'vd> {
 #[derive(Default)]
 pub struct VMapModelStore {
     /// Tree to check collision
-    loaded_model_files: HashMap<String, (Arc<WorldModel>, usize)>,
+    loaded_model_files: HashMap<String, Arc<WorldModel>>,
 }
 
 impl Deref for VMapModelStore {
-    type Target = HashMap<String, (Arc<WorldModel>, usize)>;
+    type Target = HashMap<String, Arc<WorldModel>>;
 
     fn deref(&self) -> &Self::Target {
         &self.loaded_model_files
@@ -86,32 +92,32 @@ fn push_extension<P: AsRef<Path>, E: AsRef<OsStr>>(path: P, ext: E) -> PathBuf {
 
 impl VMapModelStore {
     pub fn acquire_model_instance<P: AsRef<Path>>(&mut self, base_path: P, filename: &str) -> Option<Arc<WorldModel>> {
-        if let Some((model, ref_count)) = self.loaded_model_files.get_mut(filename) {
-            *ref_count += 1;
-            return Some(model.clone());
-        };
-        let path = push_extension(base_path.as_ref().join(filename), "vmo");
-        match fs::File::open(&path) {
-            Err(e) => {
-                error!("misc: VMapMgr2: could not load {}; err {e}", path.display());
-                return None;
-            },
-            Ok(mut f) => match WorldModel::read_file(&mut f) {
-                Ok(m) => {
-                    self.loaded_model_files.entry(filename.to_string()).or_insert((Arc::new(m), 1));
-                },
+        if let Some(model) = self.loaded_model_files.get(filename) {
+            Some(model.clone())
+        } else {
+            let path = push_extension(base_path.as_ref().join(filename), "vmo");
+            match buffered_file_open(&path) {
                 Err(e) => {
-                    debug!("error trying to open world model file: {filename}; e: {e}");
+                    error!("misc: VMapMgr2: could not load {}; err {e}", path.display());
+                    None
                 },
-            },
-        };
-        self.loaded_model_files.get(filename).map(|(m, _)| m.clone())
+                Ok(mut f) => match WorldModel::read_file(&mut f) {
+                    Ok(m) => {
+                        let r = self.loaded_model_files.entry(filename.to_string()).or_insert(Arc::new(m));
+                        Some(r.clone())
+                    },
+                    Err(e) => {
+                        debug!("error trying to open world model file: {filename}; e: {e}");
+                        None
+                    },
+                },
+            }
+        }
     }
 
     pub fn release_model_instance(&mut self, filename: &str) {
-        let should_remove = if let Some((_, ref_count)) = self.loaded_model_files.get_mut(filename) {
-            *ref_count -= 1;
-            *ref_count == 0
+        let should_remove = if let Some(m) = self.loaded_model_files.get(filename) {
+            Arc::strong_count(m) <= 1
         } else {
             error!("misc: VMapMgr2: trying to unload non-loaded file {filename}");
             return;
@@ -140,7 +146,7 @@ impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
         self.child_map_data = map_data.clone();
         let mut parent_map_data = HashMap::new();
         for (map_id, children_map_ids) in self.child_map_data.iter() {
-            self.instance_map_trees.entry(*map_id).or_insert(None);
+            self.instance_map_trees.write().unwrap().entry(*map_id).or_insert(None);
             for child_map_id in children_map_ids.iter() {
                 parent_map_data.entry(*child_map_id).or_insert(*map_id);
             }
@@ -149,8 +155,8 @@ impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
     }
 
     #[instrument(skip_all, fields(base_path=format!("{}", base_path.as_ref().display()), map_id = map_id))]
-    fn get_or_load_map_tree<P: AsRef<Path>>(&mut self, map_id: u32, base_path: P) -> super::VmapFactoryLoadResult<&mut StaticMapTree> {
-        let instance_tree = match self.instance_map_trees.get_mut(&map_id) {
+    fn get_or_load_map_tree<P: AsRef<Path>>(&self, map_id: u32, base_path: P) -> super::VmapFactoryLoadResult<Arc<RwLock<StaticMapTree>>> {
+        let instance_tree = match self.instance_map_trees.write().unwrap().get_mut(&map_id) {
             None => {
                 //TODO: go ahead with the panic for now mimicking `!thread_safe_environment` in TC/ Acore
                 // because Map Data map require reading from child trees too.
@@ -160,9 +166,9 @@ impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
                 if it.is_none() {
                     let new_tree = StaticMapTree::init_from_file(&base_path, map_id)
                         .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tree: {}", e)))?;
-                    *it = Some(new_tree)
+                    *it = Some(Arc::new(RwLock::new(new_tree)))
                 }
-                it.as_mut().unwrap_or_else(|| {
+                it.clone().unwrap_or_else(|| {
                     panic!(
                         "expect instance tree to be loaded by this point: map {map_id}; path: {}",
                         base_path.as_ref().display(),
@@ -177,29 +183,31 @@ impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
     /// loadSingleMap in TC
     #[instrument(skip_all, fields(base_path=format!("{}", base_path.as_ref().display()), tile = format!("[Map {map_id:04}] [{tile_x:02},{tile_y:02}]")))]
     pub fn load_single_map_tile<P: AsRef<Path>>(
-        &mut self,
+        &self,
         map_id: u32,
         base_path: P,
         tile_x: u16,
         tile_y: u16,
-    ) -> super::VmapFactoryLoadResult<()> {
+    ) -> super::VmapFactoryLoadResult<Vec<Arc<ModelInstance>>> {
         let model_store = self.model_store.clone();
         let parent_map_data = self.parent_map_data.clone();
         let instance_tree = self.get_or_load_map_tree(map_id, base_path)?;
 
-        instance_tree
-            .load_map_tile(tile_x, tile_y, parent_map_data, model_store)
+        let mut i_w = instance_tree.write().unwrap();
+        i_w.load_map_tile(tile_x, tile_y, parent_map_data, model_store)
             .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tile: {}", e)))?;
-        Ok(())
+        Ok(i_w.get_tile_model_instances(tile_x, tile_y))
     }
 
     // unloadSingleMap in TC
-    pub fn unload_single_map_tile(&mut self, map_id: u32, tile_x: u16, tile_y: u16) {
+    pub fn unload_single_map_tile(&self, map_id: u32, tile_x: u16, tile_y: u16) {
         let model_store = self.model_store.clone();
-        if let Some(instance_tree) = self.instance_map_trees.get_mut(&map_id) {
+        let parent_map_data = self.parent_map_data.clone();
+        if let Some(instance_tree) = self.instance_map_trees.write().unwrap().get_mut(&map_id) {
             let remove_tree = if let Some(itree) = instance_tree {
-                itree.unload_map_tile(tile_x, tile_y, model_store);
-                itree.tree_values.is_empty()
+                let mut itree_w = itree.write().unwrap();
+                itree_w.unload_map_tile(tile_x, tile_y, model_store, parent_map_data);
+                itree_w.has_no_loaded_tiles()
             } else {
                 true
             };

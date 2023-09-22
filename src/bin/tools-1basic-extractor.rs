@@ -3,6 +3,7 @@
 use std::{fs, io};
 
 use azothacore_rs::{
+    buffered_file_open,
     common::{banner, Locale},
     logging::init_logging,
     tools::{
@@ -19,7 +20,7 @@ use walkdir::WalkDir;
 
 fn main() -> AzResult<()> {
     let _wg = init_logging();
-    let mut f = fs::File::open("env/dist/etc/extractor.toml")?;
+    let mut f = buffered_file_open("env/dist/etc/extractor.toml")?;
     let args = ExtractorConfig::from_toml(&mut f)?;
 
     banner::azotha_banner_show("Azothacore Extractor", || {
@@ -69,9 +70,15 @@ fn main() -> AzResult<()> {
         info!("No locales detected!");
         return Ok(());
     };
+    // After each stage, we run libc::malloc_trim
+    // This attempts to free the greedily allocated memory on heap
+    // previously allocated by default allocator
+    // that isnt somehow being freed somehow to OS
     if args.run_stage_flags.contains(RunStagesFlag::DB2Extraction) {
         // MAP & DB2 EXTRACTOR
         main_db2_and_map_extract(&args, first_installed_locale, build)?;
+
+        unsafe { libc::malloc_trim(0) };
     }
 
     if args.run_stage_flags.contains(RunStagesFlag::VmapExtraction) {
@@ -80,11 +87,15 @@ fn main() -> AzResult<()> {
 
         // VMAP ASSEMBLER
         main_vmap4_assemble(&args, model_spawns_data, temp_gameobject_models)?;
+
+        unsafe { libc::malloc_trim(0) };
     }
 
     if args.run_stage_flags.contains(RunStagesFlag::MmapGeneration) {
         // Mmap generator
         main_path_generator(&args, first_installed_locale)?;
+
+        unsafe { libc::malloc_trim(0) };
     }
 
     Ok(())

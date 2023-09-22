@@ -16,10 +16,12 @@ use crate::{
     az_error,
     bincode_deserialise,
     bincode_serialise,
+    buffered_file_create,
+    buffered_file_open,
     cmp_or_return,
     common::{
         collision::{
-            models::model_instance::{ModelFlags, VmapModelSpawn},
+            models::model_instance::{ModelFlags, VmapModelSpawnWithMapId},
             vmap_definitions::RAW_VMAP_MAGIC,
         },
         Locale,
@@ -54,15 +56,16 @@ pub struct VmapExtractor {
 }
 
 pub struct FileIterator<T> {
-    f:    fs::File,
+    f:    io::BufReader<fs::File>,
     size: u64,
     t:    PhantomData<T>,
 }
 
 impl<T> FileIterator<T> {
-    fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        let mut f = fs::File::open(path)?;
+    pub fn new<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let f = fs::File::open(path)?;
         let size = f.metadata()?.len();
+        let mut f = io::BufReader::new(f);
         cmp_or_return!(f, RAW_VMAP_MAGIC)?;
 
         Ok(Self { f, size, t: PhantomData })
@@ -84,7 +87,7 @@ impl<T: for<'a> serde::Deserialize<'a>> Iterator for FileIterator<T> {
 pub fn main_vmap4_extract(
     args: &ExtractorConfig,
     first_installed_locale: Locale,
-) -> AzResult<(FileIterator<VmapModelSpawn>, FileIterator<TempGameObjectModel>)> {
+) -> AzResult<(FileIterator<VmapModelSpawnWithMapId>, FileIterator<TempGameObjectModel>)> {
     // VMAP EXTRACTOR AND ASSEMBLER
     let version_string = VmapExtractAndGenerate::version_string();
     info!("Extract VMAP {version_string}. Beginning work .....\n\n");
@@ -115,9 +118,9 @@ pub fn main_vmap4_extract(
     let storage = args.get_casc_storage_handler(first_installed_locale)?;
     {
         // Populate the magic number first
-        let mut model_spawns_dir_bin = fs::File::create(&vmap_extract.model_spawns_tmp)?;
+        let mut model_spawns_dir_bin = buffered_file_create(&vmap_extract.model_spawns_tmp)?;
         model_spawns_dir_bin.write_all(RAW_VMAP_MAGIC)?;
-        let mut model_list = fs::File::create(&vmap_extract.gameobject_models_tmp)?;
+        let mut model_list = buffered_file_create(&vmap_extract.gameobject_models_tmp)?;
         model_list.write_all(RAW_VMAP_MAGIC)?;
     };
     vmap_extract.extract_game_object_models(&storage, first_installed_locale, &mut wmo_doodads)?;
@@ -151,7 +154,7 @@ struct WdtWithAdts {
 
 struct AdtWithDirFileCache {
     _f:             ADTFile,
-    dir_file_cache: Option<Vec<VmapModelSpawn>>,
+    dir_file_cache: Option<Vec<VmapModelSpawnWithMapId>>,
 }
 
 impl VmapExtractor {
@@ -166,7 +169,7 @@ impl VmapExtractor {
         let source = storage.open_file("DBFilesClient/GameObjectDisplayInfo.db2", CascLocale::None.into())?;
         let db2 = wdc1::FileLoader::<GameObjectDisplayInfo>::from_reader(source, locale as u32)?;
         let recs = db2.produce_data()?;
-        let mut model_list = fs::File::options().append(true).open(&self.gameobject_models_tmp)?;
+        let mut model_list = io::BufWriter::new(fs::File::options().append(true).open(&self.gameobject_models_tmp)?);
 
         for rec in recs {
             let fid = rec.file_data_id;
@@ -212,6 +215,7 @@ impl VmapExtractor {
             )?;
         }
         info!("Done!");
+        model_list.flush().unwrap();
 
         Ok(())
     }
@@ -266,7 +270,7 @@ impl VmapExtractor {
         });
         if !file_exist {
             // save only if not exist. The above code is also to ensure that the model spawns are always idempotent.
-            let mut output = fs::File::create(&sz_local_file).inspect_err(|e| {
+            let mut output = buffered_file_create(&sz_local_file).inspect_err(|e| {
                 error!(
                     "can't create the output file '{}' for writing, err was: {}",
                     sz_local_file.display(),
@@ -303,7 +307,7 @@ impl VmapExtractor {
 
         let mdl = Model::build(storage, file_name)?;
         let vmap = mdl.convert_to_vmap();
-        let mut output = fs::File::create(&sz_local_file).inspect_err(|e| {
+        let mut output = buffered_file_create(&sz_local_file).inspect_err(|e| {
             error!(
                 "can't create the output file '{}' for writing, err was: {}",
                 sz_local_file.display(),
@@ -406,7 +410,7 @@ impl VmapExtractor {
         info!("Read Map.dbc file...");
         let source = storage.open_file("DBFilesClient/Map.db2", CascLocale::None.into())?;
         let db2 = wdc1::FileLoader::<Map>::from_reader(source, locale as u32)?;
-        let maps = db2.produce_data()?.map(|r| (r.id, r)).collect::<HashMap<_, _>>();
+        let maps = db2.produce_data()?.map(|r| (r.id, r)).collect::<BTreeMap<_, _>>();
         let maps_len = maps.len();
         info!("Done! ({maps_len} maps loaded)");
 
@@ -467,18 +471,32 @@ impl VmapExtractor {
         is_global_wmo: bool,
         map_id: u32,
         original_map_id: u32,
-        dir_file_cache: &mut Option<Vec<VmapModelSpawn>>,
+        dir_file_cache: &mut Option<Vec<VmapModelSpawnWithMapId>>,
     ) -> AzResult<()> {
+        /// fix_rotations for roll_pitch_yaw (X,Y,Z). We need the transpose here because of nalgebra handling it column-major
+        /// but the rotation given here assumes its on a row-major operation
+        /// i.e. the rotation is in reverse instead.
+        fn fix_rotations(rotation_roll_pitch_yaw: &Vector3<f32>) -> Vector3<f32> {
+            let (x, y, z) = UnitQuaternion::from(nalgebra::Rotation::from_euler_angles(
+                rotation_roll_pitch_yaw.x.to_radians(),
+                rotation_roll_pitch_yaw.y.to_radians(),
+                rotation_roll_pitch_yaw.z.to_radians(),
+            ))
+            .to_rotation_matrix()
+            .euler_angles();
+            Vector3::new(x.to_degrees(), y.to_degrees(), z.to_degrees())
+        }
+
         // destructible wmo, do not dump. we can handle the vmap for these
         // in dynamic tree (gameobject vmaps)
         if (map_obj_def.flags & 0x1) != 0 {
             return Ok(());
         }
-        let mut p_dir_file = fs::File::options().append(true).open(&self.model_spawns_tmp)?;
+        let mut p_dir_file = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp)?);
 
         //-----------add_in _dir_file----------------
         let tempname = self.temp_vmap_dir.join(wmo_inst_name);
-        let mut input = fs::File::open(tempname)?;
+        let mut input = buffered_file_open(tempname)?;
         let (n_vertices, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
         if n_vertices == 0 {
             return Ok(());
@@ -501,15 +519,16 @@ impl VmapExtractor {
         if map_id != original_map_id {
             flags |= ModelFlags::ModParentSpawn;
         }
+        let i_rot = fix_rotations(&map_obj_def.rotation);
 
         //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, Bound_lo, Bound_hi, name
-        let mut m = VmapModelSpawn::new(
+        let mut m = VmapModelSpawnWithMapId::new(
             map_id,
             flags,
             map_obj_def.name_set,
             unique_id,
             position,
-            map_obj_def.rotation,
+            i_rot,
             scale,
             Some(bounds),
             wmo_inst_name.to_string(),
@@ -532,9 +551,9 @@ impl VmapExtractor {
         map_id: u32,
         original_map_id: u32,
         wmo_doodads: &BTreeMap<String, WmoDoodadData>,
-        dir_file_cache: &mut Option<Vec<VmapModelSpawn>>,
+        dir_file_cache: &mut Option<Vec<VmapModelSpawnWithMapId>>,
     ) -> AzResult<()> {
-        let mut p_dir_file = fs::File::options().append(true).open(&self.model_spawns_tmp)?;
+        let mut p_dir_file = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp)?);
 
         let doodad_data = match wmo_doodads.get(wmo_inst_name) {
             None => {
@@ -582,7 +601,8 @@ impl VmapExtractor {
                 };
                 let model_inst_name = plain_name.to_string_lossy().to_string();
                 let tempname = self.temp_vmap_dir.join(&model_inst_name);
-                let mut input = match fs::File::open(&tempname).map_err(|e| az_error!("READ_ERR: path={}, err={e}", tempname.display())) {
+                let mut input = match buffered_file_open(&tempname).map_err(|e| az_error!("READ_ERR: path={}, err={e}", tempname.display()))
+                {
                     Err(e) => {
                         error!("Unable to open file at {} to read vertices: {e}", tempname.display());
                         continue;
@@ -612,8 +632,8 @@ impl VmapExtractor {
                 //     .toRotationMatrix() * wmoRotation)
                 //     .toEulerAnglesXYZ(rotation.z, rotation.x, rotation.y);
                 // X - roll, Y - pitch, Z - yaw
-                let (z, x, y) = UnitQuaternion::from_quaternion(Quaternion::from(doodad.rotation))
-                    .to_rotation_matrix()
+                let (z, x, y) = (UnitQuaternion::from_quaternion(Quaternion::from(doodad.rotation)).to_rotation_matrix() * wmo_rotation)
+                    .transpose() // Different from TC, have to transpose because G3D is in row-major, but nalgebra is in column major
                     .euler_angles();
                 let rotation = Vector3::new(x.to_degrees(), y.to_degrees(), z.to_degrees());
 
@@ -625,7 +645,7 @@ impl VmapExtractor {
                 }
 
                 //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, name
-                let mut m = VmapModelSpawn::new(
+                let mut m = VmapModelSpawnWithMapId::new(
                     map_id,
                     tcflags,
                     name_set, // not used for models
@@ -662,11 +682,26 @@ impl VmapExtractor {
         model_inst_name: &str,
         map_id: u32,
         original_map_id: u32,
-        dir_file_cache: &mut Option<Vec<VmapModelSpawn>>,
+        dir_file_cache: &mut Option<Vec<VmapModelSpawnWithMapId>>,
     ) -> AzResult<()> {
-        let mut p_dir_file = fs::File::options().append(true).open(&self.model_spawns_tmp)?;
+        /// fix_rotations for roll_pitch_yaw (X,Y,Z). We need the transpose here because of nalgebra handling it column-major
+        /// but the rotation given here assumes its on a row-major operation
+        /// i.e. the rotation is in reverse instead.
+        fn fix_rotations(rotation_roll_pitch_yaw: &Vector3<f32>) -> Vector3<f32> {
+            let (x, y, z) = UnitQuaternion::from(nalgebra::Rotation::from_euler_angles(
+                rotation_roll_pitch_yaw.x.to_radians(),
+                rotation_roll_pitch_yaw.y.to_radians(),
+                rotation_roll_pitch_yaw.z.to_radians(),
+            ))
+            .to_rotation_matrix()
+            .transpose()
+            .euler_angles();
+            Vector3::new(x.to_degrees(), y.to_degrees(), z.to_degrees())
+        }
+
+        let mut p_dir_file = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp)?);
         let tempname = self.temp_vmap_dir.join(model_inst_name);
-        let mut input = fs::File::open(tempname)?;
+        let mut input = buffered_file_open(tempname)?;
         let (n_vertices, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
         if n_vertices == 0 {
             return Ok(());
@@ -676,18 +711,19 @@ impl VmapExtractor {
 
         let position = fix_coords(&doodad_def.position);
 
+        let i_rot = fix_rotations(&doodad_def.rotation);
         let mut flags = ModelFlags::ModM2.into();
         if map_id != original_map_id {
             flags |= ModelFlags::ModParentSpawn;
         }
         //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, name
-        let mut m = VmapModelSpawn::new(
+        let mut m = VmapModelSpawnWithMapId::new(
             map_id,
             flags,
             0, // not used for models
             generate_unique_object_id(doodad_def.unique_id, 0),
             position,
-            doodad_def.rotation,
+            i_rot,
             sc,
             None,
             model_inst_name.to_string(),
@@ -729,7 +765,7 @@ impl VmapExtractor {
             .and_then(|c| c.dir_file_cache.as_ref())
         {
             adt_has_dir_file_cache = true;
-            let mut dirfile = fs::File::options().append(true).open(&self.model_spawns_tmp).ok()?;
+            let mut dirfile = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp).ok()?);
 
             for cached in dir_file_cache {
                 let mut spawn = cached.clone();

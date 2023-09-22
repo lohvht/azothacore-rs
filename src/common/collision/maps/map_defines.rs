@@ -1,5 +1,4 @@
 use std::{
-    fs,
     io,
     path::{Path, PathBuf},
 };
@@ -9,6 +8,8 @@ use flagset::FlagSet;
 use crate::{
     bincode_deserialise,
     bincode_serialise,
+    buffered_file_create,
+    buffered_file_open,
     sanity_check_read_all_bytes_from_reader,
     server::shared::recastnavigation_handles::{DT_NAVMESH_VERSION, RC_WALKABLE_AREA},
     AzResult,
@@ -73,10 +74,10 @@ mod tests {
 
     #[test]
     fn it_sanity_checks_mmap_nav_terrain_flag_area_id_generation() {
-        assert_eq!(MmapNavTerrainFlag::Ground.area_id(), 63);
-        assert_eq!(MmapNavTerrainFlag::GroundSteep.area_id(), 62);
-        assert_eq!(MmapNavTerrainFlag::Water.area_id(), 61);
-        assert_eq!(MmapNavTerrainFlag::MagmaSlime.area_id(), 60);
+        assert_eq!(MmapNavTerrainFlag::Ground.area_id(), RC_WALKABLE_AREA);
+        assert_eq!(MmapNavTerrainFlag::GroundSteep.area_id(), RC_WALKABLE_AREA - 1);
+        assert_eq!(MmapNavTerrainFlag::Water.area_id(), RC_WALKABLE_AREA - 2);
+        assert_eq!(MmapNavTerrainFlag::MagmaSlime.area_id(), RC_WALKABLE_AREA - 3);
     }
 }
 
@@ -136,13 +137,16 @@ impl MmapTileFile {
 
     // static char const* const MAP_FILE_NAME_FORMAT = "%smmaps/%04i.mmap";
     /// equivalent to the TILE_FILE_NAME_FORMAT in TC/AC
-    pub fn mmap_tile_filepath<P: AsRef<Path>>(mmap_dir_path: P, map_id: u32, tile_x: u16, tile_y: u16) -> PathBuf {
-        mmap_dir_path.as_ref().join(format!("{map_id:04}{tile_x:02}{tile_y:02}.mmtile"))
+    pub fn mmap_tile_filepath<P: AsRef<Path>>(mmap_dir_path: P, map_id: u32, tile_y: u16, tile_x: u16) -> PathBuf {
+        mmap_dir_path.as_ref().join(format!("{map_id:04}{tile_y:02}{tile_x:02}.mmtile"))
     }
 
-    pub fn write_to_mmtile<P: AsRef<Path>>(&self, mmap_dir_path: P, map_id: u32, tile_x: u16, tile_y: u16) -> AzResult<()> {
-        let p = Self::mmap_tile_filepath(mmap_dir_path, map_id, tile_x, tile_y);
-        let mut file = match fs::File::create(&p) {
+    #[tracing::instrument(skip(self, mmap_dir_path))]
+    pub fn write_to_mmtile<P: AsRef<Path>>(&self, mmap_dir_path: P, map_id: u32, tile_y: u16, tile_x: u16) -> AzResult<()> {
+        let p = Self::mmap_tile_filepath(mmap_dir_path, map_id, tile_y, tile_x);
+        // file output
+        tracing::info!("Writing to mmtile file {}...", p.display());
+        let mut file = match buffered_file_create(&p) {
             Err(e) => return Err(format!("[Map {map_id:04}] Failed to open {} for writing! err was {e}", p.display()).into()),
             Ok(f) => f,
         };
@@ -165,20 +169,20 @@ impl MmapTileFile {
     pub fn read_header_from_mmtile<P: AsRef<Path>>(
         mmap_dir_path: P,
         map_id: u32,
-        tile_x: u16,
         tile_y: u16,
+        tile_x: u16,
     ) -> AzResult<MmapTileFileHeader> {
-        let p = Self::mmap_tile_filepath(mmap_dir_path, map_id, tile_x, tile_y);
-        let mut file = match fs::File::open(&p) {
+        let p = Self::mmap_tile_filepath(mmap_dir_path, map_id, tile_y, tile_x);
+        let mut file = match buffered_file_open(&p) {
             Err(e) => return Err(format!("[Map {map_id:04}] Failed to open {} for writing! err was {e}", p.display()).into()),
             Ok(f) => f,
         };
         Self::read_header(&mut file)
     }
 
-    pub fn read_from_mmtile<P: AsRef<Path>>(mmap_dir_path: P, map_id: u32, tile_x: u16, tile_y: u16) -> AzResult<Self> {
-        let p = Self::mmap_tile_filepath(mmap_dir_path, map_id, tile_x, tile_y);
-        let mut file = match fs::File::open(&p) {
+    pub fn read_from_mmtile<P: AsRef<Path>>(mmap_dir_path: P, map_id: u32, tile_y: u16, tile_x: u16) -> AzResult<Self> {
+        let p = Self::mmap_tile_filepath(mmap_dir_path, map_id, tile_y, tile_x);
+        let mut file = match buffered_file_open(&p) {
             Err(e) => return Err(format!("[Map {map_id:04}] Failed to open {} for writing! err was {e}", p.display()).into()),
             Ok(f) => f,
         };

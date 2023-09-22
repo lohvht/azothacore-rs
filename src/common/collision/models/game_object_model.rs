@@ -5,6 +5,7 @@ use parry3d::bounding_volume::Aabb;
 use crate::{
     bincode_deserialise,
     bincode_serialise,
+    buffered_file_create,
     cmp_or_return,
     common::collision::vmap_definitions::{GAMEOBJECT_MODELS, VMAP_MAGIC},
     sanity_check_read_all_bytes_from_reader,
@@ -21,7 +22,7 @@ pub struct GameObjectModelData {
 
 impl GameObjectModelData {
     pub fn write_to_file<P: AsRef<Path>>(dir: P, model_list: &BTreeMap<u32, Self>) -> AzResult<()> {
-        let mut model_list_copy = fs::File::create(dir.as_ref().join(GAMEOBJECT_MODELS))?;
+        let mut model_list_copy = buffered_file_create(dir.as_ref().join(GAMEOBJECT_MODELS))?;
         Self::write(&mut model_list_copy, model_list)
     }
 

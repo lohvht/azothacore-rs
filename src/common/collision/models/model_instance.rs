@@ -1,4 +1,7 @@
-use std::{ops::Deref, sync::Arc};
+use std::{
+    ops::{Deref, DerefMut},
+    sync::Arc,
+};
 
 use flagset::{flags, FlagSet};
 use nalgebra::{Rotation, Rotation3, Vector3};
@@ -7,8 +10,13 @@ use parry3d::bounding_volume::Aabb;
 use crate::common::collision::models::world_model::WorldModel;
 
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize)]
-pub struct VmapModelSpawn {
+pub struct VmapModelSpawnWithMapId {
     pub map_num: u32,
+    pub spawn:   VmapModelSpawn,
+}
+
+#[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize)]
+pub struct VmapModelSpawn {
     pub flags:   FlagSet<ModelFlags>,
     pub adt_id:  u16,
     pub id:      u32,
@@ -20,7 +28,7 @@ pub struct VmapModelSpawn {
 }
 
 #[allow(clippy::too_many_arguments)]
-impl VmapModelSpawn {
+impl VmapModelSpawnWithMapId {
     pub fn new(
         map_num: u32,
         flags: FlagSet<ModelFlags>,
@@ -34,15 +42,31 @@ impl VmapModelSpawn {
     ) -> Self {
         Self {
             map_num,
-            flags,
-            adt_id,
-            id,
-            i_pos,
-            i_rot,
-            i_scale,
-            bound: bound.map(|[min, max]| Aabb::new(min.into(), max.into())),
-            name,
+            spawn: VmapModelSpawn {
+                flags,
+                adt_id,
+                id,
+                i_pos,
+                i_rot,
+                i_scale,
+                bound: bound.map(|[min, max]| Aabb::new(min.into(), max.into())),
+                name,
+            },
         }
+    }
+}
+
+impl Deref for VmapModelSpawnWithMapId {
+    type Target = VmapModelSpawn;
+
+    fn deref(&self) -> &Self::Target {
+        &self.spawn
+    }
+}
+
+impl DerefMut for VmapModelSpawnWithMapId {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.spawn
     }
 }
 

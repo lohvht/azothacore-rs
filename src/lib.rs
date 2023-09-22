@@ -9,6 +9,7 @@
 #![feature(async_fn_in_trait)]
 #![feature(cursor_remaining)]
 #![feature(lint_reasons)]
+#![feature(stmt_expr_attributes)]
 
 pub mod common;
 pub mod compile_options;
@@ -20,8 +21,10 @@ pub mod tools;
 
 use std::{
     fmt::{self, Arguments},
+    fs,
     io,
     num,
+    path::Path,
 };
 
 use bincode::Options;
@@ -111,4 +114,14 @@ pub fn bincode_serialise<W: io::Write, T: ?Sized + serde::Serialize>(w: &mut W, 
 
 pub fn bincode_deserialise<R: io::Read, T: ?Sized + serde::de::DeserializeOwned>(r: &mut R) -> bincode::Result<T> {
     bincode_cfg!().deserialize_from(r)
+}
+
+const DEFAULT_BUFFER_SIZE: usize = 1 * 1024 * 1024; // i.e. 1 Mebibyte
+
+pub fn buffered_file_open<P: AsRef<Path>>(p: P) -> io::Result<io::BufReader<fs::File>> {
+    Ok(io::BufReader::with_capacity(DEFAULT_BUFFER_SIZE, fs::File::open(p)?))
+}
+
+pub fn buffered_file_create<P: AsRef<Path>>(p: P) -> io::Result<io::BufWriter<fs::File>> {
+    Ok(io::BufWriter::with_capacity(DEFAULT_BUFFER_SIZE, fs::File::create(p)?))
 }

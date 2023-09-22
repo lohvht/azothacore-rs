@@ -1,20 +1,23 @@
 use std::{
     collections::{HashMap, HashSet},
-    fs,
     path::{Path, PathBuf},
-    sync::{Arc, RwLock},
+    sync::{atomic::AtomicUsize, Arc},
+    thread,
 };
 
-use nalgebra::Vector3;
 use parry3d::bounding_volume::Aabb;
-use rayon::prelude::*;
-use tracing::{error, info, info_span, instrument, warn};
+use tracing::{error, info, instrument, warn};
 
 use crate::{
     az_error,
     bincode_deserialise,
     bincode_serialise,
-    common::collision::{management::vmap_mgr2::VMapMgr2, maps::map_tree::StaticMapTree},
+    buffered_file_create,
+    buffered_file_open,
+    common::collision::{
+        management::vmap_mgr2::VMapMgr2,
+        maps::{map_defines::MmapTileFile, map_tree::StaticMapTree},
+    },
     server::shared::recastnavigation_handles::{DetourNavMesh, DetourNavMeshParams, DT_POLY_BITS},
     tools::{
         extractor_common::{get_dir_contents, ExtractorConfig},
@@ -32,7 +35,8 @@ pub struct MapBuilder<'tb> {
     skip_continents:     bool,
     skip_junk_maps:      bool,
     skip_battlegrounds:  bool,
-    tile_builder_params: TileBuilderParams<'tb>,
+    vmap_mgr:            Arc<VMapMgr2<'tb, 'tb>>,
+    tile_builder_params: TileBuilderParams,
 }
 
 #[derive(serde::Deserialize, serde::Serialize)]
@@ -40,17 +44,33 @@ struct MapBuilderFile {
     map_id:   u32,
     tile_x:   u16,
     tile_y:   u16,
-    vertices: Vec<Vector3<f32>>,
-    indices:  Vec<Vector3<u16>>,
+    vertices: Vec<f32>,
+    indices:  Vec<i32>,
+}
+
+pub fn should_skip_tile<P: AsRef<Path>>(mmap_output_path: P, map_id: u32, tile_x: u16, tile_y: u16) -> bool {
+    let header = match MmapTileFile::read_header_from_mmtile(mmap_output_path, map_id, tile_y, tile_x) {
+        Err(_) => {
+            return false;
+        },
+        Ok(h) => h,
+    };
+    header.verify().is_ok()
 }
 
 impl<'tb> MapBuilder<'tb> {
     fn discover_tiles(args: &ExtractorConfig, tb: &TerrainBuilder<'_>) -> AzResult<HashMap<u32, HashSet<u32>>> {
         info!("Discovering maps... ");
 
+        let filter_prefix = if let Some(mxy) = &args.mmap_path_generator.map_id_tile_x_y {
+            format!("{:04}", mxy.map_id)
+        } else {
+            "".into()
+        };
+
         let mut tiles = HashMap::new();
 
-        for f in get_dir_contents(args.output_map_path(), "*")? {
+        for f in get_dir_contents(args.output_map_path(), &format!("{filter_prefix}*"))? {
             let map_id = match f.file_stem().and_then(|file_stem| file_stem.to_str()).and_then(|f| {
                 let (map_id_str, _rest) = f.split_once('_')?;
                 map_id_str.parse::<u32>().ok()
@@ -64,7 +84,7 @@ impl<'tb> MapBuilder<'tb> {
             tiles.entry(map_id).or_insert(HashSet::new());
         }
 
-        for f in get_dir_contents(args.output_vmap_output_path(), "*.vmtree")? {
+        for f in get_dir_contents(args.output_vmap_output_path(), &format!("{filter_prefix}*.vmtree"))? {
             let map_id = match f
                 .file_stem()
                 .and_then(|file_stem| file_stem.to_str())
@@ -141,11 +161,12 @@ impl<'tb> MapBuilder<'tb> {
     }
 
     pub fn build(args: &ExtractorConfig, vmap_mgr: VMapMgr2<'tb, 'tb>) -> AzResult<Self> {
-        let vmap_mgr = Arc::new(RwLock::new(vmap_mgr));
+        let vmap_mgr = Arc::new(vmap_mgr);
         // Do the tile discovery first
         let tiles = Self::discover_tiles(
             args,
             &TerrainBuilder {
+                skip_liquid:    args.mmap_path_generator.skip_liquid,
                 vmap_mgr:       vmap_mgr.clone(),
                 vmaps_path:     args.output_vmap_output_path(),
                 maps_path:      args.output_map_path(),
@@ -164,10 +185,10 @@ impl<'tb> MapBuilder<'tb> {
             skip_battlegrounds: args.mmap_path_generator.skip_battlegrounds,
             skip_continents: args.mmap_path_generator.skip_continents,
             skip_junk_maps: args.mmap_path_generator.skip_junk_maps,
+            vmap_mgr,
             tile_builder_params: TileBuilderParams {
                 mmap_output_path: args.output_mmap_path().clone(),
                 skip_liquid: args.mmap_path_generator.skip_liquid,
-                vmap_mgr,
                 debug_mesh_output_path,
                 off_mesh_file_path: args.mmap_path_generator.off_mesh_file_path.clone().map(PathBuf::from),
                 vmaps_path: args.output_vmap_output_path(),
@@ -180,7 +201,7 @@ impl<'tb> MapBuilder<'tb> {
     }
 
     pub fn build_mesh_from_file<P: AsRef<Path>>(&self, file_path: P) -> AzResult<()> {
-        let mut file = fs::File::open(file_path.as_ref())?;
+        let mut file = buffered_file_open(file_path.as_ref())?;
         info!("Building mesh from file: {}", file_path.as_ref().display());
         let MapBuilderFile {
             map_id,
@@ -190,11 +211,13 @@ impl<'tb> MapBuilder<'tb> {
             mut indices,
         } = bincode_deserialise(&mut file)?;
 
-        let mut nav_mesh = self.build_nav_mesh(map_id)?;
+        let nav_mesh = self.build_nav_mesh(map_id)?;
 
         clean_vertices(&mut vertices, &mut indices);
         // get bounds of current tile
-        let b_max_min = get_tile_bounds(tile_x, tile_y, &vertices);
+        let mut bmin = [0.0; 3];
+        let mut bmax = [0.0; 3];
+        get_tile_bounds(tile_x, tile_y, &vertices, &mut bmin, &mut bmax);
 
         let data = MeshData {
             solid_verts: vertices,
@@ -203,23 +226,21 @@ impl<'tb> MapBuilder<'tb> {
         };
 
         // build navmesh tile
-        self.tile_builder_params
-            .clone()
-            .try_to_builder()?
-            .build_move_map_tile(map_id, tile_x, tile_y, &data, &b_max_min, &mut nav_mesh)?;
+        let res = {
+            let nav_mesh_params = DetourNavMeshParams::from(*nav_mesh.get_params());
+            let (tib, _) = self.tile_builder_params.clone().into_builder(self.vmap_mgr.clone());
+            tib.build_move_map_tile(map_id, tile_x, tile_y, &data, &bmin, &bmax, &nav_mesh_params)
+        };
 
-        Ok(())
+        res
     }
 
     pub fn build_single_tile(&self, map_id: u32, tile_x: u16, tile_y: u16) -> AzResult<()> {
-        let mut nav_mesh = self.build_nav_mesh(map_id)?;
+        let nav_mesh = self.build_nav_mesh(map_id)?;
 
-        self.tile_builder_params
-            .clone()
-            .try_to_builder()?
-            .build_tile(map_id, tile_x, tile_y, &mut nav_mesh)?;
-
-        Ok(())
+        let (tib, teb) = self.tile_builder_params.clone().into_builder(self.vmap_mgr.clone());
+        let nav_mesh_params = DetourNavMeshParams::from(*nav_mesh.get_params());
+        tib.build_tile(&teb, map_id, tile_x, tile_y, &nav_mesh_params)
     }
 
     pub fn build_maps(&self, map_id_opt: Option<u32>) -> AzResult<()> {
@@ -243,30 +264,77 @@ impl<'tb> MapBuilder<'tb> {
             res
         };
 
+        let count = Arc::new(AtomicUsize::new(1));
         let num_tiles = tiles_to_build.len();
-        let header_span = info_span!("build_maps");
-        let _header_span_enter = header_span.enter();
-        let result: AzResult<Vec<_>> = tiles_to_build
-            .into_par_iter()
-            .enumerate()
-            .map(|(count, (ti, tp))| {
-                info!(
-                    "{}/{} building for Map {:04} - {:02},{:02}",
-                    count, num_tiles, ti.map_id, ti.tile_x, ti.tile_y
-                );
-                // Span::current().pb_inc(1);
-                build_tile_work(ti, tp)
-            })
-            .collect();
 
-        result?;
+        let default_parallelism_approx = thread::available_parallelism().unwrap().get();
+        info!("Running build tiles with {default_parallelism_approx} threads");
 
-        Ok(())
+        let (work_sender, work_receiver) = crossbeam::channel::unbounded();
+        for (ti, tp) in tiles_to_build {
+            work_sender.send((count.clone(), num_tiles, ti, tp)).unwrap();
+        }
+        drop(work_sender);
+
+        let vmap_mgr = self.vmap_mgr.clone();
+        let res = crossbeam::scope(move |s| {
+            let vmap_mgr = vmap_mgr;
+            let work_receiver = work_receiver;
+            let mut workers = Vec::with_capacity(default_parallelism_approx);
+            for _ in 0..default_parallelism_approx {
+                let recv = work_receiver.clone();
+                let vmap_mgr = vmap_mgr.clone();
+                let work_handler = s.spawn(move |_| {
+                    while let Ok((count, num_tiles, ti, tp)) = recv.recv() {
+                        let ret = build_tile_work(vmap_mgr.clone(), count, num_tiles, ti, tp);
+                        #[expect(
+                            clippy::question_mark,
+                            reason = "Explicit return here so that we don't need to type annotate the errs vec later"
+                        )]
+                        if ret.is_err() {
+                            return ret;
+                        }
+                    }
+                    Ok(())
+                });
+                workers.push(work_handler);
+            }
+            drop(work_receiver);
+
+            let mut errs = vec![];
+            for w in workers {
+                if let Err(e) = w.join().unwrap() {
+                    errs.push(e);
+                }
+            }
+            if errs.is_empty() {
+                Ok(())
+            } else {
+                let err_str = errs
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, e)| format!("error {i}: {e}"))
+                    .fold(String::new(), |mut acc, s| {
+                        if acc.is_empty() {
+                            acc.push_str("Errors are:\n");
+                            acc.push_str(s.as_ref());
+                        } else {
+                            acc.push('\n');
+                            acc.push_str(s.as_ref());
+                        }
+                        acc
+                    });
+                Err(err_str.into())
+            }
+        })
+        .unwrap();
+
+        res
     }
 
     /// buildMap in TC/AC
     #[instrument(skip_all, fields(map = format!("[Map {map_id:04}]")))]
-    fn gather_map_tiles(&self, map_id: u32) -> AzResult<Vec<(TileInfo, TileBuilderParams<'tb>)>> {
+    fn gather_map_tiles(&self, map_id: u32) -> AzResult<Vec<(TileInfo, TileBuilderParams)>> {
         let empty = Default::default();
         let tiles = self.tiles.get(&map_id).unwrap_or(&empty);
         if tiles.is_empty() {
@@ -277,12 +345,14 @@ impl<'tb> MapBuilder<'tb> {
             e
         })?;
         let mut tile_infos = Vec::with_capacity(tiles.len());
+        let mut tile_to_build_count = 0;
         // now start building mmtiles for each tile
-        info!("we have {} tiles", tiles.len());
         for tile in tiles {
             // unpack tile coords
             let (tile_x, tile_y) = StaticMapTree::unpack_tile_id(*tile);
-
+            if should_skip_tile(&self.tile_builder_params.mmap_output_path, map_id, tile_x, tile_y) {
+                continue;
+            }
             let nav_mesh_params = *nav_mesh.get_params();
             tile_infos.push((
                 TileInfo {
@@ -292,15 +362,17 @@ impl<'tb> MapBuilder<'tb> {
                     nav_mesh_params: nav_mesh_params.into(),
                 },
                 self.tile_builder_params.clone(),
-            ))
+            ));
+            tile_to_build_count += 1;
         }
+        info!("we have {} tiles", tile_to_build_count);
 
         Ok(tile_infos)
     }
 
     fn build_nav_mesh(&self, map_id: u32) -> AzResult<DetourNavMesh> {
         // if map has a parent we use that to generate dtNavMeshParams - worldserver will load all missing tiles from that map
-        let nav_mesh_params_map_id = self.tile_builder_params.vmap_mgr.read().unwrap().get_parent_map_id(map_id);
+        let nav_mesh_params_map_id = self.vmap_mgr.get_parent_map_id(map_id);
 
         let empty = Default::default();
         let tiles = self.tiles.get(&nav_mesh_params_map_id).unwrap_or(&empty);
@@ -317,23 +389,30 @@ impl<'tb> MapBuilder<'tb> {
         let max_polys_per_tile = 1 << poly_bits;
 
         /***          calculate bounds of map         ***/
-        let (_tile_x_min, _tile_y_min, tile_x_max, tile_y_max) =
-            tiles.iter().fold((64, 64, 0, 0), |(x_min, y_min, x_max, y_max), tile_id| {
-                let (x, y) = StaticMapTree::unpack_tile_id(*tile_id);
-                (x.min(x_min), y.min(y_min), x.max(x_max), y.max(y_max))
-            });
-
+        let mut tile_x_min = 64;
+        let mut tile_y_min = 64;
+        let mut tile_x_max = 0;
+        let mut tile_y_max = 0;
+        for tile_id in tiles {
+            let (tile_x, tile_y) = StaticMapTree::unpack_tile_id(*tile_id);
+            tile_x_max = tile_x_max.max(tile_x);
+            tile_x_min = tile_x_min.min(tile_x);
+            tile_y_max = tile_y_max.max(tile_y);
+            tile_y_min = tile_y_min.min(tile_y);
+        }
+        let mut bmin = [0.0; 3];
+        let mut bmax = [0.0; 3];
         // use Max because '32 - tile_x' is negative for values over 32
-        let b_min_max = get_tile_bounds(tile_x_max, tile_y_max, &vec![]);
+        get_tile_bounds(tile_x_max, tile_y_max, &vec![], &mut bmin, &mut bmax);
 
         /***       now create the navmesh       ***/
         // navmesh creation params
-        let nav_mesh_params = DetourNavMeshParams::new(&b_min_max.mins.into(), GRID_SIZE, GRID_SIZE, max_tiles as i32, max_polys_per_tile);
+        let nav_mesh_params = DetourNavMeshParams::new(&bmin, GRID_SIZE, GRID_SIZE, max_tiles as i32, max_polys_per_tile);
         info!("Creating nav_mesh...");
         let (nav_mesh, _) = DetourNavMesh::init(&nav_mesh_params)?;
 
         let file_name = self.tile_builder_params.mmap_output_path.join(format!("{map_id:04}.mmap"));
-        let mut file = fs::File::create(file_name)?;
+        let mut file = buffered_file_create(file_name)?;
         // now that we know nav_mesh params are valid, we can write them to file
         // TODO: Do the dedup logic here, if a navmesh file exists, we load the navmesh from there.
         bincode_serialise(&mut file, &nav_mesh_params)?;
@@ -431,34 +510,24 @@ impl<'tb> MapBuilder<'tb> {
     }
 }
 
-#[instrument(skip_all, fields(tile = format!("[Map {:04}] [{:02},{:02}]", ti.map_id, ti.tile_x, ti.tile_y)))]
-fn build_tile_work(ti: TileInfo, tp: TileBuilderParams) -> AzResult<()> {
-    let tb = match tp.try_to_builder() {
-        Err(e) => {
-            error!(
-                "[Map {:04}] Failed creating tile builder for tile {:02},{:02}! err = {e}",
-                ti.map_id, ti.tile_x, ti.tile_y
-            );
-            // ignore for now.
-            return Ok(());
-        },
-        Ok(b) => b,
-    };
-    let (mut nav_mesh, _) = match DetourNavMesh::init(&ti.nav_mesh_params) {
-        Err(e) => {
-            error!(
-                "[Map {:04}] Failed creating navmesh for tile {:02},{:02}! err = {e}",
-                ti.map_id, ti.tile_x, ti.tile_y
-            );
-            // ignore for now.
-            return Ok(());
-        },
-        Ok(n) => n,
-    };
-    tb.build_tile(ti.map_id, ti.tile_x, ti.tile_y, &mut nav_mesh).map_err(|e| {
-        error!("Build tile failed because of error: {e}");
-        e
-    })?;
+fn build_tile_work<'vm>(
+    vmap_mgr: Arc<VMapMgr2<'vm, 'vm>>,
+    count: Arc<AtomicUsize>,
+    num_tiles: usize,
+    ti: TileInfo,
+    tp: TileBuilderParams,
+) -> AzResult<()> {
+    let count = count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    info!(
+        "{}/{} building for Map {:04} - {:02},{:02}",
+        count, num_tiles, ti.map_id, ti.tile_x, ti.tile_y
+    );
+    let (tib, teb) = tp.into_builder(vmap_mgr);
+    tib.build_tile(&teb, ti.map_id, ti.tile_x, ti.tile_y, &ti.nav_mesh_params)
+        .map_err(|e| {
+            error!("Build tile failed because of error: {e}");
+            e
+        })?;
     Ok(())
 }
 
@@ -475,12 +544,12 @@ fn get_grid_bounds(tb: &TerrainBuilder<'_>, map_id: u32) -> AzResult<(u16, u16, 
     }
 
     let mut bounding = Aabb::new_invalid();
-    for vertex in mesh_data.solid_verts {
-        bounding.take_point(vertex.into());
+    for vertex in mesh_data.solid_verts.chunks(3) {
+        bounding.take_point([vertex[0], vertex[1], vertex[2]].into());
     }
 
-    for vertex in mesh_data.liquid_verts {
-        bounding.take_point(vertex.into());
+    for vertex in mesh_data.liquid_verts.chunks(3) {
+        bounding.take_point([vertex[0], vertex[1], vertex[2]].into());
     }
 
     // convert coord bounds to grid bounds

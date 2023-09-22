@@ -1,45 +1,28 @@
-use std::{
-    fs,
-    io::{self, Write},
-    path::Path,
-    slice,
-};
+use std::{fs, io, io::Write, path::Path, slice};
 
 use byteorder::{NativeEndian, WriteBytesExt};
-use tracing::instrument;
+use recastnavigation_sys::{rcCompactHeightfield, rcContourSet, rcHeightfield, rcPolyMesh, rcPolyMeshDetail};
+use tracing::info;
 
-use crate::{
-    server::shared::recastnavigation_handles::{
-        RecastCompactHeightfield,
-        RecastContourSet,
-        RecastHeightField,
-        RecastPolyMesh,
-        RecastPolyMeshDetail,
-    },
-    tools::mmap_generator::common::MeshData,
-    AzResult,
-};
+use crate::{buffered_file_create, tools::mmap_generator::common::MeshData, AzResult};
 
 // this class gathers all debug info holding and output
-pub struct IntermediateValues {
-    pub heightfield:         Option<RecastHeightField>,
-    pub compact_heightfield: Option<RecastCompactHeightfield>,
-    pub contours:            Option<RecastContourSet>,
-    pub poly_mesh:           Option<RecastPolyMesh>,
-    pub poly_mesh_detail:    Option<RecastPolyMeshDetail>,
+pub struct IntermediateValues<'a> {
+    pub heightfield:         Option<&'a rcHeightfield>,
+    pub compact_heightfield: Option<&'a rcCompactHeightfield>,
+    pub contours:            Option<&'a rcContourSet>,
+    pub poly_mesh:           Option<&'a rcPolyMesh>,
+    pub poly_mesh_detail:    Option<&'a rcPolyMeshDetail>,
 }
 
-impl IntermediateValues {
-    #[instrument(skip_all, fields(tile = format!("[Map {map_id:04}] [{tile_x:02},{tile_y:02}]")))]
+impl<'a> IntermediateValues<'a> {
     pub fn write_iv<P: AsRef<Path>>(&self, meshes_base_dir: P, map_id: u32, tile_x: u16, tile_y: u16) {
         macro_rules! debug_write {
             ( $path_tmpl:expr, $file_extension:expr, $v:expr, $debug_write_func_name:ident ) => {{
-                use std::fs;
-
                 use tracing::{error, info};
 
                 let file_name = $path_tmpl.with_extension($file_extension);
-                match fs::File::create(&file_name) {
+                match buffered_file_create(&file_name) {
                     Err(e) => {
                         error!("Failed to open {} for writing! err {e}", file_name.display());
                     },
@@ -72,10 +55,10 @@ impl IntermediateValues {
         }
     }
 
-    #[instrument(skip_all, fields(tile = format!("[Map {map_id:04}] [{tile_x:02},{tile_y:02}]")))]
     pub fn generate_obj_file<P: AsRef<Path>>(&self, meshes_base_dir: P, map_id: u32, tile_x: u16, tile_y: u16, mesh_data: &MeshData) {
         let obj_file_name = meshes_base_dir.as_ref().join(format!("map{map_id:04}{tile_y:02}{tile_x:2}.obj"));
-        let mut obj_file = match fs::File::create(&obj_file_name) {
+        info!("writing debug output to {}", obj_file_name.display());
+        let mut obj_file = match buffered_file_create(&obj_file_name) {
             Err(e) => {
                 tracing::error!("Failed to open for writing: {}; e {e}", obj_file_name.display());
                 return;
@@ -92,24 +75,25 @@ impl IntermediateValues {
         for t in mesh_data.liquid_tris.iter() {
             all_tris.push(*t);
         }
-        let curr_verts_count = all_verts.len();
+        let curr_verts_count = i32::try_from(all_verts.len() / 3).unwrap();
         for v in mesh_data.solid_verts.iter() {
             all_verts.push(*v);
         }
         for t in mesh_data.solid_tris.iter() {
-            all_tris.push(t.add_scalar(curr_verts_count as u16));
+            all_tris.push(*t + curr_verts_count);
         }
 
-        for v in all_verts.iter() {
-            _ = writeln!(obj_file, "v {} {} {}", v.x, v.y, v.z);
+        for v in all_verts.chunks_exact(3) {
+            _ = writeln!(obj_file, "v {:?} {:?} {:?}", v[0], v[1], v[2]);
         }
-        for t in all_tris.iter() {
-            _ = writeln!(obj_file, "f {} {} {}", t.x + 1, t.y + 1, t.z + 1);
+        for t in all_tris.chunks_exact(3) {
+            _ = writeln!(obj_file, "f {:?} {:?} {:?}", t[0] + 1, t[1] + 1, t[2] + 1);
         }
+        _ = obj_file.flush();
 
-        tracing::info!("writing debug output");
+        info!("writing debug output");
         let obj_file_name = meshes_base_dir.as_ref().join(format!("map{map_id:04}.map"));
-        let mut obj_file = match fs::File::create(&obj_file_name) {
+        let mut obj_file = match buffered_file_create(&obj_file_name) {
             Err(e) => {
                 tracing::error!("Failed to open for writing: {}; e {e}", obj_file_name.display());
                 return;
@@ -119,7 +103,7 @@ impl IntermediateValues {
         _ = obj_file.write_all(&[0]);
 
         let obj_file_name = meshes_base_dir.as_ref().join(format!("{map_id:04}{tile_y:02}{tile_x:2}.mesh"));
-        let mut obj_file = match fs::File::create(&obj_file_name) {
+        let mut obj_file = match buffered_file_create(&obj_file_name) {
             Err(e) => {
                 tracing::error!("Failed to open for writing: {}; e {e}", obj_file_name.display());
                 return;
@@ -128,11 +112,11 @@ impl IntermediateValues {
         };
 
         _ = obj_file.write_all(&(all_verts.len() as u32).to_ne_bytes());
-        _ = obj_file.write_all(&all_verts.iter().flatten().flat_map(|v| v.to_ne_bytes()).collect::<Vec<_>>());
+        _ = obj_file.write_all(&all_verts.iter().flat_map(|v| v.to_ne_bytes()).collect::<Vec<_>>());
         _ = obj_file.flush();
 
         _ = obj_file.write_all(&(all_tris.len() as u32).to_ne_bytes());
-        _ = obj_file.write_all(&all_tris.iter().flatten().flat_map(|v| v.to_ne_bytes()).collect::<Vec<_>>());
+        _ = obj_file.write_all(&all_tris.iter().flat_map(|v| v.to_ne_bytes()).collect::<Vec<_>>());
         _ = obj_file.flush();
     }
 }
@@ -201,7 +185,7 @@ macro_rules! buf_slice_from_slice {
 // }
 // }
 
-fn debug_write_recast_compact_heightfield<W: io::Write>(file: &mut W, chf: &RecastCompactHeightfield) -> AzResult<()> {
+fn debug_write_recast_compact_heightfield<W: io::Write>(file: &mut W, chf: &rcCompactHeightfield) -> AzResult<()> {
     file.write_all(&chf.width.to_ne_bytes())?;
     file.write_all(&chf.height.to_ne_bytes())?;
     file.write_all(&chf.spanCount.to_ne_bytes())?;
@@ -267,7 +251,7 @@ fn debug_write_recast_compact_heightfield<W: io::Write>(file: &mut W, chf: &Reca
     Ok(())
 }
 
-fn debug_write_recast_contour_set<W: io::Write>(file: &mut W, cs: &RecastContourSet) -> AzResult<()> {
+fn debug_write_recast_contour_set<W: io::Write>(file: &mut W, cs: &rcContourSet) -> AzResult<()> {
     file.write_all(&cs.cs.to_ne_bytes())?;
     file.write_all(&cs.ch.to_ne_bytes())?;
     file.write_all(buf_slice_from_slice!(cs.bmin))?;
@@ -288,7 +272,7 @@ fn debug_write_recast_contour_set<W: io::Write>(file: &mut W, cs: &RecastContour
     Ok(())
 }
 
-fn debug_write_recast_poly_mesh<W: io::Write>(file: &mut W, mesh: &RecastPolyMesh) -> AzResult<()> {
+fn debug_write_recast_poly_mesh<W: io::Write>(file: &mut W, mesh: &rcPolyMesh) -> AzResult<()> {
     file.write_all(&mesh.cs.to_ne_bytes())?;
     file.write_all(&mesh.ch.to_ne_bytes())?;
     file.write_all(&mesh.nvp.to_ne_bytes())?;
@@ -304,7 +288,7 @@ fn debug_write_recast_poly_mesh<W: io::Write>(file: &mut W, mesh: &RecastPolyMes
     Ok(())
 }
 
-fn debug_write_recast_poly_mesh_detail<W: io::Write>(file: &mut W, mesh: &RecastPolyMeshDetail) -> AzResult<()> {
+fn debug_write_recast_poly_mesh_detail<W: io::Write>(file: &mut W, mesh: &rcPolyMeshDetail) -> AzResult<()> {
     file.write_all(&mesh.nverts.to_ne_bytes())?;
     file.write_all(buf_slice_from_ptr!(mesh.verts, mesh.nverts * 3))?;
     file.write_all(&mesh.ntris.to_ne_bytes())?;

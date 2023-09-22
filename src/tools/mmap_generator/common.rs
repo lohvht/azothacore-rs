@@ -1,10 +1,9 @@
-use std::{collections::HashMap, fs, path::Path};
+use std::{collections::BTreeMap, fs, path::Path};
 
-use nalgebra::{Vector3, Vector6};
-use parry3d::bounding_volume::Aabb;
+use nalgebra::Vector6;
+use recastnavigation_sys::rcCalcBounds;
 
 use crate::{
-    common::collision::maps::map_defines::MmapNavTerrainFlag,
     server::{
         game::map::{ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
         shared::recastnavigation_handles::DetourNavMeshParams,
@@ -23,19 +22,20 @@ pub const GRID_PART_SIZE: f32 = GRID_SIZE / V8_SIZE as f32;
 // static const float self.use_min_height = -2000.f;
 pub const INVALID_MAP_LIQ_HEIGHT_MAX: f32 = 5000.0;
 
-pub fn get_tile_bounds(tile_x: u16, tile_y: u16, verts: &Vec<Vector3<f32>>) -> Aabb {
+pub fn get_tile_bounds(tile_x: u16, tile_y: u16, verts: &Vec<f32>, bmin: &mut [f32; 3], bmax: &mut [f32; 3]) {
     // this is for elevation
-    let (min_elevation, max_elevation) = if verts.is_empty() {
-        verts
-            .iter()
-            .fold((f32::MAX, f32::MIN), |(min, max), v| (min.min(v.y), max.max(v.y)))
+    if !verts.is_empty() {
+        unsafe { rcCalcBounds(verts.as_ptr(), verts.len() as i32 / 3, bmin.as_mut_ptr(), bmax.as_mut_ptr()) };
     } else {
-        (0.0, f32::MAX)
-    };
+        bmin[1] = f32::EPSILON;
+        bmax[1] = f32::MAX;
+    }
+
     // this is for width and depth
-    let bmax = Vector3::new((32 - tile_x) as f32 * GRID_SIZE, max_elevation, (32 - tile_y) as f32 * GRID_SIZE);
-    let bmin = Vector3::new(bmax.x - GRID_SIZE, min_elevation, bmax.z - GRID_SIZE);
-    Aabb::new(bmin.into(), bmax.into())
+    bmax[0] = (32 - tile_x as i32) as f32 * GRID_SIZE;
+    bmax[2] = (32 - tile_y as i32) as f32 * GRID_SIZE;
+    bmin[0] = bmax[0] - GRID_SIZE;
+    bmin[2] = bmax[2] - GRID_SIZE;
 }
 
 pub struct TileInfo {
@@ -98,12 +98,12 @@ pub fn load_off_mesh_connections<P: AsRef<Path>>(
 // src/game/Map.cpp
 #[derive(Default)]
 pub struct MeshData {
-    pub solid_verts: Vec<Vector3<f32>>,
-    pub solid_tris:  Vec<Vector3<u16>>,
+    pub solid_verts: Vec<f32>,
+    pub solid_tris:  Vec<i32>,
 
-    pub liquid_verts: Vec<Vector3<f32>>,
-    pub liquid_tris:  Vec<Vector3<u16>>,
-    pub liquid_types: Vec<Option<MmapNavTerrainFlag>>,
+    pub liquid_verts: Vec<f32>,
+    pub liquid_tris:  Vec<i32>,
+    pub liquid_types: Vec<u8>,
 
     // offmesh connection data
     /// [p0y,p0z,p0x,p1y,p1z,p1x] - per connection
@@ -114,29 +114,29 @@ pub struct MeshData {
     pub offset_mesh_connections_flags: Vec<u16>,
 }
 
-pub fn clean_vertices(verts: &mut Vec<Vector3<f32>>, tris: &mut [Vector3<u16>]) {
+pub fn clean_vertices(verts: &mut Vec<f32>, tris: &mut [i32]) {
     // collect all the vertex indices from triangle
+    let mut vert_map = BTreeMap::new();
     let mut cleaned_verts = vec![];
-    let mut vert_map = HashMap::new();
-    let mut count = 0u16;
-    for tri in tris.iter() {
-        for t in tri {
-            if vert_map.get(t).is_some() {
-                continue;
-            }
-            vert_map.insert(*t, count);
-            cleaned_verts.push(verts[usize::from(*t)]);
-            count += 1;
+    let mut count = 0i32;
+    for t in tris.iter() {
+        if vert_map.get(t).is_some() {
+            continue;
         }
+        vert_map.insert(*t, count);
+
+        let index: usize = (*t).try_into().unwrap();
+        cleaned_verts.push(verts[index * 3]);
+        cleaned_verts.push(verts[index * 3 + 1]);
+        cleaned_verts.push(verts[index * 3 + 2]);
+        count += 1;
     }
     verts.clear();
     verts.append(&mut cleaned_verts);
     // update triangles to use new indices
     for tri in tris.iter_mut() {
-        for t in tri {
-            if let Some(new_t) = vert_map.get(t) {
-                *t = *new_t;
-            }
+        if let Some(new_t) = vert_map.get(tri) {
+            *tri = *new_t;
         }
     }
 }
