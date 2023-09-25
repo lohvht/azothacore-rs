@@ -148,6 +148,7 @@ impl TileBuilder {
         Ok(())
     }
 
+    #[allow(non_snake_case)]
     #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(tile = format!("[Map {map_id:04}] [{tile_x:02},{tile_y:02}]")))]
     pub fn build_move_map_tile(
@@ -202,7 +203,6 @@ impl TileBuilder {
         // these are WORLD UNIT based metrics
         // this are basic unit dimentions
         // value have to divide GRID_SIZE(533.3333f) ( aka: 0.5333, 0.2666, 0.3333, 0.1333, etc )
-        #[allow(non_snake_case)]
         let BASE_UNIT_DIM: f32 = if self.big_base_unit {
             GRID_SIZE / 1000.0
         } else {
@@ -210,11 +210,8 @@ impl TileBuilder {
         };
 
         // All are in UNIT metrics!
-        #[allow(non_snake_case)]
         let VERTEX_PER_MAP: usize = (GRID_SIZE / BASE_UNIT_DIM + 0.5) as usize;
-        #[allow(non_snake_case)]
         let VERTEX_PER_TILE: usize = if self.big_base_unit { 40 } else { 80 }; // must divide VERTEX_PER_MAP
-        #[allow(non_snake_case)]
         let TILES_PER_MAP: usize = VERTEX_PER_MAP / VERTEX_PER_TILE;
 
         let mut config = RecastConfig::default();

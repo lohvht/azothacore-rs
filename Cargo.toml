@@ -63,3 +63,4 @@ zerocopy = { version = "0.7.1" }
 zerocopy-derive = { version = "0.7.1" }
 crossbeam = { version = "0.8.2" }
 libc = "0.2.148"
+num = "0.4.1"

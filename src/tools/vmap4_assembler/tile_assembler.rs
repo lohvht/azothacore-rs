@@ -8,7 +8,7 @@ use std::{
 
 use flagset::FlagSet;
 use futures::future;
-use nalgebra::{Matrix3, Rotation, Vector2, Vector3};
+use nalgebra::{Matrix3, Vector2, Vector3};
 use parry3d::{bounding_volume::Aabb, math::Point, partitioning::Qbvh};
 use rayon::prelude::*;
 use tracing::{error, info, warn};
@@ -30,6 +30,7 @@ use crate::{
     },
     read_le,
     sanity_check_read_all_bytes_from_reader,
+    server::shared::g3dlite_copied::matrix3_from_euler_angles_zyx,
     tools::{
         extractor_common::{get_fixed_plain_name, ExtractorConfig},
         vmap4_extractor::TempGameObjectModel,
@@ -359,8 +360,7 @@ struct ModelPosition {
 
 impl ModelPosition {
     fn new(i_dir: Vector3<f32>, i_scale: f32) -> Self {
-        // iRotation = G3D::Matrix3::fromEulerAnglesZYX(G3D::pif()*iDir.y/180.f, G3D::pif()*iDir.x/180.f, G3D::pif()*iDir.z/180.f);
-        let i_rotation = *Rotation::from_euler_angles(i_dir.z.to_radians(), i_dir.x.to_radians(), i_dir.y.to_radians()).matrix();
+        let i_rotation = matrix3_from_euler_angles_zyx(i_dir.y.to_radians(), i_dir.x.to_radians(), i_dir.z.to_radians());
         Self {
             i_rotation,
             i_pos: Vector3::zeros(),

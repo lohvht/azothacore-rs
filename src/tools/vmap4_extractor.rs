@@ -475,20 +475,6 @@ impl VmapExtractor {
         original_map_id: u32,
         dir_file_cache: &mut Option<Vec<VmapModelSpawnWithMapId>>,
     ) -> AzResult<()> {
-        /// fix_rotations for roll_pitch_yaw (X,Y,Z). We need the transpose here because of nalgebra handling it column-major
-        /// but the rotation given here assumes its on a row-major operation
-        /// i.e. the rotation is in reverse instead.
-        fn fix_rotations(rotation_roll_pitch_yaw: &Vector3<f32>) -> Vector3<f32> {
-            let (x, y, z) = UnitQuaternion::from(nalgebra::Rotation::from_euler_angles(
-                rotation_roll_pitch_yaw.x.to_radians(),
-                rotation_roll_pitch_yaw.y.to_radians(),
-                rotation_roll_pitch_yaw.z.to_radians(),
-            ))
-            .to_rotation_matrix()
-            .euler_angles();
-            Vector3::new(x.to_degrees(), y.to_degrees(), z.to_degrees())
-        }
-
         // destructible wmo, do not dump. we can handle the vmap for these
         // in dynamic tree (gameobject vmaps)
         if (map_obj_def.flags & 0x1) != 0 {
@@ -521,8 +507,6 @@ impl VmapExtractor {
         if map_id != original_map_id {
             flags |= ModelFlags::ModParentSpawn;
         }
-        let i_rot = fix_rotations(&map_obj_def.rotation);
-
         //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, Bound_lo, Bound_hi, name
         let mut m = VmapModelSpawnWithMapId::new(
             map_id,
@@ -530,7 +514,7 @@ impl VmapExtractor {
             map_obj_def.name_set,
             unique_id,
             position,
-            i_rot,
+            map_obj_def.rotation,
             scale,
             Some(bounds),
             wmo_inst_name.to_string(),
@@ -574,8 +558,6 @@ impl VmapExtractor {
             wmo.rotation.x.to_radians(),
             wmo.rotation.y.to_radians(),
         );
-        // G3D::Matrix3 wmoRotation = G3D::Matrix3::fromEulerAnglesZYX(G3D::toRadians(wmo.Rotation.y), G3D::toRadians(wmo.Rotation.x), G3D::toRadians(wmo.Rotation.z));
-
         if is_global_wmo {
             wmo_position += Vector3::new((1600.0 / 3.0) * 32.0, (1600.0 / 3.0) * 32.0, 0.0);
         }
@@ -635,7 +617,7 @@ impl VmapExtractor {
                 //     .toEulerAnglesXYZ(rotation.z, rotation.x, rotation.y);
                 // X - roll, Y - pitch, Z - yaw
                 let (z, x, y) = (UnitQuaternion::from_quaternion(Quaternion::from(doodad.rotation)).to_rotation_matrix() * wmo_rotation)
-                    .transpose() // Different from TC, have to transpose because G3D is in row-major, but nalgebra is in column major
+                    // .transpose() // Different from TC, have to transpose because G3D is in row-major, but nalgebra is in column major
                     .euler_angles();
                 let rotation = Vector3::new(x.to_degrees(), y.to_degrees(), z.to_degrees());
 
@@ -686,21 +668,6 @@ impl VmapExtractor {
         original_map_id: u32,
         dir_file_cache: &mut Option<Vec<VmapModelSpawnWithMapId>>,
     ) -> AzResult<()> {
-        /// fix_rotations for roll_pitch_yaw (X,Y,Z). We need the transpose here because of nalgebra handling it column-major
-        /// but the rotation given here assumes its on a row-major operation
-        /// i.e. the rotation is in reverse instead.
-        fn fix_rotations(rotation_roll_pitch_yaw: &Vector3<f32>) -> Vector3<f32> {
-            let (x, y, z) = UnitQuaternion::from(nalgebra::Rotation::from_euler_angles(
-                rotation_roll_pitch_yaw.x.to_radians(),
-                rotation_roll_pitch_yaw.y.to_radians(),
-                rotation_roll_pitch_yaw.z.to_radians(),
-            ))
-            .to_rotation_matrix()
-            .transpose()
-            .euler_angles();
-            Vector3::new(x.to_degrees(), y.to_degrees(), z.to_degrees())
-        }
-
         let mut p_dir_file = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp)?);
         let tempname = self.temp_vmap_dir.join(model_inst_name);
         let mut input = buffered_file_open(tempname)?;
@@ -713,7 +680,6 @@ impl VmapExtractor {
 
         let position = fix_coords(&doodad_def.position);
 
-        let i_rot = fix_rotations(&doodad_def.rotation);
         let mut flags = ModelFlags::ModM2.into();
         if map_id != original_map_id {
             flags |= ModelFlags::ModParentSpawn;
@@ -725,7 +691,7 @@ impl VmapExtractor {
             0, // not used for models
             generate_unique_object_id(doodad_def.unique_id, 0),
             position,
-            i_rot,
+            doodad_def.rotation,
             sc,
             None,
             model_inst_name.to_string(),

@@ -1,7 +1,7 @@
 use std::{path::PathBuf, sync::Arc};
 
 use flagset::FlagSet;
-use nalgebra::{DMatrix, Rotation, SMatrix, Vector3};
+use nalgebra::{DMatrix, SMatrix, Vector3};
 use tracing::{debug, instrument, warn};
 
 use crate::{
@@ -9,7 +9,10 @@ use crate::{
     buffered_file_open,
     common::collision::{management::vmap_mgr2::VMapMgr2, maps::map_defines::MmapNavTerrainFlag, models::model_instance::ModelFlags},
     row_vector_to_matrix_index,
-    server::game::map::{map_file::MapFile, GridMap, MapLiquidTypeFlag},
+    server::{
+        game::map::{map_file::MapFile, GridMap, MapLiquidTypeFlag},
+        shared::g3dlite_copied::matrix3_from_euler_angles_xyz,
+    },
     tools::mmap_generator::common::{
         MeshData,
         GRID_PART_SIZE,
@@ -428,12 +431,11 @@ impl TerrainBuilder<'_> {
 
             // transform data
             let scale = instance.i_scale;
-            let rotation = Rotation::from_euler_angles(
+            let rotation = matrix3_from_euler_angles_xyz(
                 -instance.i_rot.z.to_radians(),
                 -instance.i_rot.x.to_radians(),
                 -instance.i_rot.y.to_radians(),
             );
-            // G3D::Matrix3 rotation = G3D::Matrix3::fromEulerAnglesXYZ(G3D::pi()*instance.iRot.z/-180.f, G3D::pi()*instance.iRot.x/-180.f, G3D::pi()*instance.iRot.y/-180.f);
             let mut position = instance.i_pos;
             position.x -= 32.0 * GRID_SIZE;
             position.y -= 32.0 * GRID_SIZE;
@@ -444,7 +446,7 @@ impl TerrainBuilder<'_> {
                 let transformed_vertices = g.mesh.iter().flat_map(|mesh| {
                     mesh.vertices().iter().map(|v| {
                         // apply tranform, then mirror along the horizontal axes
-                        let mut v = rotation.matrix() * v * scale + position;
+                        let mut v = rotation.transpose() * v * scale + position;
                         v.x *= -1.0;
                         v.y *= -1.0;
                         v

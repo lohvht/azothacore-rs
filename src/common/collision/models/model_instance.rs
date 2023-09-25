@@ -4,10 +4,10 @@ use std::{
 };
 
 use flagset::{flags, FlagSet};
-use nalgebra::{Rotation, Rotation3, Vector3};
+use nalgebra::{Matrix3, Vector3};
 use parry3d::bounding_volume::Aabb;
 
-use crate::common::collision::models::world_model::WorldModel;
+use crate::{common::collision::models::world_model::WorldModel, server::shared::g3dlite_copied::matrix3_from_euler_angles_zyx};
 
 #[derive(Debug, Clone, Default, serde::Deserialize, serde::Serialize)]
 pub struct VmapModelSpawnWithMapId {
@@ -87,7 +87,7 @@ impl ModelFlags {
 pub struct ModelInstance {
     pub spawn:     VmapModelSpawn,
     pub inv_scale: f32,
-    pub inv_rot:   Rotation3<f32>,
+    pub inv_rot:   Matrix3<f32>,
     pub model:     Arc<WorldModel>,
 }
 
@@ -101,8 +101,9 @@ impl Deref for ModelInstance {
 
 impl ModelInstance {
     pub fn new(spawn: VmapModelSpawn, model: Arc<WorldModel>) -> Self {
-        let inv_rot = Rotation::from_euler_angles(spawn.i_rot.z.to_radians(), spawn.i_rot.x.to_radians(), spawn.i_rot.y.to_radians());
-        // iInvRot = G3D::Matrix3::fromEulerAnglesZYX(G3D::pif()*iRot.y/180.f, G3D::pif()*iRot.x/180.f, G3D::pif()*iRot.z/180.f).inverse();
+        let inv_rot = matrix3_from_euler_angles_zyx(spawn.i_rot.y.to_radians(), spawn.i_rot.x.to_radians(), spawn.i_rot.z.to_radians())
+            .try_inverse()
+            .unwrap();
 
         let inv_scale = 1.0 / spawn.i_scale;
         Self {
