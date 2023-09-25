@@ -62,11 +62,11 @@ enum UpdateMode {
 }
 
 struct AppliedFileEntry {
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     name:           PathBuf,
     hash:           String,
     state:          FetcherState,
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     unix_timestamp: u64,
 }
 
@@ -130,12 +130,13 @@ impl<'u> UpdateFetcher<'u> {
                 }
 
                 let s: FetcherState = FetcherState::from_str(row.get::<String, _>("state").as_str())
-                    .inspect_err(|e| {
+                    .map_err(|e| {
                         warn!(
                             "DBUpdater: Given update include directory \"{}\" has invalid state, error was {}, skipped!",
                             p.to_string_lossy(),
                             e,
                         );
+                        e
                     })
                     .ok()?;
 
@@ -203,11 +204,12 @@ impl<'u> UpdateFetcher<'u> {
                 .filter_map(|row| {
                     let name: String = row.get("name");
                     let state: FetcherState = FetcherState::from_str(row.get::<String, _>("state").as_str())
-                        .inspect_err(|e| {
+                        .map_err(|e| {
                             warn!(
                                 "DBUpdater: update from `updates` table with name \"{}\" has invalid state, error was {}, skipped!",
                                 name, e,
                             );
+                            e
                         })
                         .ok()?;
 
@@ -317,8 +319,8 @@ fn get_sha256_hash<P: AsRef<Path>>(fp: P) -> Result<String, DatabaseLoaderError>
             file:  fp.as_ref().to_string_lossy().to_string(),
             inner: e,
         })
-        .inspect_err(|e| {
-            let f = if let DatabaseLoaderError::OpenApplyFile { file, .. } = e {
+        .map_err(|e| {
+            let f = if let DatabaseLoaderError::OpenApplyFile { file, .. } = &e {
                 file
             } else {
                 ""
@@ -329,6 +331,7 @@ fn get_sha256_hash<P: AsRef<Path>>(fp: P) -> Result<String, DatabaseLoaderError>
                 try to identify and solve the issue or disable the database updater.",
                 f,
             );
+            e
         })?;
     let mut hasher = Sha256::new();
     hasher.update(file_content.as_bytes());

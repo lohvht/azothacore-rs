@@ -721,7 +721,7 @@ where
         }
     }
 
-    #[allow(clippy::type_complexity)]
+    #[expect(clippy::type_complexity)]
     fn get_raw_record_data(&self, record_number: usize) -> io::Result<Option<(&[u8], BTreeMap<usize, BTreeMap<usize, usize>>)>> {
         let mut field_and_array_offsets = BTreeMap::new();
         let res = match &self.file_data {

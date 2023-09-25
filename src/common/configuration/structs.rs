@@ -26,10 +26,11 @@ pub enum ConfigError {
         #[source]
         err:      toml::de::Error,
     },
+    #[error("generic error: {msg}")]
+    Generic { msg: String },
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
-#[allow(clippy::large_enum_variant)]
 pub struct Config {
     pub worldserver: Option<WorldserverConfig>,
 }
@@ -58,7 +59,6 @@ impl Config {
 structstruck::strike! {
   #[strikethrough[serde_inline_default]]
   #[strikethrough[derive(Deserialize, DefaultFromSerde, Serialize, Clone, Debug,  PartialEq)]]
-  #[strikethrough[allow(non_snake_case)]]
   pub struct WorldserverConfig {
     #[serde_inline_default(1)]
     pub RealmID: u32,
@@ -1442,7 +1442,6 @@ structstruck::strike! {
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug)]
-#[allow(non_snake_case)]
 pub enum LogLevel {
     Disabled,
     Fatal,
@@ -1455,7 +1454,7 @@ pub enum LogLevel {
 
 #[serde_inline_default]
 #[derive(Deserialize, Serialize, DefaultFromSerde, Clone, Debug, PartialEq)]
-#[allow(non_snake_case)]
+#[expect(non_snake_case)]
 pub struct DatabaseInfo {
     #[serde_inline_default("127.0.0.1:3306".to_string())]
     pub Address:       String,
@@ -1513,6 +1512,8 @@ impl Updates {
 
 #[cfg(test)]
 mod tests {
+    use std::fs;
+
     use flagset::FlagSet;
 
     use crate::common::configuration::*;

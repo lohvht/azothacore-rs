@@ -255,8 +255,9 @@ impl StaticMapTree {
         model_spawns_used: &[&VmapModelSpawn],
     ) -> AzResult<()> {
         let mapfilename = Self::map_file_name(dir, map_id);
-        let mut mapfile = buffered_file_create(&mapfilename).inspect_err(|e| {
+        let mut mapfile = buffered_file_create(&mapfilename).map_err(|e| {
             error!("cannot open {}, err was: {e}", mapfilename.display());
+            e
         })?;
 
         Self::write_map_tree(&mut mapfile, ptree, model_spawns_used)

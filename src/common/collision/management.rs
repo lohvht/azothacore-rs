@@ -77,7 +77,7 @@ pub trait VMapMgrTrait {
     fn unload_map_tile(&self, p_map_id: u32, x: u16, y: u16);
     fn unload_map(&self, p_map_id: u32);
 
-    #[allow(clippy::too_many_arguments, non_snake_case)]
+    #[expect(clippy::too_many_arguments)]
     // TODO: refactor this to return instead of taking in multiple mutable parmas?
     fn is_in_line_of_sight(
         &self,
@@ -94,7 +94,7 @@ pub trait VMapMgrTrait {
     /// test if we hit an object. return true if we hit one. rx, ry, rz will hold the hit position or the dest position, if no intersection was found
     /// return a position, that is pReduceDist closer to the origin
     // TODO: refactor this to return instead of taking in multiple mutable parmas?
-    #[allow(clippy::too_many_arguments, non_snake_case)]
+    #[expect(clippy::too_many_arguments)]
     fn get_object_hit_pos(
         &self,
         p_map_id: u32,
@@ -123,7 +123,7 @@ pub trait VMapMgrTrait {
     /// Query world model area info.
     ///
     /// \param z gets adjusted to the ground height for which this are info is valid
-    #[allow(clippy::too_many_arguments, non_snake_case)]
+    #[expect(clippy::too_many_arguments)]
     // TODO: refactor this to return instead of taking in multiple mutable parmas?
     fn get_area_info(
         &self,
@@ -137,7 +137,7 @@ pub trait VMapMgrTrait {
         group_id: &mut u32,
     ) -> bool;
 
-    #[allow(clippy::too_many_arguments, non_snake_case)]
+    #[expect(clippy::too_many_arguments)]
     // TODO: refactor this to return instead of taking in multiple mutable parmas?
     fn get_liquid_level(
         &self,

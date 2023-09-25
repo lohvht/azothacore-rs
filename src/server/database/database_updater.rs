@@ -107,11 +107,12 @@ async fn check_update_table(pool: &sqlx::Pool<MySql>, cfg: &DatabaseInfo, table_
     let mut f = Path::new(&cfg.BaseFilePath).to_path_buf();
     f.push(format!("{table_name}.sql"));
 
-    apply_file(pool, f).await.inspect_err(|_| {
+    apply_file(pool, f).await.map_err(|e| {
         error!(
-            "Failed apply file to database {}! Does the user (named in *.conf) have `INSERT` and `DELETE` privileges on the MySQL server?",
-            &cfg.DatabaseName
+            "Failed apply file to database {} due to error: {e}! Does the user (named in *.conf) have `INSERT` and `DELETE` privileges on the MySQL server?",
+            &cfg.DatabaseName,
         );
+        e
     })?;
 
     Ok(())

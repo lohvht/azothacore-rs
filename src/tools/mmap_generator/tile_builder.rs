@@ -1,4 +1,4 @@
-use std::{path::PathBuf, ptr::null_mut, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use recastnavigation_sys::{
     dtNavMeshCreateParams,
@@ -274,7 +274,7 @@ impl TileBuilder {
                 tile_cfg.bmax[2] = config.bmin[2] + ((y + 1) * config.tileSize + config.borderSize) as f32 * config.cs;
 
                 // build heightfield
-                let mut tile_solid = unsafe { rcAllocHeightfield() };
+                let tile_solid = unsafe { rcAllocHeightfield() };
                 if tile_solid.is_null()
                     || !unsafe {
                         rcCreateHeightfield(
@@ -337,7 +337,7 @@ impl TileBuilder {
                 };
 
                 // compact heightfield spans
-                let mut tile_chf = unsafe { rcAllocCompactHeightfield() };
+                let tile_chf = unsafe { rcAllocCompactHeightfield() };
                 if tile_chf.is_null()
                     || !unsafe {
                         rcBuildCompactHeightfield(rc_context, tile_cfg.walkableHeight, tile_cfg.walkableClimb, tile_solid, tile_chf)
@@ -371,7 +371,7 @@ impl TileBuilder {
                     continue;
                 }
 
-                let mut tile_cset = unsafe { rcAllocContourSet() };
+                let tile_cset = unsafe { rcAllocContourSet() };
                 if tile_cset.is_null()
                     || !unsafe {
                         rcBuildContours(
@@ -415,14 +415,8 @@ impl TileBuilder {
                 // we may want to keep them in the future for debug
                 // but right now, we don't have the code to merge them
                 unsafe { rcFreeHeightField(tile_solid) };
-                #[expect(unused_assignments)]
-                tile_solid = null_mut();
                 unsafe { rcFreeCompactHeightfield(tile_chf) };
-                #[expect(unused_assignments)]
-                tile_chf = null_mut();
                 unsafe { rcFreeContourSet(tile_cset) };
-                #[expect(unused_assignments)]
-                tile_cset = null_mut();
 
                 pmmerge.push(tile_pmesh);
                 dmmerge.push(tile_dmesh);

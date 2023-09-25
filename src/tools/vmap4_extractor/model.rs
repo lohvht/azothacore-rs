@@ -14,7 +14,7 @@ use crate::{
     AzResult,
 };
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Debug)]
 pub struct Model {
     /// HEADER VALUES

@@ -397,7 +397,6 @@ pub struct BroadcastText {
     pub sound_entries_id: [u32; 2],
 }
 
-#[allow(dead_code, non_camel_case_types)]
 #[derive(WDC1, Default, Debug)]
 #[layout_hash(0x9F4272BF)]
 pub struct Cfg_Regions {

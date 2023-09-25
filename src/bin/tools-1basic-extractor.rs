@@ -1,6 +1,4 @@
-#![feature(result_option_inspect)]
-
-use std::{fs, io};
+use std::io;
 
 use azothacore_rs::{
     buffered_file_open,
@@ -35,7 +33,7 @@ fn main() -> AzResult<()> {
     let mut first_installed_locale: Option<Locale> = None;
     let mut build = 0;
     for l in args.locales.into_iter() {
-        if let Locale::none = l {
+        if let Locale::None = l {
             continue;
         }
         if (installed_locales_mask & l.to_casc_locales()).bits() == 0 {

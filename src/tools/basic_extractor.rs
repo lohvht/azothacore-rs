@@ -67,7 +67,7 @@ pub fn main_db2_and_map_extract(args: &ExtractorConfig, first_installed_locale: 
     let installed_locales_mask = args.get_installed_locales_mask()?;
 
     for l in args.locales.into_iter() {
-        if let Locale::none = l {
+        if let Locale::None = l {
             continue;
         }
 
@@ -153,8 +153,9 @@ fn extract_db_files_client(storage: &CascStorageHandle, args: &ExtractorConfig, 
 fn extract_file(file_in_archive: &mut CascFileHandle, out_path: PathBuf) -> AzResult<()> {
     let file_size = file_in_archive.get_file_size()?;
 
-    let mut output = buffered_file_create(&out_path).inspect_err(|e| {
+    let mut output = buffered_file_create(&out_path).map_err(|e| {
         error!("can't create the output file '{}', err was: {}", out_path.display(), e);
+        e
     })?;
 
     let res = io::copy(file_in_archive, &mut output)?;
@@ -396,7 +397,7 @@ fn transform_to_high_res(low_res_holes: u16) -> [u8; 8] {
     hi_res_holes
 }
 
-#[allow(clippy::too_many_arguments, non_snake_case)]
+#[expect(clippy::too_many_arguments)]
 pub fn convert_adt(
     storage: &CascStorageHandle,
     storage_path: &str,
@@ -413,8 +414,8 @@ pub fn convert_adt(
     // Prepare map header
     let map_build_magic = build_no;
     let mut map_area_ids = [[0; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
-    let mut map_height_V9 = SMatrix::<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>::zeros();
-    let mut map_height_V8 = SMatrix::<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>::zeros();
+    let mut map_height_v9 = SMatrix::<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>::zeros();
+    let mut map_height_v8 = SMatrix::<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>::zeros();
     let mut map_liquid_flags: [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID] =
         [[None.into(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
     let mut map_liquid_entry = [[0; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
@@ -434,14 +435,14 @@ pub fn convert_adt(
             let cy = mcnk.iy() * ADT_CELL_SIZE + y;
             for x in 0..ADT_CELL_SIZE + 1 {
                 let cx = mcnk.ix() * ADT_CELL_SIZE + x;
-                map_height_V9[(cy, cx)] = mcnk.ypos;
+                map_height_v9[(cy, cx)] = mcnk.ypos;
             }
         }
         for y in 0..ADT_CELL_SIZE {
             let cy = mcnk.iy() * ADT_CELL_SIZE + y;
             for x in 0..ADT_CELL_SIZE {
                 let cx = mcnk.ix() * ADT_CELL_SIZE + x;
-                map_height_V8[(cy, cx)] = mcnk.ypos;
+                map_height_v8[(cy, cx)] = mcnk.ypos;
             }
         }
         // Get custom height
@@ -451,7 +452,7 @@ pub fn convert_adt(
                 let cy = mcnk.iy() * ADT_CELL_SIZE + y;
                 for x in 0..ADT_CELL_SIZE + 1 {
                     let cx = mcnk.ix() * ADT_CELL_SIZE + x;
-                    map_height_V9[(cy, cx)] += mcvt.height_map[y * (ADT_CELL_SIZE * 2 + 1) + x];
+                    map_height_v9[(cy, cx)] += mcvt.height_map[y * (ADT_CELL_SIZE * 2 + 1) + x];
                 }
             }
             // get V8 height map
@@ -459,7 +460,7 @@ pub fn convert_adt(
                 let cy = mcnk.iy() * ADT_CELL_SIZE + y;
                 for x in 0..ADT_CELL_SIZE {
                     let cx = mcnk.ix() * ADT_CELL_SIZE + x;
-                    map_height_V8[(cy, cx)] += mcvt.height_map[y * (ADT_CELL_SIZE * 2 + 1) + ADT_CELL_SIZE + 1 + x];
+                    map_height_v8[(cy, cx)] += mcvt.height_map[y * (ADT_CELL_SIZE * 2 + 1) + ADT_CELL_SIZE + 1 + x];
                 }
             }
         }
@@ -627,13 +628,13 @@ pub fn convert_adt(
     // Try pack height data
     //============================================
 
-    let mut max_height = (-20000.0f32).max(map_height_V8.max().max(map_height_V9.max()));
-    let mut min_height = (20000.0f32).min(map_height_V8.min().min(map_height_V9.min()));
+    let mut max_height = (-20000.0f32).max(map_height_v8.max().max(map_height_v9.max()));
+    let mut min_height = (20000.0f32).min(map_height_v8.min().min(map_height_v9.min()));
 
     // Check for allow limit minimum height (not store height in deep ochean - allow save some memory)
     if allow_height_limit && min_height < use_min_height {
-        map_height_V8.iter_mut().for_each(|v| *v = v.max(use_min_height));
-        map_height_V9.iter_mut().for_each(|v| *v = v.max(use_min_height));
+        map_height_v8.iter_mut().for_each(|v| *v = v.max(use_min_height));
+        map_height_v9.iter_mut().for_each(|v| *v = v.max(use_min_height));
 
         max_height = max_height.max(use_min_height);
         min_height = min_height.max(use_min_height);
@@ -658,25 +659,25 @@ pub fn convert_adt(
         if allow_float_to_int && diff < V9V8_HEIGHT_FLOAT_TO_INT8_LIMIT {
             // As uint8 (max accuracy = CONF_float_to_int8_limit/256)
             let step = 255.0 / diff;
-            let map_height_V9 = map_height_V9.map(|v| ((v - min_height) * step + 0.5) as u8);
-            let map_height_V8 = map_height_V8.map(|v| ((v - min_height) * step + 0.5) as u8);
+            let map_height_v9 = map_height_v9.map(|v| ((v - min_height) * step + 0.5) as u8);
+            let map_height_v8 = map_height_v8.map(|v| ((v - min_height) * step + 0.5) as u8);
             Some(MapFilev9v8::U8 {
-                v9: map_height_V9,
-                v8: map_height_V8,
+                v9: map_height_v9,
+                v8: map_height_v8,
             })
         } else if allow_float_to_int && diff < V9V8_HEIGHT_FLOAT_TO_INT16_LIMIT {
             // As uint16 (max accuracy = CONF_float_to_int16_limit/65536)
             let step = 65535.0 / diff;
-            let map_height_V9 = map_height_V9.map(|v| ((v - min_height) * step + 0.5) as u16);
-            let map_height_V8 = map_height_V8.map(|v| ((v - min_height) * step + 0.5) as u16);
+            let map_height_v9 = map_height_v9.map(|v| ((v - min_height) * step + 0.5) as u16);
+            let map_height_v8 = map_height_v8.map(|v| ((v - min_height) * step + 0.5) as u16);
             Some(MapFilev9v8::U16 {
-                v9: map_height_V9,
-                v8: map_height_V8,
+                v9: map_height_v9,
+                v8: map_height_v8,
             })
         } else {
             Some(MapFilev9v8::F32 {
-                v9: map_height_V9,
-                v8: map_height_V8,
+                v9: map_height_v9,
+                v8: map_height_v8,
             })
         }
     };
@@ -689,7 +690,7 @@ pub fn convert_adt(
     //============================================
     // Pack liquid data
     //============================================
-    #[allow(clippy::never_loop)]
+    #[expect(clippy::never_loop)]
     let map_liquid_data = loop {
         let global_liq_info = global_liquid_info(&map_liquid_entry, &map_liquid_flags);
         match global_liq_info {

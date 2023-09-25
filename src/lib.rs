@@ -1,15 +1,5 @@
-#![feature(const_option_ext)]
-#![feature(fs_try_exists)]
-#![feature(associated_type_bounds)]
-#![feature(btree_extract_if)]
-#![feature(result_option_inspect)]
-#![feature(extract_if)]
-#![feature(async_closure)]
-#![feature(impl_trait_in_fn_trait_return)]
 #![feature(async_fn_in_trait)]
-#![feature(cursor_remaining)]
 #![feature(lint_reasons)]
-#![feature(stmt_expr_attributes)]
 
 pub mod common;
 pub mod compile_options;
@@ -116,7 +106,7 @@ pub fn bincode_deserialise<R: io::Read, T: ?Sized + serde::de::DeserializeOwned>
     bincode_cfg!().deserialize_from(r)
 }
 
-const DEFAULT_BUFFER_SIZE: usize = 1 * 1024 * 1024; // i.e. 1 Mebibyte
+const DEFAULT_BUFFER_SIZE: usize = 2 * 1024 * 1024; // i.e. 2 Mebibyte
 
 pub fn buffered_file_open<P: AsRef<Path>>(p: P) -> io::Result<io::BufReader<fs::File>> {
     Ok(io::BufReader::with_capacity(DEFAULT_BUFFER_SIZE, fs::File::open(p)?))

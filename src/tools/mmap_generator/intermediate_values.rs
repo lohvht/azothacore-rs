@@ -1,4 +1,4 @@
-use std::{fs, io, io::Write, path::Path, slice};
+use std::{io, io::Write, path::Path, slice};
 
 use byteorder::{NativeEndian, WriteBytesExt};
 use recastnavigation_sys::{rcCompactHeightfield, rcContourSet, rcHeightfield, rcPolyMesh, rcPolyMeshDetail};

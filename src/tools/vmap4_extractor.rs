@@ -270,12 +270,13 @@ impl VmapExtractor {
         });
         if !file_exist {
             // save only if not exist. The above code is also to ensure that the model spawns are always idempotent.
-            let mut output = buffered_file_create(&sz_local_file).inspect_err(|e| {
+            let mut output = buffered_file_create(&sz_local_file).map_err(|e| {
                 error!(
                     "can't create the output file '{}' for writing, err was: {}",
                     sz_local_file.display(),
                     e
                 );
+                e
             })?;
             let vmap = froot.convert_to_vmap(self.precise_vector_data);
             vmap.write(&mut output)?;
@@ -307,12 +308,13 @@ impl VmapExtractor {
 
         let mdl = Model::build(storage, file_name)?;
         let vmap = mdl.convert_to_vmap();
-        let mut output = buffered_file_create(&sz_local_file).inspect_err(|e| {
+        let mut output = buffered_file_create(&sz_local_file).map_err(|e| {
             error!(
                 "can't create the output file '{}' for writing, err was: {}",
                 sz_local_file.display(),
                 e
             );
+            e
         })?;
         vmap.write(&mut output)?;
         Ok(())
@@ -362,17 +364,17 @@ impl VmapExtractor {
                     (filename.clone(), filename)
                 };
 
-                _ = self.extract_single_wmo(storage, &storage_path, wmo_doodads).inspect_err(|e| {
+                _ = self.extract_single_wmo(storage, &storage_path, wmo_doodads).map_err(|e| {
                     warn!("get_or_extract_wdt extract_single_wmo err for path {storage_path} due to err: {e}");
                 });
                 _ = self
                     .mapobject_extract(map_obj_def, &name, true, map.id, map.id, &mut None)
-                    .inspect_err(|e| {
+                    .map_err(|e| {
                         warn!("get_or_extract_wdt mapobject_extract err for name {name} due to err: {e}");
                     });
                 _ = self
                     .doodad_extractset(&name, map_obj_def, true, map.id, map.id, wmo_doodads, &mut None)
-                    .inspect_err(|e| {
+                    .map_err(|e| {
                         warn!("get_or_extract_wdt doodad_extractset err for name {name} due to err: {e}");
                     });
             }
@@ -738,7 +740,7 @@ impl VmapExtractor {
 
     /// equivalent to WDT->GetMap(x, y) and ADT->init(map_id, original_map_id)
     /// in a single step
-    #[allow(clippy::too_many_arguments)]
+    #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(map_id=map_id, original_map_id=original_map_id, x=x, y=y))]
     fn store_adt_in_wdt<'a>(
         &self,
@@ -809,7 +811,7 @@ impl VmapExtractor {
                 };
                 let ok = self
                     .extract_single_model(storage, &storage_path)
-                    .inspect_err(|e| {
+                    .map_err(|e| {
                         if !e.to_string().contains("has no bounding triangles") {
                             warn!("store_adt_in_wdt extract_single_model err for path {storage_path} due to err: {e}");
                         }
@@ -818,7 +820,7 @@ impl VmapExtractor {
                 if ok {
                     _ = self
                         .doodad_extract(doodad_def, &name, map_id, original_map_id, &mut dir_file_cache)
-                        .inspect_err(|e| {
+                        .map_err(|e| {
                             warn!("store_adt_in_wdt doodad_extract err for {name} due to err: {e}");
                         });
                 }
@@ -839,18 +841,18 @@ impl VmapExtractor {
                     (filename.clone(), filename)
                 };
 
-                _ = self.extract_single_wmo(storage, &storage_path, wmo_doodads).inspect_err(|e| {
+                _ = self.extract_single_wmo(storage, &storage_path, wmo_doodads).map_err(|e| {
                     warn!("store_adt_in_wdt extract_single_wmo err for path {storage_path} due to err: {e}");
                 });
 
                 _ = self
                     .mapobject_extract(map_obj_def, &name, false, map_id, original_map_id, &mut dir_file_cache)
-                    .inspect_err(|e| {
+                    .map_err(|e| {
                         warn!("store_adt_in_wdt mapobject_extract err for name {name} due to err: {e}");
                     });
                 _ = self
                     .doodad_extractset(&name, map_obj_def, false, map_id, original_map_id, wmo_doodads, &mut dir_file_cache)
-                    .inspect_err(|e| {
+                    .map_err(|e| {
                         warn!("store_adt_in_wdt doodad_extractset err for name {name} due to err: {e}");
                     });
             }

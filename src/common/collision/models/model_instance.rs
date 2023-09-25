@@ -27,7 +27,7 @@ pub struct VmapModelSpawn {
     pub name:    String,
 }
 
-#[allow(clippy::too_many_arguments)]
+#[expect(clippy::too_many_arguments)]
 impl VmapModelSpawnWithMapId {
     pub fn new(
         map_num: u32,

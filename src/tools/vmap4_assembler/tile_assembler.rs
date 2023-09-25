@@ -189,11 +189,13 @@ fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpaw
 
     let model_position = ModelPosition::new(spawn.i_rot, spawn.i_scale);
 
-    let mut input = buffered_file_open(&model_filename).inspect_err(|e| {
+    let mut input = buffered_file_open(&model_filename).map_err(|e| {
         error!("ERROR: Can't open raw model file: {} - err {e}", model_filename.display());
+        e
     })?;
-    let raw_model = WorldModel_Raw::read(&mut input).inspect_err(|e| {
+    let raw_model = WorldModel_Raw::read(&mut input).map_err(|e| {
         error!("ERROR: read raw world model error: {} - err {e}", model_filename.display());
+        e
     })?;
 
     let groups = raw_model.groups.len();
@@ -219,12 +221,14 @@ pub fn convert_raw_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(src: 
         return Ok(());
     }
 
-    let mut raw_model_file = buffered_file_open(&filename).inspect_err(|e| {
+    let mut raw_model_file = buffered_file_open(&filename).map_err(|e| {
         error!("convert_raw_file err: {}; err was {e}", filename.display());
+        e
     })?;
 
-    let raw_model = WorldModel_Raw::read(&mut raw_model_file).inspect_err(|e| {
+    let raw_model = WorldModel_Raw::read(&mut raw_model_file).map_err(|e| {
         error!("read raw_world_model err: {}; err was {e}", filename.display());
+        e
     })?;
 
     let groups = raw_model
@@ -244,8 +248,9 @@ pub fn convert_raw_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(src: 
 
     let model = WorldModel::new(raw_model.root_wmo_id, groups);
 
-    let mut outfile = buffered_file_create(out).inspect_err(|e| {
+    let mut outfile = buffered_file_create(out).map_err(|e| {
         error!("create new  vmofile err: {}; err was {e}", filename.display());
+        e
     })?;
     model
         .write_file(&mut outfile)
@@ -344,7 +349,7 @@ To start the conversion call convertWorld().
 */
 //===============================================
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 struct ModelPosition {
     i_rotation: Matrix3<f32>,
     i_pos:      Vector3<f32>,
@@ -364,7 +369,7 @@ impl ModelPosition {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(dead_code)]
     fn move_to_base_pos(&mut self, p_base_pos: &Vector3<f32>) {
         self.i_pos -= p_base_pos;
     }

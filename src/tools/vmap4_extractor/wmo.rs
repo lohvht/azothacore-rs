@@ -84,6 +84,7 @@ impl WmoRoot {
         };
         let mut wmo_paths = HashMap::new();
         for (fourcc, chunk) in cf.chunks() {
+            let chunk_data_len = u64::try_from(chunk.len()).unwrap();
             match fourcc {
                 b"MOHD" => {
                     let mut f = io::Cursor::new(chunk);
@@ -112,7 +113,7 @@ impl WmoRoot {
                 },
                 b"MODS" => {
                     let mut f = io::Cursor::new(chunk);
-                    while !f.is_empty() {
+                    while f.position() < chunk_data_len {
                         let mut name = [0u8; 20];
                         f.read_exact(&mut name)?;
                         let start_index = f.read_u32::<LittleEndian>()?;
@@ -171,7 +172,7 @@ impl WmoRoot {
                 },
                 b"MODD" => {
                     let mut f = io::Cursor::new(chunk);
-                    while !f.is_empty() {
+                    while f.position() < chunk_data_len {
                         s.doodad_data.spawns.push(WmoModd {
                             name_index: f.read_u24::<LittleEndian>()?,
                             flags:      f.read_u8()?,
@@ -236,8 +237,9 @@ impl WmoRoot {
     fn init_wmo_groups(&mut self, storage: &CascStorageHandle, wmo_paths: HashMap<usize, String>) -> AzResult<()> {
         for group_file_data_id in self.group_file_data_ids.iter() {
             let s = format!("FILE{group_file_data_id:08X}.xxx");
-            let fgroup = WmoGroup::build(self, storage, s).inspect_err(|e| {
+            let fgroup = WmoGroup::build(self, storage, s).map_err(|e| {
                 error!("could not open all group files for {}, err was {e}", self.filename);
+                e
             })?;
             for group_reference in fgroup.doodad_references.iter() {
                 if *group_reference as usize >= self.doodad_data.spawns.len() {
@@ -304,7 +306,7 @@ impl WMOLiquidHeader {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 #[derive(Default, Debug)]
 struct WMOLiquidVert {
     unk1:   u16,
@@ -312,7 +314,7 @@ struct WMOLiquidVert {
     height: f32,
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 struct WmoGroupMOBA {
     unknown_box:       [u8; 10],
     material_id_large: u16,
@@ -377,7 +379,7 @@ flags! {
     }
 }
 
-#[allow(dead_code)]
+#[expect(dead_code)]
 struct WmoGroupMOPY {
     flag:        FlagSet<MopyFlags>,
     material_id: u8,
@@ -430,13 +432,14 @@ impl WmoGroup {
             s.liq_has_mogp_liq = true;
         }
 
-        let mogp_subchunks = mogp_data.remaining_slice();
+        let mogp_subchunks = &mogp[mogp_data.position() as usize..];
         for (fourcc, start, end) in &chunked_data_offsets(mogp_subchunks)? {
             let subchunk_data = &mogp_subchunks[*start..*end];
-            #[allow(clippy::if_same_then_else)]
+            let subchunk_data_len = u64::try_from(subchunk_data.len()).unwrap();
+            #[expect(clippy::if_same_then_else)]
             if fourcc == b"MOPY" {
                 let mut data = io::Cursor::new(subchunk_data);
-                while !data.is_empty() {
+                while data.position() < subchunk_data_len {
                     s.mopy.push(WmoGroupMOPY {
                         flag:        FlagSet::new(data.read_u8()?)
                             .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("FLAGS INVALID?: err was {}", e)))?,
@@ -446,7 +449,7 @@ impl WmoGroup {
                 // s.n_triangles = s.mopy.len();
             } else if fourcc == b"MOVI" {
                 let mut data = io::Cursor::new(subchunk_data);
-                while !data.is_empty() {
+                while data.position() < subchunk_data_len {
                     s.movi.push(Vector3::new(
                         data.read_u16::<LittleEndian>()?,
                         data.read_u16::<LittleEndian>()?,
@@ -455,7 +458,7 @@ impl WmoGroup {
                 }
             } else if fourcc == b"MOVT" {
                 let mut data = io::Cursor::new(subchunk_data);
-                while !data.is_empty() {
+                while data.position() < subchunk_data_len {
                     s.movt.push(Vector3::new(
                         data.read_f32::<LittleEndian>()?,
                         data.read_f32::<LittleEndian>()?,
@@ -469,7 +472,7 @@ impl WmoGroup {
                 //
             } else if fourcc == b"MOBA" {
                 let mut data = io::Cursor::new(subchunk_data);
-                while !data.is_empty() {
+                while data.position() < subchunk_data_len {
                     let mut unknown_box = [0u8; 10];
                     data.read_exact(&mut unknown_box)?;
                     s.moba.push(WmoGroupMOBA {
@@ -485,7 +488,7 @@ impl WmoGroup {
                 }
             } else if fourcc == b"MODR" {
                 let mut data = io::Cursor::new(subchunk_data);
-                while !data.is_empty() {
+                while data.position() < subchunk_data_len {
                     s.doodad_references.push(data.read_u16::<LittleEndian>()?);
                 }
             } else if fourcc == b"MLIQ" {
@@ -565,11 +568,11 @@ impl WmoGroup {
         // group bound
         let bbcorn = Aabb::new(self.bbcorn1.into(), self.bbcorn2.into());
         let n_bounding_triangles = self.moba.iter().map(|m| m.index_count_movi).collect::<Vec<_>>();
-        #[allow(unused_assignments)]
+        #[expect(unused_assignments)]
         let mut mesh_triangle_indices = Vec::new();
-        #[allow(unused_assignments)]
+        #[expect(unused_assignments)]
         let mut vertices_chunks = Vec::new();
-        #[allow(unused_assignments)]
+        #[expect(unused_assignments)]
         let mut n_col_triangles = 0;
         if precise_vector_data {
             mesh_triangle_indices = self.movi.clone();

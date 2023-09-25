@@ -17,8 +17,9 @@ pub fn main_vmap4_assemble(
     model_spawns_data: impl Iterator<Item = VmapModelSpawnWithMapId>,
     temp_gameobject_models: impl Iterator<Item = TempGameObjectModel>,
 ) -> AzResult<()> {
-    tile_assembler_convert_world2(args, model_spawns_data, temp_gameobject_models).inspect_err(|e| {
+    tile_assembler_convert_world2(args, model_spawns_data, temp_gameobject_models).map_err(|e| {
         error!("TileAssembler exit with errors: {e}");
+        e
     })?;
     info!("Ok, all done");
     Ok(())

@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, fs, path::Path, sync::RwLock};
+use std::{collections::BTreeSet, path::Path, sync::RwLock};
 
 use tracing::{error, info, instrument};
 
@@ -18,7 +18,7 @@ pub struct ConfigMgr {
 
 /// Get the config file or config
 fn config_or_configdist(file_name: &str) -> Result<String, ConfigError> {
-    let file_exist = match fs::try_exists(file_name) {
+    let file_exist = match Path::new(file_name).try_exists() {
         Err(err) => {
             return Err(ConfigError::Filesystem {
                 filepath: file_name.into(),

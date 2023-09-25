@@ -102,26 +102,25 @@ pub enum CascHandlerError {
     CascLibParseError { typ: String, got: u32 },
 }
 
-#[allow(clippy::unnecessary_cast)]
 #[derive(Debug, Clone, FromPrimitive)]
 #[repr(u32)]
 pub enum CascStorageInfoClass {
     /// Returns the number of local files in the storage. Note that files
     /// can exist under different names, so the total number of files in the archive
     /// can be higher than the value returned by this info class
-    LocalFileCount = _CASC_STORAGE_INFO_CLASS_CascStorageLocalFileCount as u32,
+    LocalFileCount = _CASC_STORAGE_INFO_CLASS_CascStorageLocalFileCount,
     /// Returns the total file count, including the offline files
-    TotalFileCount = _CASC_STORAGE_INFO_CLASS_CascStorageTotalFileCount as u32,
+    TotalFileCount = _CASC_STORAGE_INFO_CLASS_CascStorageTotalFileCount,
     /// Returns the features flag    
-    Features = _CASC_STORAGE_INFO_CLASS_CascStorageFeatures as u32,
+    Features = _CASC_STORAGE_INFO_CLASS_CascStorageFeatures,
     /// Not supported
-    InstalledLocales = _CASC_STORAGE_INFO_CLASS_CascStorageInstalledLocales as u32,
+    InstalledLocales = _CASC_STORAGE_INFO_CLASS_CascStorageInstalledLocales,
     /// Gives CASC_STORAGE_PRODUCT
-    Product = _CASC_STORAGE_INFO_CLASS_CascStorageProduct as u32,
+    Product = _CASC_STORAGE_INFO_CLASS_CascStorageProduct,
     /// Gives CASC_STORAGE_TAGS structure
-    Tags = _CASC_STORAGE_INFO_CLASS_CascStorageTags as u32,
+    Tags = _CASC_STORAGE_INFO_CLASS_CascStorageTags,
     /// Gives Path:Product into a LPTSTR bufferPathProduct = _CASC_STORAGE_INFO_CLASS_CascStoragePathProduct,
-    InfoClassMax = _CASC_STORAGE_INFO_CLASS_CascStorageInfoClassMax as u32,
+    InfoClassMax = _CASC_STORAGE_INFO_CLASS_CascStorageInfoClassMax,
 }
 
 impl TryFrom<u32> for CascStorageInfoClass {

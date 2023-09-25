@@ -163,7 +163,7 @@ impl ExtractorConfig {
     }
 
     pub fn get_installed_locales_mask(&self) -> AzResult<FlagSet<CascLocale>> {
-        let storage = self.get_casc_storage_handler(Locale::none)?;
+        let storage = self.get_casc_storage_handler(Locale::None)?;
 
         Ok(storage.get_installed_locales_mask()?)
     }
@@ -255,17 +255,19 @@ impl ChunkedFile {
         P: AsRef<Path>,
     {
         let mut file = storage.open_file(&filename, CascLocale::All.into())?;
-        let file_size = file.get_file_size().inspect_err(|e| {
+        let file_size = file.get_file_size().map_err(|e| {
             use tracing::error;
             let f_display = filename.as_ref().display();
             error!("ChunkedFile::build: error reading filesize from file {f_display}: {e}");
+            e
         })? as usize;
 
         let mut chunk_data: Vec<u8> = Vec::with_capacity(file_size);
-        let read_file_size = file.read_to_end(&mut chunk_data).inspect_err(|e| {
+        let read_file_size = file.read_to_end(&mut chunk_data).map_err(|e| {
             use tracing::error;
             let f_display = filename.as_ref().display();
             error!("ChunkedFile::build: error reading file {f_display}: {e}");
+            e
         })?;
 
         if file_size != read_file_size {

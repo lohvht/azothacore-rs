@@ -71,8 +71,9 @@ flags! {
 impl MapLiquidTypeFlag {
     pub fn from_liquid_type_sound_bank_unchecked(sound_bank: u8) -> FlagSet<Self> {
         Self::from_liquid_type_sound_bank(sound_bank)
-            .inspect_err(|e| {
+            .map_err(|e| {
                 warn!("{e}: sound_bank value was: {sound_bank}");
+                e
             })
             .unwrap_or_default()
     }

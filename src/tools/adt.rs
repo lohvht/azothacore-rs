@@ -424,7 +424,7 @@ impl From<(&[u8; 4], &[u8])> for AdtChunkMcnk {
         let effect_id = read_le_unwrap!(cursor, u32);
 
         // Process the rest of the subchunks
-        let chunk_data = cursor.remaining_slice();
+        let chunk_data = &data[cursor.position() as usize..];
         let mut mcvt = None;
         let mut mclq = None;
         for (fourcc, start, end) in chunked_data_offsets(chunk_data).unwrap().into_iter() {
@@ -583,9 +583,10 @@ impl From<(&[u8; 4], &[u8])> for AdtChunkMddf {
         if fcc != b"MDDF" {
             panic!("fcc must be MDDF, got {}", std::str::from_utf8(&fcc[..]).unwrap());
         }
+        let data_len = u64::try_from(data.len()).unwrap();
         let mut cursor = io::Cursor::new(data);
         let mut doodad_defs = Vec::new();
-        while !cursor.is_empty() {
+        while cursor.position() < data_len {
             let id = read_le_unwrap!(cursor, u32);
             let unique_id = read_le_unwrap!(cursor, u32);
             let position = Vector3::new(
