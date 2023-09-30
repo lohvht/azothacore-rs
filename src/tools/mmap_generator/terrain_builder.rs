@@ -155,7 +155,10 @@ impl TerrainBuilder<'_> {
                 Some(i) => i,
             };
             let map_file_name = GridMap::file_name(&self.maps_path, map_id, tile_y, tile_x);
-            let f = match MapFile::read(&mut buffered_file_open(&map_file_name)?) {
+            let f = match buffered_file_open(&map_file_name)
+                .map_err(|e| e.into())
+                .and_then(|mut f| MapFile::read(&mut f))
+            {
                 Err(_) => {
                     tried_map_ids.push(map_id);
                     let new_map_id = self.vmap_mgr.get_parent_map_id(map_id);
