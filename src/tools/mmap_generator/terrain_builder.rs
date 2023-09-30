@@ -510,7 +510,7 @@ impl TerrainBuilder<'_> {
                                 corner.y + y as f32 * GRID_PART_SIZE,
                                 data[(y, x)],
                             );
-                            let mut vert = rotation * vert * scale + position;
+                            let mut vert = rotation.transpose() * vert * scale + position;
                             vert.x *= -1.0;
                             vert.y *= -1.0;
                             liq_verts.push(vert);
