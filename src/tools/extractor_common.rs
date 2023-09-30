@@ -163,7 +163,7 @@ impl ExtractorConfig {
     }
 
     pub fn get_installed_locales_mask(&self) -> AzResult<FlagSet<CascLocale>> {
-        let storage = self.get_casc_storage_handler(Locale::None)?;
+        let storage = self.get_casc_storage_handler(Locale::none)?;
 
         Ok(storage.get_installed_locales_mask()?)
     }

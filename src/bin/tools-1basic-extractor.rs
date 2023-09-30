@@ -33,7 +33,7 @@ fn main() -> AzResult<()> {
     let mut first_installed_locale: Option<Locale> = None;
     let mut build = 0;
     for l in args.locales.into_iter() {
-        if let Locale::None = l {
+        if let Locale::none = l {
             continue;
         }
         if (installed_locales_mask & l.to_casc_locales()).bits() == 0 {

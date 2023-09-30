@@ -67,7 +67,7 @@ pub fn main_db2_and_map_extract(args: &ExtractorConfig, first_installed_locale: 
     let installed_locales_mask = args.get_installed_locales_mask()?;
 
     for l in args.locales.into_iter() {
-        if let Locale::None = l {
+        if let Locale::none = l {
             continue;
         }
 

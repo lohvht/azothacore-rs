@@ -40,37 +40,38 @@ impl TryFrom<u8> for AccountTypes {
 }
 
 flags! {
+    #[allow(non_camel_case_types)]
     pub enum Locale: u32 {
-        EnUs = 0,
-        KoKr = 1,
-        FrFr = 2,
-        DeDe = 3,
-        ZhCn = 4,
-        ZhTw = 5,
-        EsEs = 6,
-        EsMx = 7,
-        RuRu = 8,
-        None = 9,
-        PtBr = 10,
-        ItIt = 11,
+        enUS = 0,
+        koKR = 1,
+        frFR = 2,
+        deDE = 3,
+        zhCN = 4,
+        zhTW = 5,
+        esES = 6,
+        esMX = 7,
+        ruRU = 8,
+        none = 9,
+        ptBR = 10,
+        itIT = 11,
     }
 }
 
 impl Locale {
     pub fn to_casc_locales(&self) -> FlagSet<CascLocale> {
         match *self {
-            Locale::EnUs => CascLocale::Enus | CascLocale::Engb,
-            Locale::KoKr => CascLocale::Kokr.into(),
-            Locale::FrFr => CascLocale::Frfr.into(),
-            Locale::DeDe => CascLocale::Dede.into(),
-            Locale::ZhCn => CascLocale::Zhcn.into(),
-            Locale::ZhTw => CascLocale::Zhtw.into(),
-            Locale::EsEs => CascLocale::Eses.into(),
-            Locale::EsMx => CascLocale::Esmx.into(),
-            Locale::RuRu => CascLocale::Ruru.into(),
-            Locale::None => CascLocale::None.into(),
-            Locale::PtBr => CascLocale::Ptbr | CascLocale::Ptpt,
-            Locale::ItIt => CascLocale::Itit.into(),
+            Locale::enUS => CascLocale::Enus | CascLocale::Engb,
+            Locale::koKR => CascLocale::Kokr.into(),
+            Locale::frFR => CascLocale::Frfr.into(),
+            Locale::deDE => CascLocale::Dede.into(),
+            Locale::zhCN => CascLocale::Zhcn.into(),
+            Locale::zhTW => CascLocale::Zhtw.into(),
+            Locale::esES => CascLocale::Eses.into(),
+            Locale::esMX => CascLocale::Esmx.into(),
+            Locale::ruRU => CascLocale::Ruru.into(),
+            Locale::none => CascLocale::None.into(),
+            Locale::ptBR => CascLocale::Ptbr | CascLocale::Ptpt,
+            Locale::itIT => CascLocale::Itit.into(),
         }
     }
 
@@ -90,18 +91,18 @@ impl FromStr for Locale {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         match s {
-            "enUS" => Ok(Locale::EnUs),
-            "koKR" => Ok(Locale::KoKr),
-            "frFR" => Ok(Locale::FrFr),
-            "deDE" => Ok(Locale::DeDe),
-            "zhCN" => Ok(Locale::ZhCn),
-            "zhTW" => Ok(Locale::ZhTw),
-            "esES" => Ok(Locale::EsEs),
-            "esMX" => Ok(Locale::EsMx),
-            "ruRU" => Ok(Locale::RuRu),
-            "none" => Ok(Locale::None),
-            "ptBR" => Ok(Locale::PtBr),
-            "itIT" => Ok(Locale::ItIt),
+            "enUS" => Ok(Locale::enUS),
+            "koKR" => Ok(Locale::koKR),
+            "frFR" => Ok(Locale::frFR),
+            "deDE" => Ok(Locale::deDE),
+            "zhCN" => Ok(Locale::zhCN),
+            "zhTW" => Ok(Locale::zhTW),
+            "esES" => Ok(Locale::esES),
+            "esMX" => Ok(Locale::esMX),
+            "ruRU" => Ok(Locale::ruRU),
+            "none" => Ok(Locale::none),
+            "ptBR" => Ok(Locale::ptBR),
+            "itIT" => Ok(Locale::itIT),
             _ => Err(LocaleParseError { got: s.to_string() }),
         }
     }
