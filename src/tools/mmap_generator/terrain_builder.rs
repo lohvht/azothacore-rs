@@ -161,8 +161,7 @@ impl TerrainBuilder<'_> {
             {
                 Err(_) => {
                     tried_map_ids.push(map_id);
-                    let new_map_id = self.vmap_mgr.get_parent_map_id(map_id);
-                    used_map_id = if new_map_id == map_id { None } else { Some(new_map_id) };
+                    used_map_id = self.vmap_mgr.get_parent_map_id(map_id);
                     continue;
                 },
                 Ok(m) => m,

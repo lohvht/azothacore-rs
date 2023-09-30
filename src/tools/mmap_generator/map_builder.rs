@@ -14,10 +14,7 @@ use crate::{
     bincode_serialise,
     buffered_file_create,
     buffered_file_open,
-    common::collision::{
-        management::vmap_mgr2::VMapMgr2,
-        maps::{map_defines::MmapTileFile, map_tree::StaticMapTree},
-    },
+    common::collision::{management::vmap_mgr2::VMapMgr2, maps::map_defines::MmapTileFile},
     server::shared::recastnavigation_handles::{DetourNavMesh, DetourNavMeshParams, DT_POLY_BITS},
     tools::{
         extractor_common::{get_dir_contents, ExtractorConfig},
@@ -31,7 +28,7 @@ use crate::{
 };
 
 pub struct MapBuilder<'tb> {
-    tiles:               HashMap<u32, HashSet<u32>>,
+    tiles:               HashMap<u32, HashSet<(u16, u16)>>,
     skip_continents:     bool,
     skip_junk_maps:      bool,
     skip_battlegrounds:  bool,
@@ -59,18 +56,12 @@ pub fn should_skip_tile<P: AsRef<Path>>(mmap_output_path: P, map_id: u32, tile_x
 }
 
 impl<'tb> MapBuilder<'tb> {
-    fn discover_tiles(args: &ExtractorConfig, tb: &TerrainBuilder<'_>) -> AzResult<HashMap<u32, HashSet<u32>>> {
+    fn discover_tiles(args: &ExtractorConfig, tb: &TerrainBuilder<'_>) -> AzResult<HashMap<u32, HashSet<(u16, u16)>>> {
         info!("Discovering maps... ");
-
-        let filter_prefix = if let Some(mxy) = &args.mmap_path_generator.map_id_tile_x_y {
-            format!("{:04}", mxy.map_id)
-        } else {
-            "".into()
-        };
 
         let mut tiles = HashMap::new();
 
-        for f in get_dir_contents(args.output_map_path(), &format!("{filter_prefix}*"))? {
+        for f in get_dir_contents(args.output_map_path(), "*")? {
             let map_id = match f.file_stem().and_then(|file_stem| file_stem.to_str()).and_then(|f| {
                 let (map_id_str, _rest) = f.split_once('_')?;
                 map_id_str.parse::<u32>().ok()
@@ -84,7 +75,7 @@ impl<'tb> MapBuilder<'tb> {
             tiles.entry(map_id).or_insert(HashSet::new());
         }
 
-        for f in get_dir_contents(args.output_vmap_output_path(), &format!("{filter_prefix}*.vmtree"))? {
+        for f in get_dir_contents(args.output_vmap_output_path(), "*.vmtree")? {
             let map_id = match f
                 .file_stem()
                 .and_then(|file_stem| file_stem.to_str())
@@ -110,7 +101,7 @@ impl<'tb> MapBuilder<'tb> {
                     let first = first.parse::<u16>().ok().unwrap(); // tileY
                     let second = second.parse::<u16>().ok().unwrap(); // tileX
 
-                    StaticMapTree::pack_tile_id(first, second)
+                    (first, second)
                 }) {
                     None => {
                         warn!("cannot take tileID from vmap tree tile file: {}", f.display());
@@ -128,7 +119,7 @@ impl<'tb> MapBuilder<'tb> {
                     let first = first.parse::<u16>().ok().unwrap(); // tileY
                     let second = second.parse::<u16>().ok().unwrap(); // tileX
 
-                    StaticMapTree::pack_tile_id(second, first)
+                    (second, first)
                 }) {
                     None => {
                         warn!("cannot take tileID from vmap tree tile file: {}", f.display());
@@ -148,7 +139,7 @@ impl<'tb> MapBuilder<'tb> {
                     // add all tiles within bounds to tile list.
                     for i in min_x..max_x {
                         for j in min_y..max_y {
-                            map_tiles.insert(StaticMapTree::pack_tile_id(i, j));
+                            map_tiles.insert((i, j));
                         }
                     }
                 }
@@ -349,7 +340,7 @@ impl<'tb> MapBuilder<'tb> {
         // now start building mmtiles for each tile
         for tile in tiles {
             // unpack tile coords
-            let (tile_x, tile_y) = StaticMapTree::unpack_tile_id(*tile);
+            let (tile_x, tile_y) = *tile;
             if should_skip_tile(&self.tile_builder_params.mmap_output_path, map_id, tile_x, tile_y) {
                 continue;
             }
@@ -372,7 +363,7 @@ impl<'tb> MapBuilder<'tb> {
 
     fn build_nav_mesh(&self, map_id: u32) -> AzResult<DetourNavMesh> {
         // if map has a parent we use that to generate dtNavMeshParams - worldserver will load all missing tiles from that map
-        let nav_mesh_params_map_id = self.vmap_mgr.get_parent_map_id(map_id);
+        let nav_mesh_params_map_id = self.vmap_mgr.get_parent_map_id(map_id).unwrap_or(map_id);
 
         let empty = Default::default();
         let tiles = self.tiles.get(&nav_mesh_params_map_id).unwrap_or(&empty);
@@ -394,7 +385,7 @@ impl<'tb> MapBuilder<'tb> {
         let mut tile_x_max = 0;
         let mut tile_y_max = 0;
         for tile_id in tiles {
-            let (tile_x, tile_y) = StaticMapTree::unpack_tile_id(*tile_id);
+            let (tile_x, tile_y) = *tile_id;
             tile_x_max = tile_x_max.max(tile_x);
             tile_x_min = tile_x_min.min(tile_x);
             tile_y_max = tile_y_max.max(tile_y);

@@ -127,37 +127,6 @@ impl WmoRoot {
                             _pad,
                         });
                     }
-                    // else if (!strcmp(fourcc, "MODS"))
-                    // {
-                    //     DoodadData.Sets.resize(size / sizeof(WMO::MODS));
-                    //     f.read(DoodadData.Sets.data(), size);
-                    // }
-                    // else if (!strcmp(fourcc,"MODN"))
-                    // {
-                    //     char* ptr = f.getPointer();
-                    //     char* end = ptr + size;
-                    //     DoodadData.Paths = std::make_unique<char[]>(size);
-                    //     memcpy(DoodadData.Paths.get(), ptr, size);
-                    //     while (ptr < end)
-                    //     {
-                    //         std::string path = ptr;
-
-                    //         char* s = GetPlainName(ptr);
-                    //         FixNameCase(s, strlen(s));
-                    //         FixNameSpaces(s, strlen(s));
-
-                    //         uint32 doodadNameIndex = ptr - f.getPointer();
-                    //         ptr += path.length() + 1;
-
-                    //         if (ExtractSingleModel(path))
-                    //             ValidDoodadNames.insert(doodadNameIndex);
-                    //     }
-                    // }
-                    // else if (!strcmp(fourcc,"MODD"))
-                    // {
-                    //     DoodadData.Spawns.resize(size / sizeof(WMO::MODD));
-                    //     f.read(DoodadData.Spawns.data(), size);
-                    // }
                 },
                 b"MODN" => {
                     let mut offset = 0;
@@ -256,7 +225,7 @@ impl WmoRoot {
                     },
                     Some(s) => s,
                 };
-                self.doodad_data.references.insert(*group_reference as u32, path.clone());
+                self.doodad_data.references.insert(u32::from(*group_reference), path.clone());
             }
             self.wmo_groups.push(fgroup);
         }

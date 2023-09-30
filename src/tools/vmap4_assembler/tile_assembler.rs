@@ -23,7 +23,7 @@ use crate::{
         maps::map_tree::StaticMapTree,
         models::{
             game_object_model::GameObjectModelData,
-            model_instance::{ModelFlags, VmapModelSpawnWithMapId},
+            model_instance::{ModelFlags, VmapModelSpawn, VmapModelSpawnWithMapId},
             world_model::{GroupModel, WmoLiquid, WorldModel},
         },
         vmap_definitions::RAW_VMAP_MAGIC,
@@ -38,15 +38,15 @@ use crate::{
     AzResult,
 };
 
-pub fn read_map_spawns(map_spawns: impl Iterator<Item = VmapModelSpawnWithMapId>) -> BTreeMap<u32, BTreeMap<u32, VmapModelSpawnWithMapId>> {
+pub fn read_map_spawns(map_spawns: impl Iterator<Item = VmapModelSpawnWithMapId>) -> BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>> {
     // retrieve the unique entries
-    let mut map_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawnWithMapId>> = BTreeMap::new();
+    let mut map_data: BTreeMap<u32, BTreeMap<u32, VmapModelSpawn>> = BTreeMap::new();
     for spawn in map_spawns {
         let unique_entries = map_data.entry(spawn.map_num).or_default();
         if unique_entries.is_empty() {
             info!("Spawning map {}", spawn.map_num);
         }
-        unique_entries.insert(spawn.id, spawn);
+        unique_entries.entry(spawn.id).or_insert(spawn.spawn);
     }
     map_data
 }
@@ -95,13 +95,10 @@ pub fn tile_assembler_convert_world2(
 
             for x in low.x..=high.x {
                 for y in low.y..=high.y {
-                    entry_tile_entries
-                        .entry(StaticMapTree::pack_tile_id(x, y))
-                        .or_insert(BTreeSet::new())
-                        .insert(TileSpawn {
-                            id:    entry.id,
-                            flags: entry.flags,
-                        });
+                    entry_tile_entries.entry((x, y)).or_insert(BTreeSet::new()).insert(TileSpawn {
+                        id:    entry.id,
+                        flags: entry.flags,
+                    });
                 }
             }
             s.send(entry.name.clone())
@@ -112,7 +109,7 @@ pub fn tile_assembler_convert_world2(
         info!("Creating map tree for map {map_id}. map_spawns len is {}...", map_spawns.len());
         let mut ptree = Qbvh::new();
         // unborrow map_spawns
-        let map_spawns = map_spawns.into_iter().map(|m| &m.spawn).collect::<Vec<_>>();
+        let map_spawns = map_spawns.into_iter().map(|m| &*m).collect::<Vec<_>>();
         let map_data = map_spawns.iter().enumerate().map(|(idx, m)| (idx, m.bound.unwrap()));
         ptree.clear_and_rebuild(map_data, 0.0);
 
@@ -122,7 +119,7 @@ pub fn tile_assembler_convert_world2(
 
         // write map tile files, similar to ADT files, only with extra BVH tree node info
         for (tile_id, tile_entries) in tile_entries.iter() {
-            let (x, y) = StaticMapTree::unpack_tile_id(*tile_id);
+            let (x, y) = *tile_id;
             let empty = BTreeSet::new();
             let parent_tile_entries = parent_tile_entries.get(tile_id).unwrap_or(&empty);
             let mut all_tile_entries = Vec::with_capacity(tile_entries.len() + parent_tile_entries.len());
@@ -141,7 +138,6 @@ pub fn tile_assembler_convert_world2(
                     all_tile_entries.push(model_spawn);
                 }
             }
-            let all_tile_entries = all_tile_entries.into_iter().map(|m| &m.spawn).collect::<Vec<_>>();
             StaticMapTree::write_map_tile_spawns_file(&dst, map_id, x, y, &all_tile_entries)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("write_map_tile_spawns_file err: {e}")))?;
         }
@@ -185,8 +181,8 @@ pub fn tile_assembler_convert_world2(
     Ok(())
 }
 
-fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpawnWithMapId) -> AzResult<()> {
-    let model_filename = src.as_ref().join(&spawn.name);
+fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpawn) -> AzResult<()> {
+    let model_filename = src.as_ref().join(spawn.name.trim_matches(char::from(0)));
 
     let model_position = ModelPosition::new(spawn.i_rot, spawn.i_scale);
 

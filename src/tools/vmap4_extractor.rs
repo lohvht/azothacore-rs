@@ -1,10 +1,10 @@
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     io::{self, Read, Seek, Write},
     marker::PhantomData,
     path::{Path, PathBuf},
-    sync::Mutex,
+    sync::{Arc, Mutex},
     time::Instant,
 };
 
@@ -145,16 +145,168 @@ pub struct TempGameObjectModel {
     pub file_name: String,
 }
 
+type AdtCache = Vec<Vec<Option<Arc<Mutex<AdtWithDirFileCache>>>>>;
+
 struct WdtWithAdts {
     _wdt:      WDTFile,
     map_name:  String,
-    map_id:    u32,
-    adt_cache: Option<Vec<Vec<Option<AdtWithDirFileCache>>>>,
+    adt_cache: Option<AdtCache>,
+}
+
+impl WdtWithAdts {
+    fn get_map(&mut self, storage: &CascStorageHandle, x: usize, y: usize) -> Option<Arc<Mutex<AdtWithDirFileCache>>> {
+        if let Some(cache) = &self.adt_cache {
+            let cached = cache[x][y].clone();
+            if cached.is_some() {
+                return cached;
+            }
+        }
+        let map_name = &self.map_name;
+        let storage_path = format!("World/Maps/{map_name}/{map_name}_{x}_{y}_obj0.adt");
+        let adt = match ADTFile::build(storage, storage_path) {
+            Err(_e) => {
+                // warn!("Unable to get ADT file {storage_path} with warning: {e}, moving on");
+                return None;
+            },
+            Ok(f) => Arc::new(Mutex::new(AdtWithDirFileCache {
+                f,
+                cacheable: self.adt_cache.is_some(),
+                dir_file_cache: None,
+            })),
+        };
+        if let Some(cache) = self.adt_cache.as_mut() {
+            cache[x][y] = Some(adt.clone());
+        }
+        Some(adt)
+    }
 }
 
 struct AdtWithDirFileCache {
-    _f:             ADTFile,
+    f:              ADTFile,
+    cacheable:      bool,
     dir_file_cache: Option<Vec<VmapModelSpawnWithMapId>>,
+}
+
+impl AdtWithDirFileCache {
+    fn init(
+        &mut self,
+        storage: &CascStorageHandle,
+        vm_ex: &VmapExtractor,
+        wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
+        map_id: u32,
+        original_map_id: u32,
+    ) -> AzResult<()> {
+        if let Some(dfc) = &self.dir_file_cache {
+            if dfc.is_empty() {
+                return Ok(());
+            }
+            let mut dirfile = io::BufWriter::new(fs::File::options().append(true).open(&vm_ex.model_spawns_tmp)?);
+            for cached in dfc {
+                let mut cached = cached.clone();
+                cached.map_num = map_id;
+                if map_id != original_map_id {
+                    cached.flags |= ModelFlags::ModParentSpawn;
+                }
+                bincode_serialise(&mut dirfile, &cached)?;
+            }
+            return Ok(());
+        }
+        if self.cacheable {
+            self.dir_file_cache = Some(vec![]);
+        }
+        let mut p_dir_file = io::BufWriter::new(fs::File::options().append(true).open(&vm_ex.model_spawns_tmp)?);
+        // Do some extraction here as well.
+        for mddf in self.f.mddf.iter() {
+            for doodad_def in mddf.doodad_defs.iter() {
+                let (storage_path, name) = if doodad_def.flags & 0x40 == 0 {
+                    let path = self
+                        .f
+                        .model_paths
+                        .get(&(doodad_def.id as usize))
+                        .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", doodad_def.id, self.f.model_paths))
+                        .clone();
+                    let name = get_fixed_plain_name(&path);
+                    (path, name)
+                } else {
+                    let fid = doodad_def.id;
+                    let filename = format!("FILE{fid:08X}.xxx");
+                    (filename.clone(), filename)
+                };
+                let ok = vm_ex
+                    .extract_single_model(storage, &storage_path)
+                    .map_err(|e| {
+                        if !e.to_string().contains("has no bounding triangles") {
+                            warn!("AdtWithDirFileCache::init extract_single_model err for path {storage_path} due to err: {e}");
+                        }
+                    })
+                    .is_ok();
+                if ok {
+                    _ = vm_ex
+                        .doodad_extract(
+                            doodad_def,
+                            &name,
+                            map_id,
+                            original_map_id,
+                            &mut p_dir_file,
+                            &mut self.dir_file_cache,
+                        )
+                        .map_err(|e| {
+                            warn!("AdtWithDirFileCache::init doodad_extract err for {name} due to err: {e}");
+                        });
+                }
+            }
+        }
+        for modf in self.f.modf.iter() {
+            for map_obj_def in modf.map_object_defs.iter() {
+                let (storage_path, name) = if map_obj_def.flags & 0x8 == 0 {
+                    let path = self
+                        .f
+                        .wmo_paths
+                        .get(&(map_obj_def.id as usize))
+                        .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", map_obj_def.id, self.f.wmo_paths));
+                    let wmo_inst_name = get_fixed_plain_name(path);
+                    (path.clone(), wmo_inst_name)
+                } else {
+                    let fid = map_obj_def.id;
+                    let filename = format!("FILE{fid:08X}.xxx");
+                    (filename.clone(), filename)
+                };
+
+                _ = vm_ex.extract_single_wmo(storage, &storage_path, wmo_doodads).map_err(|e| {
+                    warn!("AdtWithDirFileCache::init extract_single_wmo err for path {storage_path} due to err: {e}");
+                });
+
+                _ = vm_ex
+                    .mapobject_extract(
+                        map_obj_def,
+                        &name,
+                        false,
+                        map_id,
+                        original_map_id,
+                        &mut p_dir_file,
+                        &mut self.dir_file_cache,
+                    )
+                    .map_err(|e| {
+                        warn!("AdtWithDirFileCache::init mapobject_extract err for name {name} due to err: {e}");
+                    });
+                _ = vm_ex
+                    .doodad_extractset(
+                        &name,
+                        map_obj_def,
+                        false,
+                        map_id,
+                        original_map_id,
+                        wmo_doodads,
+                        &mut p_dir_file,
+                        &mut self.dir_file_cache,
+                    )
+                    .map_err(|e| {
+                        warn!("AdtWithDirFileCache::init doodad_extractset err for name {name} due to err: {e}");
+                    });
+            }
+        }
+        Ok(())
+    }
 }
 
 impl VmapExtractor {
@@ -250,24 +402,10 @@ impl VmapExtractor {
             info!("Extracting to vmap: {}", file_name);
         }
         let mut froot = WmoRoot::build(storage, file_name)?;
-        let mut to_remove = vec![];
-        for (k, s) in froot.doodad_data.references.iter() {
-            match self.extract_single_model(storage, s) {
-                Ok(_) => {
-                    //  valid_doodad_name_indices.insert(*doodad_name_index);
-                },
-                Err(e) => {
-                    if !e.to_string().contains("has no bounding triangles") {
-                        warn!("extract_single_wmo extract_single_model err for path {s} due to err: {e}");
-                    }
-                    to_remove.push(*k);
-                },
-            };
-        }
-        froot.doodad_data.references.retain(|k, _v| {
-            let in_remove = to_remove.contains(k);
-            !in_remove
-        });
+        froot
+            .doodad_data
+            .references
+            .retain(|_k, s| self.extract_single_model(storage, s).is_ok());
         if !file_exist {
             // save only if not exist. The above code is also to ensure that the model spawns are always idempotent.
             let mut output = buffered_file_create(&sz_local_file).map_err(|e| {
@@ -330,19 +468,21 @@ impl VmapExtractor {
     /// such as invariants within the WoW client files that arent met are *PANICKED*.
     ///
     /// for the get part of getWDT itself, it should be done by just a normal `wdts.get_mut`
-    #[instrument(skip_all, fields(map_id=map.id, map_name=map.directory.def_str()))]
-    fn get_or_extract_wdt<'a>(
+    #[instrument(skip_all, fields(map_id=map_id))]
+    fn get_wdt<'a>(
         &self,
-        map: &Map,
+        map_id: u32,
         storage: &CascStorageHandle,
-        wdts: &'a mut HashMap<u32, WdtWithAdts>,
+        maps: &BTreeMap<u32, Map>,
+        maps_that_are_parents: &BTreeSet<u32>,
+        wdts: &'a mut HashMap<u32, Arc<Mutex<WdtWithAdts>>>,
         wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
-    ) -> Option<&'a mut WdtWithAdts> {
-        if wdts.contains_key(&map.id) {
-            return wdts.get_mut(&map.id);
+    ) -> Option<Arc<Mutex<WdtWithAdts>>> {
+        if let Some(wdt) = wdts.get(&map_id) {
+            return Some(wdt.clone());
         }
-        let map_name = map.directory.def_str();
-        let storage_path = format!("World/Maps/{map_name}/{map_name}.wdt");
+        let name = maps.get(&map_id).unwrap().directory.def_str();
+        let storage_path = format!("World/Maps/{name}/{name}.wdt");
         let wdt = match WDTFile::build(storage, &storage_path) {
             Err(_e) => {
                 warn!("unable to open WDT file {storage_path}: {_e}");
@@ -350,6 +490,15 @@ impl VmapExtractor {
             },
             Ok(wdt) => wdt,
         };
+        // cache ADTs for maps that have parent maps
+        let cache = maps_that_are_parents.get(&map_id).is_some();
+        let adt_cache = if cache {
+            Some(vec![vec![None; WDT_MAP_SIZE]; WDT_MAP_SIZE])
+        } else {
+            None
+        };
+        let mut p_dir_file = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp).ok()?);
+        let mut dir_file_cache = None;
         // do some extraction also
         // global wmo instance data
         for modf in wdt.modf.iter() {
@@ -365,42 +514,38 @@ impl VmapExtractor {
                 };
 
                 _ = self.extract_single_wmo(storage, &storage_path, wmo_doodads).map_err(|e| {
-                    warn!("get_or_extract_wdt extract_single_wmo err for path {storage_path} due to err: {e}");
+                    warn!("get_wdt extract_single_wmo err for path {storage_path} due to err: {e}");
                 });
                 _ = self
-                    .mapobject_extract(map_obj_def, &name, true, map.id, map.id, &mut None)
+                    .mapobject_extract(map_obj_def, &name, true, map_id, map_id, &mut p_dir_file, &mut dir_file_cache)
                     .map_err(|e| {
-                        warn!("get_or_extract_wdt mapobject_extract err for name {name} due to err: {e}");
+                        warn!("get_wdt mapobject_extract err for name {name} due to err: {e}");
                     });
                 _ = self
-                    .doodad_extractset(&name, map_obj_def, true, map.id, map.id, wmo_doodads, &mut None)
+                    .doodad_extractset(
+                        &name,
+                        map_obj_def,
+                        true,
+                        map_id,
+                        map_id,
+                        wmo_doodads,
+                        &mut p_dir_file,
+                        &mut dir_file_cache,
+                    )
                     .map_err(|e| {
-                        warn!("get_or_extract_wdt doodad_extractset err for name {name} due to err: {e}");
+                        warn!("get_wdt doodad_extractset err for name {name} due to err: {e}");
                     });
             }
         }
-
-        let map_id = map.id;
-        // cache ADTs for maps that have parent maps
-        let adt_cache = if map.parent_map_id >= 0 {
-            let mut c = Vec::new();
-            c.resize_with(WDT_MAP_SIZE, || {
-                let mut v = Vec::new();
-                v.resize_with(WDT_MAP_SIZE, || None);
-                v
-            });
-            Some(c)
-        } else {
-            None
-        };
-        Some(wdts.entry(map.id).or_insert(WdtWithAdts {
-            map_name,
-            map_id,
+        let wdt = wdts.entry(map_id).or_insert(Arc::new(Mutex::new(WdtWithAdts {
+            map_name: name,
             _wdt: wdt,
             adt_cache,
-        }))
+        })));
+        Some(wdt.clone())
     }
 
+    #[rustfmt::skip]
     pub fn parse_map_files(
         &self,
         locale: Locale,
@@ -413,48 +558,39 @@ impl VmapExtractor {
         let source = storage.open_file("DBFilesClient/Map.db2", CascLocale::None.into())?;
         let db2 = wdc1::FileLoader::<Map>::from_reader(source, locale as u32)?;
         let maps = db2.produce_data()?.map(|r| (r.id, r)).collect::<BTreeMap<_, _>>();
+        let maps_that_are_parents = maps.iter().filter_map(|(_, m)| if m.parent_map_id >= 0 { Some(m.parent_map_id.try_into().unwrap()) } else { None } ).collect();
         let maps_len = maps.len();
         info!("Done! ({maps_len} maps loaded)");
 
         let mut wdts = HashMap::new();
         let now = Instant::now();
-        for (i, map) in maps.values().enumerate() {
-            // Populate `wdts` with current map's and parent map's WDT files first
-            let map_id = if let Some(wdt) = self.get_or_extract_wdt(map, storage, &mut wdts, wmo_doodads) {
-                wdt.map_id
-            } else {
-                continue;
-            };
-            let parent_id = if map.parent_map_id >= 0 {
-                let parent_id = map.parent_map_id.try_into().unwrap();
-                maps.get(&parent_id)
-                    .and_then(|m| self.get_or_extract_wdt(m, storage, &mut wdts, wmo_doodads).map(|w| w.map_id))
-            } else {
-                None
-            };
-
-            let map_name = map.directory.def_str();
-            // After populating, then process ADTs
-            info!("[{i}/{maps_len}] - Processing Map file {map_id} - {map_name}");
-            for x in 0..WDT_MAP_SIZE {
-                for y in 0..WDT_MAP_SIZE {
-                    // tmp_store is purely for the case where there is no caching.
-                    // It is done to solve the issue where `store_adt_in_wdt`
-                    // returns a reference as the case no caching, the resultant
-                    // ADT needs to be owned by something.
-                    //
-                    // Can think of tmp_store as `WDT->FreeADT` in this case as
-                    // its dropped after the loop.
-                    let mut tmp_store = None;
-                    if let Some(r) = self.store_adt_in_wdt(storage, map_id, map_id, x, y, &mut wdts, &mut tmp_store, wmo_doodads) {
-                        r
-                    } else if let Some(r) = parent_id.and_then(|original_map_id| {
-                        self.store_adt_in_wdt(storage, map_id, original_map_id, x, y, &mut wdts, &mut tmp_store, wmo_doodads)
-                    }) {
-                        r
-                    } else {
-                        continue;
-                    };
+        for (i, (map_id, map)) in maps.iter().enumerate() {
+            if let Some(wdt) = self.get_wdt(*map_id, storage, &maps, &maps_that_are_parents, &mut wdts, wmo_doodads) {
+                let parent_wdt = if map.parent_map_id >= 0 {
+                    self.get_wdt(map.parent_map_id.try_into().unwrap(), storage, &maps, &maps_that_are_parents, &mut wdts, wmo_doodads)
+                } else {
+                    None
+                };
+                let map_id = map.id;
+                let map_name = map.directory.def_str();
+                // After populating, then process ADTs
+                info!("[{i}/{maps_len}] - Processing Map file {map_id} - {map_name}");
+                for x in 0..WDT_MAP_SIZE {
+                    for y in 0..WDT_MAP_SIZE {
+                        let mut success = false;
+                        if let Some(adt) = wdt.lock().unwrap().get_map(storage, x, y) {
+                            success = adt.lock().unwrap().init(storage, self, wmo_doodads, map_id, map_id).is_ok();
+                        }
+                        match &parent_wdt {
+                            Some(p_wdt) if !success => {
+                                let original_map_id = map.parent_map_id.try_into().unwrap();
+                                if let Some(adt) = p_wdt.lock().unwrap().get_map(storage, x, y) {
+                                    _ = adt.lock().unwrap().init(storage, self, wmo_doodads, map_id, original_map_id).is_ok();
+                                }
+                            },
+                            _ => {},
+                        }
+                    }
                 }
             }
         }
@@ -465,14 +601,16 @@ impl VmapExtractor {
         Ok(())
     }
 
+    #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(map_id=map_id, original_map_id=original_map_id))]
-    pub fn mapobject_extract(
+    pub fn mapobject_extract<W: io::Write>(
         &self,
         map_obj_def: &AdtMapObjectDefs,
         wmo_inst_name: &str,
         is_global_wmo: bool,
         map_id: u32,
         original_map_id: u32,
+        mut p_dir_file: &mut W,
         dir_file_cache: &mut Option<Vec<VmapModelSpawnWithMapId>>,
     ) -> AzResult<()> {
         // destructible wmo, do not dump. we can handle the vmap for these
@@ -480,7 +618,6 @@ impl VmapExtractor {
         if (map_obj_def.flags & 0x1) != 0 {
             return Ok(());
         }
-        let mut p_dir_file = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp)?);
 
         //-----------add_in _dir_file----------------
         let tempname = self.temp_vmap_dir.join(wmo_inst_name);
@@ -508,7 +645,7 @@ impl VmapExtractor {
             flags |= ModelFlags::ModParentSpawn;
         }
         //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, Bound_lo, Bound_hi, name
-        let mut m = VmapModelSpawnWithMapId::new(
+        let m = VmapModelSpawnWithMapId::new(
             map_id,
             flags,
             map_obj_def.name_set,
@@ -521,7 +658,8 @@ impl VmapExtractor {
         );
         bincode_serialise(&mut p_dir_file, &m)?;
         if let Some(dfc) = dir_file_cache {
-            m.flags.retain(|fl| fl != ModelFlags::ModParentSpawn);
+            let mut m = m.clone();
+            m.flags = None.into();
             dfc.push(m);
         }
         Ok(())
@@ -529,7 +667,7 @@ impl VmapExtractor {
 
     #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(map_id=map_id, original_map_id=original_map_id))]
-    pub fn doodad_extractset(
+    pub fn doodad_extractset<W: io::Write>(
         &self,
         wmo_inst_name: &str,
         wmo: &AdtMapObjectDefs,
@@ -537,10 +675,9 @@ impl VmapExtractor {
         map_id: u32,
         original_map_id: u32,
         wmo_doodads: &BTreeMap<String, WmoDoodadData>,
+        mut p_dir_file: &mut W,
         dir_file_cache: &mut Option<Vec<VmapModelSpawnWithMapId>>,
     ) -> AzResult<()> {
-        let mut p_dir_file = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp)?);
-
         let doodad_data = match wmo_doodads.get(wmo_inst_name) {
             None => {
                 let keys = wmo_doodads.keys().collect::<Vec<_>>();
@@ -629,7 +766,7 @@ impl VmapExtractor {
                 }
 
                 //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, name
-                let mut m = VmapModelSpawnWithMapId::new(
+                let m = VmapModelSpawnWithMapId::new(
                     map_id,
                     tcflags,
                     name_set, // not used for models
@@ -645,7 +782,8 @@ impl VmapExtractor {
                     continue;
                 };
                 if let Some(dfc) = dir_file_cache {
-                    m.flags.retain(|fl| fl != ModelFlags::ModParentSpawn);
+                    let mut m = m.clone();
+                    m.flags = ModelFlags::ModM2.into();
                     dfc.push(m);
                 }
             }
@@ -660,15 +798,15 @@ impl VmapExtractor {
     }
 
     #[instrument(skip_all, fields(map_id=map_id, original_map_id=original_map_id))]
-    pub fn doodad_extract(
+    pub fn doodad_extract<W: io::Write>(
         &self,
         doodad_def: &AdtDoodadDef,
         model_inst_name: &str,
         map_id: u32,
         original_map_id: u32,
+        mut p_dir_file: &mut W,
         dir_file_cache: &mut Option<Vec<VmapModelSpawnWithMapId>>,
     ) -> AzResult<()> {
-        let mut p_dir_file = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp)?);
         let tempname = self.temp_vmap_dir.join(model_inst_name);
         let mut input = buffered_file_open(tempname)?;
         let (n_vertices, _) = WorldModel_Raw::read_world_model_raw_header(&mut input)?;
@@ -685,7 +823,7 @@ impl VmapExtractor {
             flags |= ModelFlags::ModParentSpawn;
         }
         //write mapID, Flags, name_set, unique_id, Pos, Rot, Scale, name
-        let mut m = VmapModelSpawnWithMapId::new(
+        let m = VmapModelSpawnWithMapId::new(
             map_id,
             flags,
             0, // not used for models
@@ -698,140 +836,11 @@ impl VmapExtractor {
         );
         bincode_serialise(&mut p_dir_file, &m)?;
         if let Some(dfc) = dir_file_cache {
-            m.flags.retain(|fl| fl != ModelFlags::ModParentSpawn);
+            let mut m = m.clone();
+            m.flags = ModelFlags::ModM2.into();
             dfc.push(m);
         }
         Ok(())
-    }
-
-    /// equivalent to WDT->GetMap(x, y) and ADT->init(map_id, original_map_id)
-    /// in a single step
-    #[expect(clippy::too_many_arguments)]
-    #[instrument(skip_all, fields(map_id=map_id, original_map_id=original_map_id, x=x, y=y))]
-    fn store_adt_in_wdt<'a>(
-        &self,
-        storage: &CascStorageHandle,
-        map_id: u32,
-        original_map_id: u32,
-        x: usize,
-        y: usize,
-        wdts: &'a mut HashMap<u32, WdtWithAdts>,
-        tmp_store: &'a mut Option<AdtWithDirFileCache>,
-        wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
-    ) -> Option<&'a mut AdtWithDirFileCache> {
-        let wdt = match wdts.get_mut(&original_map_id) {
-            None => return None,
-            Some(wdt) => wdt,
-        };
-        let should_cache_adts = wdt.adt_cache.is_some();
-        // initFromCache routine from TC / AC
-        let mut adt_has_dir_file_cache = false;
-        if let Some(dir_file_cache) = wdt
-            .adt_cache
-            .as_ref()
-            .and_then(|cache| cache[x][y].as_ref())
-            .and_then(|c| c.dir_file_cache.as_ref())
-        {
-            adt_has_dir_file_cache = true;
-            let mut dirfile = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp).ok()?);
-
-            for cached in dir_file_cache {
-                let mut spawn = cached.clone();
-                spawn.map_num = map_id;
-                if map_id != original_map_id {
-                    spawn.flags |= ModelFlags::ModParentSpawn;
-                }
-                bincode_serialise(&mut dirfile, &spawn).ok()?;
-            }
-        }
-        if adt_has_dir_file_cache {
-            return wdt.adt_cache.as_mut().and_then(|cache| cache[x][y].as_mut());
-        }
-
-        let mut dir_file_cache = if should_cache_adts { Some(vec![]) } else { None };
-
-        let map_name = &wdt.map_name;
-        let storage_path = format!("World/Maps/{map_name}/{map_name}_{x}_{y}_obj0.adt");
-        let adt = match ADTFile::build(storage, &storage_path) {
-            Err(_e) => {
-                // warn!("Unable to get ADT file {storage_path} with warning: {e}, moving on");
-                return None;
-            },
-            Ok(f) => f,
-        };
-        // Do some extraction here as well.
-        for mddf in adt.mddf.iter() {
-            for doodad_def in mddf.doodad_defs.iter() {
-                let (storage_path, name) = if doodad_def.flags & 0x40 == 0 {
-                    let path = adt
-                        .model_paths
-                        .get(&(doodad_def.id as usize))
-                        .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", doodad_def.id, adt.model_paths))
-                        .clone();
-                    let name = get_fixed_plain_name(&path);
-                    (path, name)
-                } else {
-                    let fid = doodad_def.id;
-                    let filename = format!("FILE{fid:08X}.xxx");
-                    (filename.clone(), filename)
-                };
-                let ok = self
-                    .extract_single_model(storage, &storage_path)
-                    .map_err(|e| {
-                        if !e.to_string().contains("has no bounding triangles") {
-                            warn!("store_adt_in_wdt extract_single_model err for path {storage_path} due to err: {e}");
-                        }
-                    })
-                    .is_ok();
-                if ok {
-                    _ = self
-                        .doodad_extract(doodad_def, &name, map_id, original_map_id, &mut dir_file_cache)
-                        .map_err(|e| {
-                            warn!("store_adt_in_wdt doodad_extract err for {name} due to err: {e}");
-                        });
-                }
-            }
-        }
-        for modf in adt.modf.iter() {
-            for map_obj_def in modf.map_object_defs.iter() {
-                let (storage_path, name) = if map_obj_def.flags & 0x8 == 0 {
-                    let path = adt
-                        .wmo_paths
-                        .get(&(map_obj_def.id as usize))
-                        .unwrap_or_else(|| panic!("name_id {} should exist in {:?}", map_obj_def.id, adt.wmo_paths));
-                    let wmo_inst_name = get_fixed_plain_name(path);
-                    (path.clone(), wmo_inst_name)
-                } else {
-                    let fid = map_obj_def.id;
-                    let filename = format!("FILE{fid:08X}.xxx");
-                    (filename.clone(), filename)
-                };
-
-                _ = self.extract_single_wmo(storage, &storage_path, wmo_doodads).map_err(|e| {
-                    warn!("store_adt_in_wdt extract_single_wmo err for path {storage_path} due to err: {e}");
-                });
-
-                _ = self
-                    .mapobject_extract(map_obj_def, &name, false, map_id, original_map_id, &mut dir_file_cache)
-                    .map_err(|e| {
-                        warn!("store_adt_in_wdt mapobject_extract err for name {name} due to err: {e}");
-                    });
-                _ = self
-                    .doodad_extractset(&name, map_obj_def, false, map_id, original_map_id, wmo_doodads, &mut dir_file_cache)
-                    .map_err(|e| {
-                        warn!("store_adt_in_wdt doodad_extractset err for name {name} due to err: {e}");
-                    });
-            }
-        }
-
-        let res = Some(AdtWithDirFileCache { _f: adt, dir_file_cache });
-        if let Some(cache) = &mut wdt.adt_cache {
-            cache[x][y] = res;
-            cache[x][y].as_mut()
-        } else {
-            *tmp_store = res;
-            tmp_store.as_mut()
-        }
     }
 }
 

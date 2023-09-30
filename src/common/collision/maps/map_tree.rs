@@ -58,7 +58,7 @@ pub struct StaticMapTree {
     /// Store all the map tile idents that are loaded for that map
     /// some maps are not splitted into tiles and we have to make sure, not removing the map before all tiles are removed
     /// empty tiles have no tile file, hence map with bool instead of just a set (consistency check)
-    loaded_tiles:  HashMap<u32, Vec<Arc<ModelInstance>>>,
+    loaded_tiles:  HashMap<(u16, u16), Vec<Arc<ModelInstance>>>,
     // std::vector<std::pair<int32, int32>> iLoadedPrimaryTiles;
     base_path:     PathBuf,
 }
@@ -94,7 +94,7 @@ impl StaticMapTree {
         parent_map_data: Arc<HashMap<u32, u32>>,
         model_store: Arc<Mutex<VMapModelStore>>,
     ) -> AzResult<()> {
-        let packed_id = Self::pack_tile_id(tile_x, tile_y);
+        let packed_id = (tile_x, tile_y);
         let TileFileOpenResult {
             spawns,
             name: file_result_name,
@@ -160,7 +160,7 @@ impl StaticMapTree {
         model_store: Arc<Mutex<VMapModelStore>>,
         parent_map_data: Arc<HashMap<u32, u32>>,
     ) {
-        let tile_id = Self::pack_tile_id(tile_x, tile_y);
+        let tile_id = (tile_x, tile_y);
         // Drop the spawns in `loaded_tiles`
         let had_tile_loaded = match self.loaded_tiles.remove(&tile_id) {
             None => {
@@ -207,7 +207,7 @@ impl StaticMapTree {
 
     pub fn get_tile_model_instances(&self, tile_x: u16, tile_y: u16) -> Vec<Arc<ModelInstance>> {
         self.loaded_tiles
-            .get(&Self::pack_tile_id(tile_x, tile_y))
+            .get(&(tile_x, tile_y))
             .into_iter()
             .flat_map(|v| v.iter().cloned())
             .collect()
@@ -215,18 +215,6 @@ impl StaticMapTree {
 
     pub fn has_no_loaded_tiles(&self) -> bool {
         self.loaded_tiles.is_empty()
-    }
-
-    pub fn pack_tile_id(tile_x: u16, tile_y: u16) -> u32 {
-        let packed = (tile_x as u32) << 16;
-        packed | (tile_y as u32)
-    }
-
-    pub fn unpack_tile_id(id: u32) -> (u16, u16) {
-        let tile_x = (id >> 16) as _;
-        let tile_y = ((id << 16) >> 16) as _;
-
-        (tile_x, tile_y)
     }
 
     pub fn map_file_name<P: AsRef<Path>, M: Num + Display>(dir: P, map_id: M) -> PathBuf {
@@ -399,29 +387,3 @@ struct TileFileOpenResult {
 //             StaticMapTree(StaticMapTree const& right) = delete;
 //             StaticMapTree& operator=(StaticMapTree const& right) = delete;
 // };
-
-#[cfg(test)]
-mod tests {
-    use super::StaticMapTree;
-
-    #[test]
-    fn it_ensures_that_static_map_tree_packing_unpacking_works() {
-        let tests = [
-            (u16::MIN, u16::MIN, 0),
-            (u16::MIN, u16::MAX, 65535),
-            (u16::MAX, u16::MIN, 4294901760),
-            (u16::MAX, u16::MAX, 4294967295),
-        ];
-
-        for (idx, (tile_x, tile_y, expected_packed)) in tests.into_iter().enumerate() {
-            let result_packed = StaticMapTree::pack_tile_id(tile_x, tile_y);
-            assert_eq!(
-                result_packed, expected_packed,
-                "test {idx} failed: got packed {result_packed}, expected {expected_packed}"
-            );
-            let (result_x, result_y) = StaticMapTree::unpack_tile_id(result_packed);
-            assert_eq!(result_x, tile_x, "test {idx} failed: got x {result_x}, expected {tile_x}");
-            assert_eq!(result_y, tile_y, "test {idx} failed: got y {result_y}, expected {tile_y}");
-        }
-    }
-}

@@ -106,7 +106,8 @@ pub fn bincode_deserialise<R: io::Read, T: ?Sized + serde::de::DeserializeOwned>
     bincode_cfg!().deserialize_from(r)
 }
 
-const DEFAULT_BUFFER_SIZE: usize = 2 * 1024 * 1024; // i.e. 2 Mebibyte
+/// Set big buffer for now.
+const DEFAULT_BUFFER_SIZE: usize = 256 * 1024 * 1024; // i.e. 256 Mebibyte
 
 pub fn buffered_file_open<P: AsRef<Path>>(p: P) -> io::Result<io::BufReader<fs::File>> {
     Ok(io::BufReader::with_capacity(DEFAULT_BUFFER_SIZE, fs::File::open(p)?))

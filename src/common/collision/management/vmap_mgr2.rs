@@ -217,9 +217,8 @@ impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
         }
     }
 
-    /// Retieves the parent map ID, if it doesnt exist, return the current map_id
-    pub fn get_parent_map_id(&self, map_id: u32) -> u32 {
-        self.parent_map_data.get(&map_id).cloned().unwrap_or(map_id)
+    pub fn get_parent_map_id(&self, map_id: u32) -> Option<u32> {
+        self.parent_map_data.get(&map_id).cloned()
     }
 }
 
