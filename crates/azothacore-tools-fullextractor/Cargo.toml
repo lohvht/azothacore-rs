@@ -1,0 +1,13 @@
+[package]
+name = "azothacore-tools-fullextractor"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+# Local crates
+azothacore-common.workspace=true
+azothacore-tools.workspace=true
+# External crates
+tracing.workspace = true
+walkdir.workspace = true
+libc = "0.2.148"

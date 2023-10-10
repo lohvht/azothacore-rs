@@ -1,0 +1,12 @@
+[package]
+name = "skeleton-module"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+# Local crates
+azothacore-common.workspace = true
+azothacore-server.workspace = true
+# External crates
+tracing.workspace = true
+serde.workspace = true

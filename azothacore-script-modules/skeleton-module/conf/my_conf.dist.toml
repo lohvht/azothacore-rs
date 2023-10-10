@@ -1,0 +1,12 @@
+
+########################################
+# My module configuration
+########################################
+#
+#    enabled
+#        Description: Enable my module and print "Hello World" message at server start
+#        Default:     false - Disabled
+#                     true  - Enabled
+#
+
+enabled = false

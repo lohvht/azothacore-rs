@@ -1,66 +1,36 @@
 [workspace]
-members = ["crates/*"]
-
-[package]
-name = "azothacore-rs"
-version = "0.1.0"
-edition = "2021"
-rust-version = "1.70.0"
-authors = ["Hirogoro <hirogoro@gmail.com>"]
+resolver = "2"
+members = ["crates/*", "azothacore-script-modules/*"]
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [profile.release]
 lto = true
 
-[profile.dev.package.sqlx-macros]
-opt-level = 3
-
-[dependencies]
-# divert = { path = "crates/divert" } 
-casclib-sys = { version = "0.1", path = "crates/casclib-sys" }
-azothacore-proc-macros = { version = "0.1", path = "crates/azothacore-proc-macros" }
-wow-db2 = { version = "0.1", path = "crates/wow-db2" }
-wow-db2-proc-macros = { version = "0.1", path = "crates/wow-db2-proc-macros" }
-tokio = { version = "1.26.0", features = ["full", "tracing"] }
-clap =  { version = "4.1.8", features = ["derive"] }
+[workspace.dependencies]
+# Local crates
+azothacore-tools = { path = "crates/azothacore-tools" }
+azothacore-server = { path = "crates/azothacore-server" }
+azothacore-common = { path = "crates/azothacore-common" }
+azothacore-modules = { path = "azothacore-script-modules/modules" }
+casclib-sys = { path = "crates/casclib-sys" }
+wow-db2 = { path = "crates/wow-db2" }
+wow-db2-proc-macros = { path = "crates/wow-db2-proc-macros" }
+# External crates
+flagset = { version = "0.4.3", features = ["serde"] }
+futures = "0.3.27"
+num-traits = { version = "0.2.15" }
+num-derive = { version = "0.3.3" }
+num = { version = "0.4.1" }
+thiserror = { version = "1.0.40" }
 serde = { version = "1.0.152", features = ["derive"] }
 toml = { version = "0.7.2", features = ["preserve_order"] }
-structstruck = "0.4.0"
-tracing = { version = "0.1.37" }
-tracing-subscriber = { version = "0.3", features = ["registry", "env-filter"] }
-console-subscriber = { version = "0.1.8" }
-tracing-appender = "0.2"
-owo-colors = "3"
-git-version = "0.3.5"
-rand = "0.8.5"
-num-bigint = { version = "0.4.3", features = ["rand"] }
-const_format = "0.2.30"
-regex = "1.7.1"
-flagset = { version = "0.4.3", features = ["serde"] }
-sqlx = { version = "0.6.2", features = [ "runtime-tokio-rustls", "mysql", "time"] }
-thiserror = "1.0.40"
-walkdir = "2.3.3"
-serde-inline-default = "0.1.1"
 serde_default = "0.1.0"
-futures = "0.3.27"
-sql-parse = "0.12.0"
-sha2 = "0.10.6"
-hex_fmt = "0.3.0"
-hugsqlx = {version = "0.1.4", features = [ "mysql" ]}
-async-trait = "0.1.68"
-num-traits = "0.2.15"
-num-derive = "0.3.3"
-hex = "0.4.3"
-byteorder = "1.4.3"
-nalgebra = { version = "0.32.2", features = [ "serde-serialize", "convert-glam023" ] }
-bincode = "1.3.3"
-rayon = "1.7.0"
-recastnavigation-sys = { version = "1.0.1", features = [ "detour", "recast", "detour_large_nav_meshes" ] }
-glob = "0.3.1"
-sscanf = "0.4.1"
+serde-inline-default = "0.1.1"
+structstruck = "0.4.0"
+sqlx = { version = "0.6.2", features = [ "runtime-tokio-rustls", "mysql", "time"] }
+nalgebra = { version = "0.32.2", features = [ "serde-serialize" ] }
 parry3d = { version = "0.13.5", features = ["serde-serialize"] }
-zerocopy = { version = "0.7.1" }
-zerocopy-derive = { version = "0.7.1" }
-crossbeam = { version = "0.8.2" }
-libc = "0.2.148"
-num = "0.4.1"
+tokio = { version = "1.26.0", features = ["full", "tracing"] }
+tracing = { version = "0.1.37" }
+recastnavigation-sys = { version = "1.0.1", features = [ "detour", "recast", "detour_large_nav_meshes" ] }
+walkdir = { version = "2.3.3" }

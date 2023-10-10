@@ -1,0 +1,30 @@
+[package]
+name = "azothacore-server"
+version = "0.0.0"
+edition = "2021"
+
+[profile.dev.package.sqlx-macros]
+opt-level = 3
+
+[dependencies]
+# Local crates
+azothacore-common.workspace = true
+wow-db2.workspace = true
+wow-db2-proc-macros.workspace = true
+# External crates
+tokio.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+nalgebra.workspace = true
+serde.workspace = true
+flagset.workspace = true
+num.workspace = true
+num-derive.workspace = true
+num-traits.workspace = true
+sqlx.workspace = true
+walkdir.workspace = true
+hugsqlx = { git = "https://github.com/lohvht/hugsqlx.git", branch = "feat/6-queries-workspace-and-cargo-manifest-dir", features = [ "mysql" ] } # version = "0.1.4",
+sql-parse = "0.12.0"
+async-trait = "0.1.68"
+hex_fmt = "0.3.0"
+sha2 = "0.10.6"

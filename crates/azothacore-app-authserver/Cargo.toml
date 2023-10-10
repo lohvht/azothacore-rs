@@ -1,0 +1,7 @@
+[package]
+name = "azothacore-app-authserver"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+tracing.workspace = true

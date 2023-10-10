@@ -1,0 +1,19 @@
+[package]
+name = "azothacore-app-worldserver"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+# Local crates
+azothacore-common.workspace=true
+azothacore-server.workspace=true
+azothacore-modules.workspace=true
+# External crates
+flagset.workspace =true
+tracing.workspace = true
+futures.workspace = true
+tokio.workspace = true
+sqlx.workspace = true
+clap =  { version = "4.1.8", features = ["derive"] }
+rand = "0.8.5"
+num-bigint = { version = "0.4.3", features = ["rand"] }
