@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::RwLock,
-};
+use std::{path::Path, sync::RwLock};
 
 use tracing::{error, info, instrument};
 
@@ -13,31 +10,28 @@ pub use structs::*;
 use crate::AzResult;
 
 pub struct ConfigMgr {
-    filename:    String,
-    dry_run:     bool,
-    worldconfig: Option<WorldserverConfig>,
-}
-
-/// Get the config file or config
-fn config_or_configdist<P: AsRef<Path>>(file_name: P) -> PathBuf {
-    if file_name.as_ref().exists() {
-        return file_name.as_ref().into();
-    }
-    file_name.as_ref().with_extension("dist.toml").to_path_buf()
+    filename: String,
+    dry_run:  bool,
+    config:   Option<ConfigTable>,
 }
 
 impl ConfigMgr {
     const fn new() -> ConfigMgr {
         ConfigMgr {
-            filename:    String::new(),
-            dry_run:     false,
-            worldconfig: None,
+            filename: String::new(),
+            dry_run:  false,
+            config:   None,
         }
     }
 
-    /// Retrieves the worldserver configuration. It is expected that the worldserver values are set
-    pub fn world(&self) -> &WorldserverConfig {
-        self.worldconfig.as_ref().unwrap()
+    pub fn get_option<'de, T>(&self, key: &str) -> ConfigGetResult<T>
+    where
+        T: serde::Deserialize<'de>,
+    {
+        self.config
+            .as_ref()
+            .expect("expect configuration to be set already before calling get_option")
+            .get(key)
     }
 
     pub fn is_dry_run(&self) -> bool {
@@ -49,7 +43,7 @@ impl ConfigMgr {
     }
 
     pub fn configure<P: AsRef<Path>>(&mut self, init_file_name: P, dry_run: bool) {
-        self.filename = config_or_configdist(init_file_name).to_str().unwrap().to_string();
+        self.filename = init_file_name.as_ref().to_str().unwrap().to_string();
         self.dry_run = dry_run;
     }
 
@@ -64,7 +58,7 @@ impl ConfigMgr {
     /// Loads the main app configuration. This doesnt load the module configurations
     #[instrument(skip(self))]
     pub fn load_app_configs(&mut self) -> AzResult<()> {
-        self.worldconfig = Some(toml_from_filepath(&self.filename)?);
+        self.config = Some(toml_from_filepath(&self.filename)?);
         Ok(())
     }
 

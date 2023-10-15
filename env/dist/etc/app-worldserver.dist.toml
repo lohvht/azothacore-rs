@@ -1,5 +1,5 @@
 ################################################
-# AzerothCore World Server configuration file #
+# Azothazcore World Server configuration file #
 ################################################
 
 ###################################################################################################
@@ -91,60 +91,32 @@ LogsDir = ""
 #                                                                 section my.ini)
 #                     ".;/path/to/unix_socket;username;password;database" - (use Unix sockets on
 #                                                                           Unix/Linux)
-#        Default:     "127.0.0.1;3306;acore;acore;acore_auth"       - (LoginDatabaseInfo)
-#                     "127.0.0.1;3306;acore;acore;acore_world"      - (WorldDatabaseInfo)
-#                     "127.0.0.1;3306;acore;acore;acore_characters" - (CharacterDatabaseInfo)
+#        Default:     "127.0.0.1;3306;azcore;azcore;azcore_auth"       - (LoginDatabaseInfo)
+#                     "127.0.0.1;3306;azcore;azcore;azcore_world"      - (WorldDatabaseInfo)
+#                     "127.0.0.1;3306;azcore;azcore;azcore_characters" - (CharacterDatabaseInfo)
 [LoginDatabaseInfo]
 Address="127.0.0.1:3306"
-User="acore"
-Password="acore"
-DatabaseName="acore_auth"
-WorkerThreads=1
-SynchThreads=1
+User="azcore"
+Password="azcore"
+DatabaseName="azcore_auth"
 BaseFilePath="data/sql/base/db_auth"
 DBModuleName="db-auth"
 
 [WorldDatabaseInfo]
 Address="127.0.0.1:3306"
-User="acore"
-Password="acore"
-DatabaseName="acore_world"
-WorkerThreads=1
-SynchThreads=1
+User="azcore"
+Password="azcore"
+DatabaseName="azcore_world"
 BaseFilePath="data/sql/base/db_world"
 DBModuleName="db-world"
 
 [CharacterDatabaseInfo]
 Address="127.0.0.1:3306"
-User="acore"
-Password="acore"
-DatabaseName="acore_characters"
-WorkerThreads=1
-SynchThreads=1
+User="azcore"
+Password="azcore"
+DatabaseName="azcore_characters"
 BaseFilePath="data/sql/base/db_characters"
 DBModuleName="db-characters"
-
-#
-#    TempDir
-#        Description: Temp directory setting.
-#        Important:   TempDir needs to be quoted, as the string might contain space characters.
-#                     TempDir directory must exists, or the server can't work properly
-#        Example:     "/home/youruser/azerothcore/temp"
-#        Default:     "" - (Temp files will be stored in the current path)
-
-TempDir = ""
-
-#
-#    Database.Reconnect.Seconds
-#    Database.Reconnect.Attempts
-#
-#        Description: How many seconds between every reconnection attempt
-#                     and how many attempts will be performed in total
-#        Default:     20 attempts every 15 seconds
-#
-
-Database.Reconnect.Seconds = 15
-Database.Reconnect.Attempts = 20
 
 #
 #    MaxPingTime
@@ -187,26 +159,6 @@ CMakeCommand = ""
 BuildDirectory = ""
 
 #
-#    SourceDirectory
-#        Description: The path to your AzerothCore source directory.
-#                     If the path is left empty, the built-in CMAKE_SOURCE_DIR is used.
-#        Example:     "../AzerothCore"
-#        Default:     ""
-
-SourceDirectory = ""
-
-#
-#    MySQLExecutable
-#        Description: The path to your MySQL CLI binary.
-#                     If the path is left empty, built-in path from cmake is used.
-#        Example:     "C:/Program Files/MySQL/MySQL Server 8.0/bin/mysql.exe"
-#                     "mysql.exe"
-#                     "/usr/bin/mysql"
-#        Default:     ""
-
-MySQLExecutable = ""
-
-#
 #    ThreadPool
 #        Description: Number of threads to be used for the global thread pool
 #                     The thread pool is currently used for:
@@ -222,8 +174,8 @@ ThreadPool = 2
 #
 #    IPLocationFile
 #        Description: The path to your IP2Location database CSV file.
-#        Example:     "C:/acore/IP2LOCATION-LITE-DB1.CSV"
-#                     "/home/acore/IP2LOCATION-LITE-DB1.CSV"
+#        Example:     "C:/azcore/IP2LOCATION-LITE-DB1.CSV"
+#                     "/home/azcore/IP2LOCATION-LITE-DB1.CSV"
 #        Default:     ""  - (Disabled)
 #
 
@@ -1373,12 +1325,13 @@ IsPreloadedContinentTransport.Enabled = false
 #           DATABASE_LOGIN     = 1, // Auth database
 #           DATABASE_CHARACTER = 2, // Character database
 #           DATABASE_WORLD     = 4, // World database
+#           DATABASE_HOTFIX    = 8, // Hotfixes database
 #
-#        Default:     7  - (All enabled)
+#        Default:     15 - (All enabled)
 #                     4  - (Enable world only)
 #                     0  - (All disabled)
 
-Updates.EnableDatabases = 7
+Updates.EnableDatabases = 15
 
 #
 #    Updates.AutoSetup
@@ -3706,8 +3659,8 @@ DungeonAccessRequirements.LFGLevelDBCOverride = false
 #
 #    DungeonAccessRequirements.OptionalStringID
 #
-#        Description: Display an extra message from acore_strings in the chat after printing the dungeon access requirements.
-#                     To en able it set the ID of your desired string from the table acore_strings
+#        Description: Display an extra message from azcore_strings in the chat after printing the dungeon access requirements.
+#                     To en able it set the ID of your desired string from the table azcore_strings
 #        Default:     false - (Disabled)
 #                     1+ - (Enabled)
 
@@ -3905,19 +3858,59 @@ file = "DBErrors.log"
 #
 #                     appenders: List of appenders linked to logger
 #
+[[Logger]]
+name="root"
+min_level="Info"
+max_level="Error"
+appenders=["Console", "Server"]
 
-Logger=[
-    {name="root", min_level="Info", max_level="Error", appenders=["Console","Server"]},
-    {name="module", min_level="Info", max_level="Error", appenders=["Console","Server"]},
-    {name="commands::gm",min_level="Info",max_level="Error",appenders=["Console","GM"]},
-    {name="diff",min_level="Warning",max_level="Error",appenders=["Console","Server"]},
-    {name="mmaps",min_level="Info",max_level="Error",appenders=["Server"]},
-    {name="sripts::hotswap",min_level="Info",max_level="Error",appenders=["Console","Server,"]},
-    {name="server",min_level="Info",max_level="Error",appenders=["Console","Server"]},
-    {name="sql::sql",min_level="Warning",max_level="Error",appenders=["Console","DBErrors"]},
-    {name="sql",min_level="Info",max_level="Error",appenders=["Console","Server"]},
-    {name="time::update",min_level="Info",max_level="Error",appenders=["Console","Server"]},
-]
+[[Logger]]
+name="module"
+min_level="Info"
+max_level="Error"
+appenders=["Console", "Server"]
+
+[[Logger]]
+name="commands::gm"
+min_level="Info"
+max_level="Error"
+appenders=["Console", "GM"]
+
+[[Logger]]
+name="diff"
+min_level="Warning"
+max_level="Error"
+appenders=["Console", "Server"]
+
+[[Logger]]
+name="mmaps"
+min_level="Info"
+max_level="Error"
+appenders=["Server"]
+
+[[Logger]]
+name="server"
+min_level="Info"
+max_level="Error"
+appenders=["Console", "Server"]
+
+[[Logger]]
+name="sql::sql"
+min_level="Warning"
+max_level="Error"
+appenders=["Console", "DBErrors"]
+
+[[Logger]]
+name="sql"
+min_level="Info"
+max_level="Error"
+appenders=["Console", "Server"]
+
+[[Logger]]
+name="time::update"
+min_level="Info"
+max_level="Error"
+appenders=["Console", "Server"]
 
 #Logger.achievement=4,Console Server
 #Logger.addon=4,Console Server

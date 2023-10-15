@@ -248,7 +248,6 @@ dependencies = [
  "serde",
  "serde-inline-default",
  "serde_default",
- "structstruck",
  "thiserror",
  "toml",
  "tracing",

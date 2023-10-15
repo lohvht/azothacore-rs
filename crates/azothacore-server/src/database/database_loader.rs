@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use azothacore_common::configuration::{DatabaseInfo, DatabaseTypeFlags, Updates};
+use azothacore_common::configuration::{DatabaseInfo, DatabaseTypeFlags, DbUpdates};
 use sqlx::{
     mysql::{MySqlDatabaseError, MySqlPoolOptions},
     Connection,
@@ -18,7 +18,7 @@ pub struct DatabaseLoader<'d, 'u> {
     update_flags:    DatabaseTypeFlags,
     modules_list:    BTreeSet<String>,
     database_config: &'d DatabaseInfo,
-    update_config:   &'u Updates,
+    update_config:   &'u DbUpdates,
 }
 
 impl<'d, 'u> DatabaseLoader<'d, 'u> {
@@ -26,7 +26,7 @@ impl<'d, 'u> DatabaseLoader<'d, 'u> {
         update_flags: DatabaseTypeFlags,
         modules_list: Iter,
         database_config: &'d DatabaseInfo,
-        update_config: &'u Updates,
+        update_config: &'u DbUpdates,
     ) -> Self {
         Self {
             update_flags,

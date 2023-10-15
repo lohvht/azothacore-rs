@@ -7,7 +7,7 @@ use std::{
     time::Duration,
 };
 
-use azothacore_common::configuration::Updates;
+use azothacore_common::configuration::DbUpdates;
 use hex_fmt::HexFmt;
 use sha2::{Digest, Sha256};
 use sqlx::{MySql, Row};
@@ -76,7 +76,7 @@ pub struct UpdateFetcher<'u> {
     src_directory: String,
     module_target: String,
     module_list:   BTreeSet<String>,
-    update_cfg:    &'u Updates,
+    update_cfg:    &'u DbUpdates,
 }
 
 impl<'u> UpdateFetcher<'u> {
@@ -84,7 +84,7 @@ impl<'u> UpdateFetcher<'u> {
         src_directory: String,
         module_target: String,
         module_iterator: Iter,
-        update_cfg: &'u Updates,
+        update_cfg: &'u DbUpdates,
     ) -> Self {
         let mut module_list = BTreeSet::new();
         module_list.extend(module_iterator);
@@ -355,7 +355,7 @@ async fn update_state(pool: &sqlx::Pool<MySql>, file_name: String, state: Fetche
     allow_rehash=update_cfg.AllowRehash,
 ))]
 async fn apply_update_file(
-    update_cfg: &Updates,
+    update_cfg: &DbUpdates,
     pool: &sqlx::Pool<MySql>,
     applied: &mut BTreeMap<PathBuf, AppliedFileEntry>,
     applied_hash_to_filename: &BTreeMap<String, PathBuf>,

@@ -7,7 +7,9 @@ use azothacore_common::{
         DatabaseTypeFlags::{Character as DBFlagCharacter, Login as DBFlagLogin, World as DBFlagWorld},
         CONFIG_MGR,
     },
+    get_g,
     log::init_logging,
+    mut_g,
     utils::create_pid_file,
     AccountTypes,
     AzResult,
@@ -69,7 +71,7 @@ fn signal_handler(rt: &tokio::runtime::Runtime) -> JoinHandle<Result<(), std::io
             let mut sig_terminate = short_curcuit_unix_signal_unwrap!(SignalKind::terminate());
             let mut sig_quit = short_curcuit_unix_signal_unwrap!(SignalKind::quit());
             receive_signal_and_run_expr!(
-                S_WORLD.write().unwrap().stop_now(1),
+                mut_g!(S_WORLD).stop_now(1),
                 "SIGINT" => sig_interrupt
                 "SIGTERM" => sig_terminate
                 "SIGQUIT" => sig_quit
@@ -84,22 +86,26 @@ fn main() -> AzResult<()> {
     ThisServerProcess::set(ServerProcessType::Worldserver);
     let vm = ConsoleArgs::parse();
     let _wg = {
-        let mut cfg_mgr_w = CONFIG_MGR.write().unwrap();
+        let mut cfg_mgr_w = mut_g!(CONFIG_MGR);
         cfg_mgr_w.configure(&vm.config, vm.dry_run);
+
         cfg_mgr_w.load_app_configs()?;
         // TODO: Setup DB logging. Original code below
         // // Init all logs
         // sLog->RegisterAppender<AppenderDB>();
-        init_logging(&cfg_mgr_w.world().LogsDir, &cfg_mgr_w.world().Appender, &cfg_mgr_w.world().Logger)
+        init_logging(
+            cfg_mgr_w.get_option::<String>("LogsDir")?,
+            &cfg_mgr_w.get_option::<Vec<_>>("Appender")?,
+            &cfg_mgr_w.get_option::<Vec<_>>("Logger")?,
+        )
     };
 
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
-
     banner::azotha_banner_show("worldserver-daemon", || {
         info!(
             target = "server::worldserver",
             "> Using configuration file       {}",
-            CONFIG_MGR.read().unwrap().get_filename().display()
+            get_g!(CONFIG_MGR).get_filename().display()
         )
     });
     // Seed the OsRng here.
@@ -107,7 +113,7 @@ fn main() -> AzResult<()> {
     OsRng.gen_bigint(16 * 8);
 
     // worldserver PID file creation
-    if let Some(pid_file) = &CONFIG_MGR.read().unwrap().world().PidFile {
+    if let Ok(pid_file) = &get_g!(CONFIG_MGR).get_option::<String>("PidFile") {
         let pid = create_pid_file(pid_file)?;
         error!(target = "server", "Daemon PID: {}", pid);
     }
@@ -141,20 +147,17 @@ fn main() -> AzResult<()> {
 
     info!(target = "server::loading", "Initializing Scripts...");
     // Loading modules configs before scripts
-    CONFIG_MGR
-        .write()
-        .unwrap()
-        .load_modules_configs(false, true, |reload| SCRIPT_MGR.read().unwrap().on_load_module_config(reload))?;
-    let _s_script_mgr_handle = dropper_wrapper_fn(rt.handle(), || async { SCRIPT_MGR.write().unwrap().unload() });
+    mut_g!(CONFIG_MGR).load_modules_configs(false, true, |reload| get_g!(SCRIPT_MGR).on_load_module_config(reload))?;
+    let _s_script_mgr_handle = dropper_wrapper_fn(rt.handle(), || async { mut_g!(SCRIPT_MGR).unload() });
     scripts::add_scripts()?;
     azothacore_modules::add_scripts()?;
 
-    rt.block_on(async { start_db().await })?;
+    let realm_id = get_g!(CONFIG_MGR).get_option::<u32>("RealmID")?;
+    rt.block_on(async { start_db(realm_id).await })?;
     let _db_handle = dropper_wrapper_fn(rt.handle(), || async { stop_db().await });
 
     // set server offline (not connectable)
 
-    let realm_id = CONFIG_MGR.read().unwrap().world().RealmID;
     rt.block_on(async {
         sql_w_args(
             "UPDATE realmlist SET flag = (flag & ~?) | ? WHERE id = ?",
@@ -168,7 +171,7 @@ fn main() -> AzResult<()> {
         .await
     })?;
 
-    rt.block_on(async { load_realm_info().await })?;
+    rt.block_on(async { load_realm_info(realm_id).await })?;
 
     // // TODO: Implement metrics?
     // sMetric->Initialize(realm.Name, *ioContext, []()
@@ -200,16 +203,14 @@ fn main() -> AzResult<()> {
     Ok(())
 }
 
-async fn start_db() -> AzResult<()> {
-    let (realm_id, updates, auth_cfg, world_cfg, character_cfg) = {
-        let config_mgr_r = CONFIG_MGR.read().unwrap();
-        let world_cfg = config_mgr_r.world();
+async fn start_db(realm_id: u32) -> AzResult<()> {
+    let (updates, auth_cfg, world_cfg, character_cfg) = {
+        let config_mgr_r = get_g!(CONFIG_MGR);
         (
-            world_cfg.RealmID,
-            world_cfg.Updates.clone(),
-            world_cfg.LoginDatabaseInfo.clone(),
-            world_cfg.WorldDatabaseInfo.clone(),
-            world_cfg.CharacterDatabaseInfo.clone(),
+            config_mgr_r.get_option("Updates")?,
+            config_mgr_r.get_option("LoginDatabaseInfo")?,
+            config_mgr_r.get_option("WorldDatabaseInfo")?,
+            config_mgr_r.get_option("CharacterDatabaseInfo")?,
         )
     };
     let registered_modules = module_scripts();
@@ -247,11 +248,11 @@ async fn start_db() -> AzResult<()> {
     .execute(WorldDatabase::get())
     .await?;
 
-    S_WORLD.write().unwrap().load_db_version()?;
+    mut_g!(S_WORLD).load_db_version()?;
 
-    info!("> Version DB world:     {}", S_WORLD.read().unwrap().get_db_version());
+    info!("> Version DB world:     {}", get_g!(S_WORLD).get_db_version());
 
-    SCRIPT_MGR.read().unwrap().on_after_databases_loaded(updates.EnableDatabases);
+    get_g!(SCRIPT_MGR).on_after_databases_loaded(updates.EnableDatabases);
 
     Ok(())
 }
@@ -281,9 +282,7 @@ async fn clear_online_accounts(realm_id: u32) -> AzResult<()> {
 }
 
 #[instrument]
-async fn load_realm_info() -> AzResult<()> {
-    let realm_id = CONFIG_MGR.read().unwrap().world().RealmID;
-
+async fn load_realm_info(realm_id: u32) -> AzResult<()> {
     let realm = sql_w_args(
         "SELECT id, name, address, localAddress, localSubnetMask, port, icon, flag, timezone, allowedSecurityLevel, population, gamebuild FROM realmlist WHERE id = ?",
         qargs!(realm_id),

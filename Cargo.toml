@@ -16,6 +16,7 @@ casclib-sys = { path = "crates/casclib-sys" }
 wow-db2 = { path = "crates/wow-db2" }
 wow-db2-proc-macros = { path = "crates/wow-db2-proc-macros" }
 # External crates
+clap =  { version = "4.1.8", features = ["derive"] }
 flagset = { version = "0.4.3", features = ["serde"] }
 futures = "0.3.27"
 num-traits = { version = "0.2.15" }
@@ -26,7 +27,6 @@ serde = { version = "1.0.152", features = ["derive"] }
 toml = { version = "0.7.2", features = ["preserve_order"] }
 serde_default = "0.1.0"
 serde-inline-default = "0.1.1"
-structstruck = "0.4.0"
 sqlx = { version = "0.6.2", features = [ "runtime-tokio-rustls", "mysql", "time"] }
 nalgebra = { version = "0.32.2", features = [ "serde-serialize" ] }
 parry3d = { version = "0.13.5", features = ["serde-serialize"] }
@@ -34,3 +34,5 @@ tokio = { version = "1.26.0", features = ["full", "tracing"] }
 tracing = { version = "0.1.37" }
 recastnavigation-sys = { version = "1.0.1", features = [ "detour", "recast", "detour_large_nav_meshes" ] }
 walkdir = { version = "2.3.3" }
+rand = { version = "0.8.5" }
+num-bigint = { version = "0.4.3", features = ["rand"] }
