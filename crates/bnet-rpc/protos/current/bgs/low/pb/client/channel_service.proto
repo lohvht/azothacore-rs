@@ -1,0 +1,110 @@
+syntax = "proto2";
+
+package bgs.protocol.channel.v1;
+
+import "bgs/low/pb/client/account_types.proto";
+import "bgs/low/pb/client/entity_types.proto";
+import "bgs/low/pb/client/channel_types.proto";
+import "bgs/low/pb/client/rpc_types.proto";
+
+option cc_generic_services = false;
+option optimize_for = CODE_SIZE;
+
+service ChannelService {
+    rpc RemoveMember(RemoveMemberRequest) returns (NoData); // method_id: 2
+    rpc SendMessage(SendMessageRequest) returns (NoData); // method_id: 3
+    rpc UpdateChannelState(UpdateChannelStateRequest) returns (NoData); // method_id: 4
+    rpc UpdateMemberState(UpdateMemberStateRequest) returns (NoData); // method_id: 5
+    rpc Dissolve(DissolveRequest) returns (NoData); // method_id: 6
+}
+
+service ChannelListener {
+    rpc OnJoin(JoinNotification) returns (NO_RESPONSE); // method_id: 1
+    rpc OnMemberAdded(MemberAddedNotification) returns (NO_RESPONSE); // method_id: 2
+    rpc OnLeave(LeaveNotification) returns (NO_RESPONSE); // method_id: 3
+    rpc OnMemberRemoved(MemberRemovedNotification) returns (NO_RESPONSE); // method_id: 4
+    rpc OnSendMessage(SendMessageNotification) returns (NO_RESPONSE); // method_id: 5
+    rpc OnUpdateChannelState(UpdateChannelStateNotification) returns (NO_RESPONSE); // method_id: 6
+    rpc OnUpdateMemberState(UpdateMemberStateNotification) returns (NO_RESPONSE); // method_id: 7
+}
+
+message RemoveMemberRequest {
+    optional EntityId agent_id = 1;
+    required EntityId member_id = 2;
+    optional uint32 reason = 3;
+}
+
+message SendMessageRequest {
+    optional EntityId agent_id = 1;
+    required Message message = 2;
+    optional uint64 required_privileges = 3 [default = 0];
+}
+
+message UpdateChannelStateRequest {
+    optional EntityId agent_id = 1;
+    required ChannelState state_change = 2;
+}
+
+message UpdateMemberStateRequest {
+    optional EntityId agent_id = 1;
+    repeated Member state_change = 2;
+    repeated uint32 removed_role = 3 [packed = true];
+}
+
+message DissolveRequest {
+    optional EntityId agent_id = 1;
+    optional uint32 reason = 2;
+}
+
+message JoinNotification {
+    optional Member self = 1;
+    repeated Member member = 2;
+    required ChannelState channel_state = 3;
+    optional ChannelId channel_id = 4;
+    optional account.v1.Identity subscriber = 5;
+}
+
+message MemberAddedNotification {
+    required Member member = 1;
+    optional ChannelId channel_id = 2;
+    optional account.v1.Identity subscriber = 3;
+}
+
+message LeaveNotification {
+    optional EntityId agent_id = 1;
+    required EntityId member_id = 2 [deprecated = true];
+    optional uint32 reason = 3;
+    optional ChannelId channel_id = 4;
+    optional account.v1.Identity subscriber = 5;
+}
+
+message MemberRemovedNotification {
+    optional EntityId agent_id = 1;
+    required EntityId member_id = 2;
+    optional uint32 reason = 3;
+    optional ChannelId channel_id = 4;
+    optional account.v1.Identity subscriber = 5;
+}
+
+message SendMessageNotification {
+    optional EntityId agent_id = 1;
+    required Message message = 2;
+    optional uint64 required_privileges = 3 [default = 0];
+    optional string battle_tag = 4;
+    optional ChannelId channel_id = 5;
+    optional account.v1.Identity subscriber = 6;
+}
+
+message UpdateChannelStateNotification {
+    optional EntityId agent_id = 1;
+    required ChannelState state_change = 2;
+    optional ChannelId channel_id = 3;
+    optional account.v1.Identity subscriber = 4;
+}
+
+message UpdateMemberStateNotification {
+    optional EntityId agent_id = 1;
+    repeated Member state_change = 2;
+    optional ChannelId channel_id = 4;
+    optional account.v1.Identity subscriber = 5;
+}

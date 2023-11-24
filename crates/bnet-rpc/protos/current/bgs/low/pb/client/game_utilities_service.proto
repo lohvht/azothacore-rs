@@ -1,0 +1,95 @@
+syntax = "proto2";
+
+package bgs.protocol.game_utilities.v1;
+
+import "bgs/low/pb/client/attribute_types.proto";
+import "bgs/low/pb/client/content_handle_types.proto";
+import "bgs/low/pb/client/entity_types.proto";
+import "bgs/low/pb/client/game_utilities_types.proto";
+import "bgs/low/pb/client/rpc_types.proto";
+
+option java_generic_services = true;
+option cc_generic_services = false;
+option optimize_for = CODE_SIZE;
+option java_outer_classname = "GameUtilitiesServiceProto";
+option java_package = "bnet.protocol.game_utilities.v1";
+
+service GameUtilitiesService {
+    rpc ProcessClientRequest(ClientRequest) returns (ClientResponse); // method_id: 1
+    rpc PresenceChannelCreated(PresenceChannelCreatedRequest) returns (NoData); // method_id: 2
+    rpc GetPlayerVariables(GetPlayerVariablesRequest) returns (GetPlayerVariablesResponse); // method_id: 3
+    rpc ProcessServerRequest(ServerRequest) returns (ServerResponse); // method_id: 6
+    rpc OnGameAccountOnline(GameAccountOnlineNotification) returns (NO_RESPONSE); // method_id: 7
+    rpc OnGameAccountOffline(GameAccountOfflineNotification) returns (NO_RESPONSE); // method_id: 8
+    rpc GetAchievementsFile(GetAchievementsFileRequest) returns (GetAchievementsFileResponse); // method_id: 9
+    rpc GetAllValuesForAttribute(GetAllValuesForAttributeRequest) returns (GetAllValuesForAttributeResponse); // method_id: 10
+}
+
+message ClientRequest {
+    repeated Attribute attribute = 1;
+    optional ProcessId host = 2;
+    optional EntityId account_id = 3;
+    optional EntityId game_account_id = 4;
+    optional fixed32 program = 5;
+    optional ClientInfo client_info = 6;
+}
+
+message ClientResponse {
+    repeated Attribute attribute = 1;
+}
+
+message ServerRequest {
+    repeated Attribute attribute = 1;
+    required fixed32 program = 2;
+    optional ProcessId host = 3;
+}
+
+message ServerResponse {
+    repeated Attribute attribute = 1;
+}
+
+message PresenceChannelCreatedRequest {
+    required EntityId id = 1;
+    optional EntityId game_account_id = 3;
+    optional EntityId account_id = 4;
+    optional ProcessId host = 5;
+}
+
+message GetPlayerVariablesRequest {
+    repeated PlayerVariables player_variables = 1;
+    optional ProcessId host = 2;
+}
+
+message GetPlayerVariablesResponse {
+    repeated PlayerVariables player_variables = 1;
+}
+
+message GameAccountOnlineNotification {
+    required EntityId game_account_id = 1;
+    optional ProcessId host = 2;
+    optional string session_id = 3;
+}
+
+message GameAccountOfflineNotification {
+    required EntityId game_account_id = 1;
+    optional ProcessId host = 2;
+    optional string session_id = 3;
+}
+
+message GetAchievementsFileRequest {
+    optional ProcessId host = 1;
+}
+
+message GetAchievementsFileResponse {
+    optional ContentHandle content_handle = 1;
+}
+
+message GetAllValuesForAttributeRequest {
+    optional string attribute_key = 1;
+    optional EntityId agent_id = 2;
+    optional fixed32 program = 5;
+}
+
+message GetAllValuesForAttributeResponse {
+    repeated Variant attribute_value = 1;
+}

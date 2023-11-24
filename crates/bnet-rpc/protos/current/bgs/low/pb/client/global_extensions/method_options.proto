@@ -1,0 +1,17 @@
+syntax = "proto2";
+
+package bgs.protocol;
+
+import "google/protobuf/descriptor.proto";
+
+option optimize_for = CODE_SIZE;
+option java_outer_classname = "MethodOptionsProto";
+option java_package = "bnet.protocol";
+
+message BGSMethodOptions {
+    optional uint32 id = 1;
+}
+
+extend google.protobuf.MethodOptions {
+    optional BGSMethodOptions method_options = 90000;
+}

@@ -1,0 +1,86 @@
+syntax = "proto2";
+
+package bgs.protocol.user_manager.v1;
+
+import "bgs/low/pb/client/user_manager_types.proto";
+import "bgs/low/pb/client/entity_types.proto";
+import "bgs/low/pb/client/role_types.proto";
+import "bgs/low/pb/client/rpc_types.proto";
+
+option cc_generic_services = false;
+option optimize_for = CODE_SIZE;
+
+service UserManagerService {
+    rpc Subscribe(SubscribeRequest) returns (SubscribeResponse); // method_id: 1
+    rpc AddRecentPlayers(AddRecentPlayersRequest) returns (NoData); // method_id: 10
+    rpc ClearRecentPlayers(ClearRecentPlayersRequest) returns (NoData); // method_id: 11
+    rpc BlockPlayer(BlockPlayerRequest) returns (NoData); // method_id: 20
+    rpc UnblockPlayer(UnblockPlayerRequest) returns (NoData); // method_id: 21
+    rpc BlockPlayerForSession(BlockPlayerRequest) returns (NoData); // method_id: 40
+    rpc Unsubscribe(UnsubscribeRequest) returns (NoData); // method_id: 51
+}
+
+service UserManagerListener {
+    rpc OnBlockedPlayerAdded(BlockedPlayerAddedNotification) returns (NO_RESPONSE); // method_id: 1
+    rpc OnBlockedPlayerRemoved(BlockedPlayerRemovedNotification) returns (NO_RESPONSE); // method_id: 2
+    rpc OnRecentPlayersAdded(RecentPlayersAddedNotification) returns (NO_RESPONSE); // method_id: 11
+    rpc OnRecentPlayersRemoved(RecentPlayersRemovedNotification) returns (NO_RESPONSE); // method_id: 12
+}
+
+message SubscribeRequest {
+    optional EntityId agent_id = 1;
+    required uint64 object_id = 2;
+}
+
+message SubscribeResponse {
+    repeated BlockedPlayer blocked_players = 1;
+    repeated RecentPlayer recent_players = 2;
+    repeated Role role = 3;
+}
+
+message UnsubscribeRequest {
+    optional EntityId agent_id = 1;
+    optional uint64 object_id = 2;
+}
+
+message AddRecentPlayersRequest {
+    repeated RecentPlayer players = 1;
+    optional EntityId agent_id = 2;
+    optional uint32 program = 3;
+}
+
+message ClearRecentPlayersRequest {
+    optional EntityId agent_id = 1;
+    optional uint32 program = 2;
+}
+
+message BlockPlayerRequest {
+    optional EntityId agent_id = 1;
+    required EntityId target_id = 2;
+    optional uint32 role = 3;
+}
+
+message UnblockPlayerRequest {
+    optional EntityId agent_id = 1;
+    required EntityId target_id = 2;
+}
+
+message BlockedPlayerAddedNotification {
+    required BlockedPlayer player = 1;
+    optional EntityId game_account_id = 2;
+    optional EntityId account_id = 3;
+}
+
+message BlockedPlayerRemovedNotification {
+    required BlockedPlayer player = 1;
+    optional EntityId game_account_id = 2;
+    optional EntityId account_id = 3;
+}
+
+message RecentPlayersAddedNotification {
+    repeated RecentPlayer player = 1;
+}
+
+message RecentPlayersRemovedNotification {
+    repeated RecentPlayer player = 1;
+}

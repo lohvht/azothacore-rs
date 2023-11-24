@@ -1,0 +1,23 @@
+[package]
+name = "bnet-rpc"
+version = "0.0.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+bytes.workspace = true
+num-derive.workspace = true
+num-traits.workspace = true
+num.workspace = true
+prost.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+
+[build-dependencies]
+proc-macro2 = "1"
+prost-build = { version = "0" }
+protobuf-src = { version = "1" }
+quote = "1"
+syn = "2"
+walkdir.workspace = true

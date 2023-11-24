@@ -1,0 +1,83 @@
+syntax = "proto2";
+
+package bgs.protocol.connection.v1;
+
+import "bgs/low/pb/client/content_handle_types.proto";
+import "bgs/low/pb/client/rpc_types.proto";
+
+option java_generic_services = true;
+option cc_generic_services = false;
+option optimize_for = CODE_SIZE;
+option java_outer_classname = "ConnectionServiceProto";
+option java_package = "bnet.protocol.connection.v1";
+
+service ConnectionService {
+    rpc Connect(ConnectRequest) returns (ConnectResponse); // method_id: 1
+    rpc Bind(BindRequest) returns (BindResponse); // method_id: 2
+    rpc Echo(EchoRequest) returns (EchoResponse); // method_id: 3
+    rpc ForceDisconnect(DisconnectNotification) returns (NO_RESPONSE); // method_id: 4
+    rpc KeepAlive(NoData) returns (NO_RESPONSE); // method_id: 5
+    rpc Encrypt(EncryptRequest) returns (NoData); // method_id: 6
+    rpc RequestDisconnect(DisconnectRequest) returns (NO_RESPONSE); // method_id: 7
+}
+
+message ConnectRequest {
+    optional ProcessId client_id = 1;
+    optional BindRequest bind_request = 2;
+    optional bool use_bindless_rpc = 3 [default = true];
+}
+
+message ConnectionMeteringContentHandles {
+    repeated ContentHandle content_handle = 1;
+}
+
+message ConnectResponse {
+    required ProcessId server_id = 1;
+    optional ProcessId client_id = 2;
+    optional uint32 bind_result = 3;
+    optional BindResponse bind_response = 4;
+    optional ConnectionMeteringContentHandles content_handle_array = 5;
+    optional uint64 server_time = 6;
+    optional bool use_bindless_rpc = 7 [default = false];
+    optional ConnectionMeteringContentHandles binary_content_handle_array = 8;
+}
+
+message BoundService {
+    required fixed32 hash = 1;
+    required uint32 id = 2;
+}
+
+message BindRequest {
+    repeated fixed32 deprecated_imported_service_hash = 1 [packed = true, deprecated = true];
+    repeated BoundService deprecated_exported_service = 2 [deprecated = true];
+    repeated BoundService exported_service = 3;
+    repeated BoundService imported_service = 4;
+}
+
+message BindResponse {
+    repeated uint32 imported_service_id = 1 [packed = true, deprecated = true];
+}
+
+message EchoRequest {
+    optional fixed64 time = 1;
+    optional bool network_only = 2 [default = false];
+    optional bytes payload = 3;
+}
+
+message EchoResponse {
+    optional fixed64 time = 1;
+    optional bytes payload = 2;
+}
+
+message DisconnectRequest {
+    required uint32 error_code = 1;
+}
+
+message DisconnectNotification {
+    required uint32 error_code = 1;
+    optional string reason = 2;
+}
+
+message EncryptRequest {
+    
+}

@@ -1,0 +1,13 @@
+syntax = "proto2";
+
+package bgs.protocol.channel.v1;
+
+import "bgs/low/pb/client/rpc_types.proto";
+
+option optimize_for = CODE_SIZE;
+
+message ChannelId {
+    optional uint32 type = 1;
+    optional ProcessId host = 2;
+    optional fixed32 id = 3;
+}

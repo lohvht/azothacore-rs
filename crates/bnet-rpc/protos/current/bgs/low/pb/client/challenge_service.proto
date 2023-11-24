@@ -1,0 +1,24 @@
+syntax = "proto2";
+
+package bgs.protocol.challenge.v1;
+
+import "bgs/low/pb/client/rpc_types.proto";
+
+option cc_generic_services = false;
+option optimize_for = CODE_SIZE;
+
+service ChallengeListener {
+    rpc OnExternalChallenge(ChallengeExternalRequest) returns (NO_RESPONSE); // method_id: 3
+    rpc OnExternalChallengeResult(ChallengeExternalResult) returns (NO_RESPONSE); // method_id: 4
+}
+
+message ChallengeExternalRequest {
+    optional string request_token = 1;
+    optional string payload_type = 2;
+    optional bytes payload = 3;
+}
+
+message ChallengeExternalResult {
+    optional string request_token = 1;
+    optional bool passed = 2 [default = true];
+}

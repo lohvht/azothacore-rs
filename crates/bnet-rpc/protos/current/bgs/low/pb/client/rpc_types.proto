@@ -1,0 +1,58 @@
+syntax = "proto2";
+
+package bgs.protocol;
+
+import public "bgs/low/pb/client/global_extensions/field_options.proto";
+import public "bgs/low/pb/client/global_extensions/method_options.proto";
+import public "bgs/low/pb/client/global_extensions/message_options.proto";
+import public "bgs/low/pb/client/global_extensions/service_options.proto";
+import public "bgs/low/pb/client/trace_types.proto";
+
+option optimize_for = CODE_SIZE;
+option java_outer_classname = "RpcProto";
+option java_package = "bnet.protocol";
+
+message NO_RESPONSE {
+    
+}
+
+message Address {
+    required string address = 1;
+    optional uint32 port = 2;
+}
+
+message ProcessId {
+    required uint32 label = 1;
+    required uint32 epoch = 2;
+}
+
+message ObjectAddress {
+    required ProcessId host = 1;
+    optional uint64 object_id = 2 [default = 0];
+}
+
+message NoData {
+    
+}
+
+message ErrorInfo {
+    required ObjectAddress object_address = 1;
+    required uint32 status = 2;
+    required uint32 service_hash = 3;
+    required uint32 method_id = 4;
+}
+
+message Header {
+    required uint32 service_id = 1;
+    optional uint32 method_id = 2;
+    required uint32 token = 3;
+    optional uint64 object_id = 4 [default = 0];
+    optional uint32 size = 5 [default = 0];
+    optional uint32 status = 6 [default = 0];
+    repeated ErrorInfo error = 7;
+    optional uint64 timeout = 8;
+    optional bool is_response = 9;
+    repeated ProcessId forward_targets = 10;
+    optional fixed32 service_hash = 11;
+    optional TraceInfo trace_info = 12;
+}

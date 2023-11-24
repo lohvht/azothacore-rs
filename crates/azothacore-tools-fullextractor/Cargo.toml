@@ -10,4 +10,4 @@ azothacore-tools.workspace=true
 # External crates
 tracing.workspace = true
 walkdir.workspace = true
-libc = "0.2.148"
+libc = "0"

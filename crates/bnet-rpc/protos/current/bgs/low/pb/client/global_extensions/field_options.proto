@@ -1,0 +1,23 @@
+syntax = "proto2";
+
+package bgs.protocol;
+
+import "google/protobuf/descriptor.proto";
+
+option optimize_for = CODE_SIZE;
+option java_outer_classname = "FieldOptionsProto";
+option java_package = "bnet.protocol";
+
+message BGSFieldOptions {
+    optional LogOption log = 1;
+    optional bool shard_key = 2;
+}
+
+enum LogOption {
+    HIDDEN = 1;
+    HEX = 2;
+}
+
+extend google.protobuf.FieldOptions {
+    optional BGSFieldOptions field_options = 90000;
+}

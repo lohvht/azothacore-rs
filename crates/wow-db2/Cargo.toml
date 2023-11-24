@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2021"
 
 [dependencies]
-byteorder = "1.4.3"
-flagset = { version = "0.4.3", features = ["serde"] }
-serde = { version = "1.0.152", features = ["derive"] }
-itertools = "0.10.5"
+byteorder = "1"
+flagset.workspace = true
+serde.workspace = true
+itertools = "0"

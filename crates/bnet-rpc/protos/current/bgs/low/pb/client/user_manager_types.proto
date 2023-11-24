@@ -1,0 +1,24 @@
+syntax = "proto2";
+
+package bgs.protocol.user_manager.v1;
+
+import "bgs/low/pb/client/entity_types.proto";
+import "bgs/low/pb/client/attribute_types.proto";
+
+option optimize_for = CODE_SIZE;
+
+message RecentPlayer {
+    required EntityId entity_id = 1;
+    optional string program = 2;
+    optional fixed64 timestamp_played = 3;
+    repeated Attribute attributes = 4;
+    optional fixed32 id = 5 [default = 0];
+    optional fixed32 counter = 6 [default = 0];
+}
+
+message BlockedPlayer {
+    required EntityId account_id = 1;
+    optional string name = 2;
+    repeated uint32 role = 3 [packed = true];
+    optional uint64 privileges = 4 [default = 0];
+}

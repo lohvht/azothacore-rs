@@ -1,0 +1,21 @@
+syntax = "proto2";
+
+package bgs.protocol.v2;
+
+option optimize_for = CODE_SIZE;
+
+message Variant {
+    oneof type {
+        bool bool_value = 1;
+        int64 int_value = 2;
+        double float_value = 3;
+        string string_value = 4;
+        bytes blob_value = 5;
+        uint64 uint_value = 6;
+    }
+}
+
+message Attribute {
+    optional string name = 1;
+    optional Variant value = 2;
+}
