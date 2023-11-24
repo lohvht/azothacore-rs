@@ -7,31 +7,31 @@ edition = "2021"
 # Local crates
 azothacore-common.workspace = true
 azothacore-server.workspace = true
-recastnavigation-sys.workspace = true
 casclib-sys.workspace = true
+recastnavigation-sys.workspace = true
 wow-db2.workspace = true
 # External crates
-toml.workspace = true
-tracing.workspace = true
+byteorder = "1"
+crossbeam = { version = "0" }
 flagset.workspace = true
+futures.workspace = true
+glob = "0"
+libc = "0"
+nalgebra.workspace = true
+num-derive.workspace = true
+num-traits.workspace = true
+num.workspace = true
+parry3d.workspace = true
+rayon = "1"
+regex = "1"
 serde_default.workspace = true
 serde-inline-default.workspace = true
-structstruck.workspace = true
-num.workspace = true
-num-traits.workspace = true
-num-derive.workspace = true
-thiserror.workspace = true
-nalgebra.workspace = true
-parry3d.workspace = true
 serde.workspace = true
-futures.workspace = true
+sscanf = "0"
+structstruck = "0"
+thiserror.workspace = true
 tokio.workspace = true
-sscanf = "0.4.1"
-zerocopy = { version = "0.7.1" }
-zerocopy-derive = { version = "0.7.1" }
-glob = "0.3.1"
-byteorder = "1.4.3"
-rayon = "1.7.0"
-crossbeam = { version = "0.8.2" }
-regex = "1.7.1"
-libc = "0.2.148"
+toml.workspace = true
+tracing.workspace = true
+zerocopy = { version = "0" }
+zerocopy-derive = { version = "0" }

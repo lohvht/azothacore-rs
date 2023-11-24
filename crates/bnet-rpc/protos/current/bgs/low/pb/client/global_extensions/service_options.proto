@@ -1,0 +1,23 @@
+syntax = "proto2";
+
+package bgs.protocol;
+
+import "google/protobuf/descriptor.proto";
+
+option optimize_for = CODE_SIZE;
+option java_outer_classname = "ServiceOptionsProto";
+option java_package = "bnet.protocol";
+
+message BGSServiceOptions {
+    optional string descriptor_name = 1;
+}
+
+message SDKServiceOptions {
+    optional bool inbound = 1;
+    optional bool outbound = 2;
+}
+
+extend google.protobuf.ServiceOptions {
+    optional BGSServiceOptions service_options = 90000;
+    optional SDKServiceOptions sdk_service_options = 90001;
+}

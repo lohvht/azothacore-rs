@@ -1,0 +1,87 @@
+syntax = "proto2";
+
+package bgs.protocol.friends.v1;
+
+import "bgs/low/pb/client/attribute_types.proto";
+import "bgs/low/pb/client/entity_types.proto";
+import "bgs/low/pb/client/invitation_types.proto";
+import "bgs/low/pb/client/role_types.proto";
+
+option optimize_for = CODE_SIZE;
+option java_outer_classname = "FriendsTypesProto";
+option java_package = "bnet.protocol.friends.v1";
+
+message Friend {
+    required EntityId account_id = 1;
+    repeated Attribute attribute = 2;
+    repeated uint32 role = 3 [packed = true];
+    optional uint64 privileges = 4 [default = 0];
+    optional uint64 attributes_epoch = 5 [deprecated = true];
+    optional uint64 creation_time = 6;
+}
+
+message FriendOfFriend {
+    optional EntityId account_id = 1;
+    repeated uint32 role = 3 [packed = true];
+    optional uint64 privileges = 4 [default = 0];
+    optional string full_name = 6;
+    optional string battle_tag = 7;
+}
+
+message ReceivedInvitation {
+    required fixed64 id = 1;
+    required Identity inviter_identity = 2;
+    required Identity invitee_identity = 3;
+    optional string inviter_name = 4;
+    optional string invitee_name = 5;
+    optional string invitation_message = 6;
+    optional uint64 creation_time = 7;
+    optional uint64 expiration_time = 8;
+    optional fixed32 program = 9;
+    
+    extensions 100 to 9999;
+}
+
+message FriendInvitation {
+    repeated uint32 role = 2 [packed = true];
+    repeated Attribute attribute = 3;
+    
+    extend ReceivedInvitation {
+        optional FriendInvitation friend_invitation = 103;
+    }
+}
+
+message SentInvitation {
+    optional fixed64 id = 1;
+    optional string target_name = 2;
+    optional uint32 role = 3;
+    repeated Attribute attribute = 4;
+    optional uint64 creation_time = 5;
+    optional fixed32 program = 6;
+}
+
+message FriendInvitationParams {
+    optional string target_email = 1;
+    optional string target_battle_tag = 2;
+    repeated uint32 role = 6 [packed = true];
+    repeated Attribute attribute = 8;
+    optional string target_name = 9;
+    
+    extend InvitationParams {
+        optional FriendInvitationParams friend_params = 103;
+    }
+}
+
+message SubscribeResponse {
+    optional uint32 max_friends = 1;
+    optional uint32 max_received_invitations = 2;
+    optional uint32 max_sent_invitations = 3;
+    repeated Role role = 4;
+    repeated Friend friends = 5;
+    repeated ReceivedInvitation received_invitations = 7;
+    repeated SentInvitation sent_invitations = 8;
+}
+
+message AcceptInvitationOptions {
+    optional uint32 role = 1;
+}

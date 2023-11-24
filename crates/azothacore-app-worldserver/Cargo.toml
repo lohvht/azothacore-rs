@@ -6,14 +6,15 @@ edition = "2021"
 [dependencies]
 # Local crates
 azothacore-common.workspace=true
-azothacore-server.workspace=true
 azothacore-modules.workspace=true
+azothacore-server.workspace=true
 # External crates
-flagset.workspace =true
-tracing.workspace = true
-futures.workspace = true
-tokio.workspace = true
-sqlx.workspace = true
 clap.workspace = true
-rand.workspace = true
+flagset.workspace =true
+futures.workspace = true
 num-bigint.workspace = true
+rand.workspace = true
+sqlx.workspace = true
+tokio-util.workspace = true
+tokio.workspace = true
+tracing.workspace = true

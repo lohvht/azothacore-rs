@@ -1,0 +1,152 @@
+syntax = "proto2";
+
+package bgs.protocol.authentication.v1;
+
+import "bgs/low/pb/client/account_types.proto";
+import "bgs/low/pb/client/content_handle_types.proto";
+import "bgs/low/pb/client/entity_types.proto";
+import "bgs/low/pb/client/rpc_types.proto";
+
+option cc_generic_services = false;
+option optimize_for = CODE_SIZE;
+
+service AuthenticationListener {
+    rpc OnModuleLoad(ModuleLoadRequest) returns (NO_RESPONSE); // method_id: 1
+    rpc OnModuleMessage(ModuleMessageRequest) returns (NoData); // method_id: 2
+    rpc OnServerStateChange(ServerStateChangeRequest) returns (NO_RESPONSE); // method_id: 4
+    rpc OnLogonComplete(LogonResult) returns (NO_RESPONSE); // method_id: 5
+    rpc OnMemModuleLoad(MemModuleLoadRequest) returns (MemModuleLoadResponse); // method_id: 6
+    rpc OnLogonUpdate(LogonUpdateRequest) returns (NO_RESPONSE); // method_id: 10
+    rpc OnVersionInfoUpdated(VersionInfoNotification) returns (NO_RESPONSE); // method_id: 11
+    rpc OnLogonQueueUpdate(LogonQueueUpdateRequest) returns (NO_RESPONSE); // method_id: 12
+    rpc OnLogonQueueEnd(NoData) returns (NO_RESPONSE); // method_id: 13
+    rpc OnGameAccountSelected(GameAccountSelectedRequest) returns (NO_RESPONSE); // method_id: 14
+}
+
+service AuthenticationService {
+    rpc Logon(LogonRequest) returns (NoData); // method_id: 1
+    rpc ModuleNotify(ModuleNotification) returns (NoData); // method_id: 2
+    rpc ModuleMessage(ModuleMessageRequest) returns (NoData); // method_id: 3
+    rpc SelectGameAccount_DEPRECATED(EntityId) returns (NoData); // method_id: 4
+    rpc GenerateSSOToken(GenerateSSOTokenRequest) returns (GenerateSSOTokenResponse); // method_id: 5
+    rpc SelectGameAccount(SelectGameAccountRequest) returns (NoData); // method_id: 6
+    rpc VerifyWebCredentials(VerifyWebCredentialsRequest) returns (NoData); // method_id: 7
+    rpc GenerateWebCredentials(GenerateWebCredentialsRequest) returns (GenerateWebCredentialsResponse); // method_id: 8
+}
+
+message ModuleLoadRequest {
+    required ContentHandle module_handle = 1;
+    optional bytes message = 2;
+}
+
+message ModuleNotification {
+    optional int32 module_id = 2;
+    optional uint32 result = 3;
+}
+
+message ModuleMessageRequest {
+    required int32 module_id = 1;
+    optional bytes message = 2;
+}
+
+message LogonRequest {
+    optional string program = 1;
+    optional string platform = 2;
+    optional string locale = 3;
+    optional string email = 4;
+    optional string version = 5;
+    optional int32 application_version = 6;
+    optional bool public_computer = 7;
+    optional bool allow_logon_queue_notifications = 10 [default = false];
+    optional bool web_client_verification = 11 [default = false];
+    optional bytes cached_web_credentials = 12;
+    optional string user_agent = 14;
+    optional string device_id = 15;
+}
+
+message LogonResult {
+    required uint32 error_code = 1;
+    optional EntityId account_id = 2;
+    repeated EntityId game_account_id = 3;
+    optional string email = 4;
+    repeated uint32 available_region = 5;
+    optional uint32 connected_region = 6;
+    optional string battle_tag = 7;
+    optional string geoip_country = 8;
+    optional bytes session_key = 9;
+    optional bool restricted_mode = 10;
+}
+
+message GenerateSSOTokenRequest {
+    optional fixed32 program = 1;
+}
+
+message GenerateSSOTokenResponse {
+    optional bytes sso_id = 1;
+    optional bytes sso_secret = 2;
+}
+
+message LogonUpdateRequest {
+    required uint32 error_code = 1;
+}
+
+message LogonQueueUpdateRequest {
+    required uint32 position = 1;
+    required uint64 estimated_time = 2;
+    required uint64 eta_deviation_in_sec = 3;
+}
+
+message AccountSettingsNotification {
+    repeated account.v1.AccountLicense licenses = 1;
+    optional bool is_using_rid = 2;
+    optional bool is_playing_from_igr = 3;
+    optional bool can_receive_voice = 4;
+    optional bool can_send_voice = 5;
+}
+
+message ServerStateChangeRequest {
+    required uint32 state = 1;
+    required uint64 event_time = 2;
+}
+
+message VersionInfo {
+    optional uint32 number = 1;
+    optional string patch = 2;
+    optional bool is_optional = 3;
+    optional uint64 kick_time = 4;
+}
+
+message VersionInfoNotification {
+    optional VersionInfo version_info = 1;
+}
+
+message MemModuleLoadRequest {
+    required ContentHandle handle = 1;
+    required bytes key = 2;
+    required bytes input = 3;
+}
+
+message MemModuleLoadResponse {
+    required bytes data = 1;
+}
+
+message SelectGameAccountRequest {
+    required EntityId game_account_id = 1;
+}
+
+message GameAccountSelectedRequest {
+    required uint32 result = 1;
+    optional EntityId game_account_id = 2;
+}
+
+message GenerateWebCredentialsRequest {
+    optional fixed32 program = 1;
+}
+
+message GenerateWebCredentialsResponse {
+    optional bytes web_credentials = 1;
+}
+
+message VerifyWebCredentialsRequest {
+    optional bytes web_credentials = 1;
+}

@@ -1,0 +1,24 @@
+syntax = "proto2";
+
+package bgs.protocol.report.v1;
+
+import "bgs/low/pb/client/account_types.proto";
+import "bgs/low/pb/client/report_types.proto";
+import "bgs/low/pb/client/rpc_types.proto";
+
+option cc_generic_services = false;
+option optimize_for = CODE_SIZE;
+
+service ReportService {
+    rpc SendReport(SendReportRequest) returns (NoData); // method_id: 1
+    rpc SubmitReport(SubmitReportRequest) returns (NoData); // method_id: 2
+}
+
+message SendReportRequest {
+    required Report report = 1;
+}
+
+message SubmitReportRequest {
+    optional account.v1.GameAccountHandle agent_id = 1;
+    optional ReportType report_type = 2;
+}

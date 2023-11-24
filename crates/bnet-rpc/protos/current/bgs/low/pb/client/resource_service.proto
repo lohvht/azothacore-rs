@@ -1,0 +1,19 @@
+syntax = "proto2";
+
+package bgs.protocol.resources.v1;
+
+import "bgs/low/pb/client/content_handle_types.proto";
+import "bgs/low/pb/client/rpc_types.proto";
+
+option cc_generic_services = false;
+option optimize_for = CODE_SIZE;
+
+service ResourcesService {
+    rpc GetContentHandle(ContentHandleRequest) returns (ContentHandle); // method_id: 1
+}
+
+message ContentHandleRequest {
+    required fixed32 program = 1;
+    required fixed32 stream = 2;
+    optional fixed32 version = 3 [default = 0x656e5553];
+}

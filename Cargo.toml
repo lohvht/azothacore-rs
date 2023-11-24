@@ -8,31 +8,37 @@ lto = true
 
 [workspace.dependencies]
 # Local crates
-azothacore-tools = { path = "crates/azothacore-tools" }
-azothacore-server = { path = "crates/azothacore-server" }
 azothacore-common = { path = "crates/azothacore-common" }
 azothacore-modules = { path = "azothacore-script-modules/modules" }
+azothacore-server = { path = "crates/azothacore-server" }
+azothacore-tools = { path = "crates/azothacore-tools" }
+bnet-rpc = { path = "crates/bnet-rpc" }
 casclib-sys = { path = "crates/casclib-sys" }
 wow-db2 = { path = "crates/wow-db2" }
 wow-db2-proc-macros = { path = "crates/wow-db2-proc-macros" }
 # External crates
-clap =  { version = "4.1.8", features = ["derive"] }
-flagset = { version = "0.4.3", features = ["serde"] }
-futures = "0.3.27"
-num-traits = { version = "0.2.15" }
-num-derive = { version = "0.3.3" }
-num = { version = "0.4.1" }
-thiserror = { version = "1.0.40" }
-serde = { version = "1.0.152", features = ["derive"] }
-toml = { version = "0.7.2", features = ["preserve_order"] }
-serde_default = "0.1.0"
-serde-inline-default = "0.1.1"
-sqlx = { version = "0.6.2", features = [ "runtime-tokio-rustls", "mysql", "time"] }
-nalgebra = { version = "0.32.2", features = [ "serde-serialize" ] }
-parry3d = { version = "0.13.5", features = ["serde-serialize"] }
-tokio = { version = "1.26.0", features = ["full", "tracing"] }
-tracing = { version = "0.1.37" }
-recastnavigation-sys = { version = "1.0.1", features = [ "detour", "recast", "detour_large_nav_meshes" ] }
-walkdir = { version = "2.3.3" }
-rand = { version = "0.8.5" }
-num-bigint = { version = "0.4.3", features = ["rand"] }
+axum = { version = "0" }
+bytes = { version = "1" }
+clap =  { version = "4", features = ["derive"] }
+flagset = { version = "0", features = ["serde"] }
+futures = "0"
+ipnet = { version = "2" }
+nalgebra = { version = "0", features = [ "serde-serialize" ] }
+num = { version = "0" }
+num-bigint = { version = "0", features = ["rand"] }
+num-derive = { version = "0" }
+num-traits = { version = "0" }
+parry3d = { version = "0", features = ["serde-serialize"] }
+prost = { version = "0" }
+rand = { version = "0" }
+recastnavigation-sys = { version = "1", features = [ "detour", "recast", "detour_large_nav_meshes" ] }
+serde = { version = "1", features = ["derive"] }
+serde_default = "0"
+serde-inline-default = "0"
+sqlx = { version = "0", features = [ "runtime-tokio-rustls", "mysql", "time"] }
+thiserror = { version = "1" }
+tokio = { version = "1", features = ["full"] }
+tokio-util = { version = "0" }
+toml = { version = "0", features = ["preserve_order"] }
+tracing = { version = "0" }
+walkdir = { version = "2" }

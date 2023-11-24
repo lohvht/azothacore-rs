@@ -1,0 +1,167 @@
+syntax = "proto2";
+
+package bgs.protocol.account.v1;
+
+import "bgs/low/pb/client/account_types.proto";
+import "bgs/low/pb/client/entity_types.proto";
+import "bgs/low/pb/client/rpc_types.proto";
+
+option cc_generic_services = false;
+option optimize_for = CODE_SIZE;
+
+service AccountService {
+    rpc ResolveAccount(ResolveAccountRequest) returns (ResolveAccountResponse); // method_id: 13
+    rpc IsIgrAddress(IsIgrAddressRequest) returns (NoData); // method_id: 15
+    rpc Subscribe(SubscriptionUpdateRequest) returns (SubscriptionUpdateResponse); // method_id: 25
+    rpc Unsubscribe(SubscriptionUpdateRequest) returns (NoData); // method_id: 26
+    rpc GetAccountState(GetAccountStateRequest) returns (GetAccountStateResponse); // method_id: 30
+    rpc GetGameAccountState(GetGameAccountStateRequest) returns (GetGameAccountStateResponse); // method_id: 31
+    rpc GetLicenses(GetLicensesRequest) returns (GetLicensesResponse); // method_id: 32
+    rpc GetGameTimeRemainingInfo(GetGameTimeRemainingInfoRequest) returns (GetGameTimeRemainingInfoResponse); // method_id: 33
+    rpc GetGameSessionInfo(GetGameSessionInfoRequest) returns (GetGameSessionInfoResponse); // method_id: 34
+    rpc GetCAISInfo(GetCAISInfoRequest) returns (GetCAISInfoResponse); // method_id: 35
+    rpc GetAuthorizedData(GetAuthorizedDataRequest) returns (GetAuthorizedDataResponse); // method_id: 37
+    rpc GameAccountFlagUpdate(GameAccountFlagUpdateRequest) returns (NO_RESPONSE); // method_id: 39
+}
+
+service AccountListener {
+    rpc OnAccountStateUpdated(AccountStateNotification) returns (NO_RESPONSE); // method_id: 1
+    rpc OnGameAccountStateUpdated(GameAccountStateNotification) returns (NO_RESPONSE); // method_id: 2
+    rpc OnGameAccountsUpdated(GameAccountNotification) returns (NO_RESPONSE); // method_id: 3
+    rpc OnGameSessionUpdated(GameAccountSessionNotification) returns (NO_RESPONSE); // method_id: 4
+}
+
+message ResolveAccountRequest {
+    optional AccountReference ref = 1;
+    optional bool fetch_id = 12 [default = true];
+}
+
+message ResolveAccountResponse {
+    optional AccountId id = 12;
+}
+
+message GameAccountFlagUpdateRequest {
+    optional GameAccountHandle game_account = 1;
+    optional uint64 flag = 2;
+    optional bool active = 3;
+}
+
+message SubscriptionUpdateRequest {
+    repeated SubscriberReference ref = 2;
+}
+
+message SubscriptionUpdateResponse {
+    repeated SubscriberReference ref = 1;
+}
+
+message IsIgrAddressRequest {
+    optional string client_address = 1;
+    optional uint32 region = 2;
+}
+
+message GetAccountStateRequest {
+    optional EntityId entity_id = 1;
+    optional uint32 program = 2;
+    optional uint32 region = 3;
+    optional AccountFieldOptions options = 10;
+    optional AccountFieldTags tags = 11;
+}
+
+message GetAccountStateResponse {
+    optional AccountState state = 1;
+    optional AccountFieldTags tags = 2;
+}
+
+message GetGameAccountStateRequest {
+    optional EntityId account_id = 1 [deprecated = true];
+    optional EntityId game_account_id = 2;
+    optional GameAccountFieldOptions options = 10;
+    optional GameAccountFieldTags tags = 11;
+}
+
+message GetGameAccountStateResponse {
+    optional GameAccountState state = 1;
+    optional GameAccountFieldTags tags = 2;
+}
+
+message GetLicensesRequest {
+    optional EntityId target_id = 1;
+    optional bool fetch_account_licenses = 2;
+    optional bool fetch_game_account_licenses = 3;
+    optional bool fetch_dynamic_account_licenses = 4;
+    optional fixed32 program = 5;
+    optional bool exclude_unknown_program = 6 [default = false];
+}
+
+message GetLicensesResponse {
+    repeated AccountLicense licenses = 1;
+}
+
+message GetGameSessionInfoRequest {
+    optional EntityId entity_id = 1;
+}
+
+message GetGameSessionInfoResponse {
+    optional GameSessionInfo session_info = 2;
+}
+
+message GetGameTimeRemainingInfoRequest {
+    optional EntityId game_account_id = 1;
+    optional EntityId account_id = 2;
+}
+
+message GetGameTimeRemainingInfoResponse {
+    optional GameTimeRemainingInfo game_time_remaining_info = 1;
+}
+
+message GetCAISInfoRequest {
+    optional EntityId entity_id = 1;
+}
+
+message GetCAISInfoResponse {
+    optional CAIS cais_info = 1;
+}
+
+message GetAuthorizedDataRequest {
+    optional EntityId entity_id = 1;
+    repeated string tag = 2;
+    optional bool privileged_network = 3;
+}
+
+message GetAuthorizedDataResponse {
+    repeated AuthorizedData data = 1;
+}
+
+message UpdateParentalControlsAndCAISRequest {
+    optional AccountId account = 1;
+    optional ParentalControlInfo parental_control_info = 2;
+    optional string cais_id = 3;
+    optional uint64 session_start_time = 4;
+    optional uint64 start_time = 5;
+    optional uint64 end_time = 6;
+}
+
+message AccountStateNotification {
+    optional AccountState account_state = 1;
+    optional uint64 subscriber_id = 2 [deprecated = true];
+    optional AccountFieldTags account_tags = 3;
+    optional bool subscription_completed = 4;
+}
+
+message GameAccountStateNotification {
+    optional GameAccountState game_account_state = 1;
+    optional uint64 subscriber_id = 2 [deprecated = true];
+    optional GameAccountFieldTags game_account_tags = 3;
+    optional bool subscription_completed = 4;
+}
+
+message GameAccountNotification {
+    repeated GameAccountList game_accounts = 1;
+    optional uint64 subscriber_id = 2;
+    optional AccountFieldTags account_tags = 3;
+}
+
+message GameAccountSessionNotification {
+    optional GameAccountHandle game_account = 1;
+    optional GameSessionUpdateInfo session_info = 2;
+}

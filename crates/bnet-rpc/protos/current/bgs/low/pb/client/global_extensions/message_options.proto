@@ -1,0 +1,17 @@
+syntax = "proto2";
+
+package bgs.protocol;
+
+import "google/protobuf/descriptor.proto";
+
+option optimize_for = CODE_SIZE;
+option java_outer_classname = "MessageOptionsProto";
+option java_package = "bnet.protocol";
+
+message BGSMessageOptions {
+    optional bool custom_select_shard = 1;
+}
+
+extend google.protobuf.MessageOptions {
+    optional BGSMessageOptions message_options = 90000;
+}

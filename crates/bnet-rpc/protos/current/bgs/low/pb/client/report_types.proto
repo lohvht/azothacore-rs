@@ -1,0 +1,75 @@
+syntax = "proto2";
+
+package bgs.protocol.report.v1;
+
+import "bgs/low/pb/client/account_types.proto";
+import "bgs/low/pb/client/attribute_types.proto";
+import "bgs/low/pb/client/entity_types.proto";
+import "bgs/low/pb/client/rpc_types.proto";
+
+option cc_generic_services = false;
+option optimize_for = CODE_SIZE;
+
+message ReportType {
+    optional string note = 1;
+    
+    oneof type {
+        CustomReport custom_report = 10;
+        SpamReport spam_report = 11;
+        HarassmentReport harassment_report = 12;
+        RealLifeThreatReport real_life_threat_report = 13;
+        InappropriateBattleTagReport inappropriate_battle_tag_report = 14;
+        HackingReport hacking_report = 15;
+        BottingReport botting_report = 16;
+    }
+}
+
+message CustomReport {
+    optional string type = 1;
+    optional string programId = 2;
+    repeated Attribute attribute = 3;
+}
+
+message SpamReport {
+    optional account.v1.GameAccountHandle target = 1;
+    
+    optional SpamSource source = 2 [default = OTHER];
+    enum SpamSource {
+        OTHER = 1;
+        FRIEND_INVITE = 2;
+        WHISPER = 3;
+        CHAT = 4;
+    }
+}
+
+message HarassmentReport {
+    optional account.v1.GameAccountHandle target = 1;
+    optional string text = 2;
+}
+
+message RealLifeThreatReport {
+    optional account.v1.GameAccountHandle target = 1;
+    optional string text = 2;
+}
+
+message InappropriateBattleTagReport {
+    optional account.v1.GameAccountHandle target = 1;
+    optional string battle_tag = 2;
+}
+
+message HackingReport {
+    optional account.v1.GameAccountHandle target = 1;
+}
+
+message BottingReport {
+    optional account.v1.GameAccountHandle target = 1;
+}
+
+message Report {
+    required string report_type = 1;
+    repeated Attribute attribute = 2;
+    optional int32 report_qos = 3 [default = 0];
+    optional EntityId reporting_account = 4;
+    optional EntityId reporting_game_account = 5;
+    optional fixed64 report_timestamp = 6;
+}

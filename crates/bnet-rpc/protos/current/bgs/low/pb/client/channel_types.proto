@@ -1,0 +1,78 @@
+syntax = "proto2";
+
+package bgs.protocol.channel.v1;
+
+import public "bgs/low/pb/client/client/v1/channel_id.proto";
+import "bgs/low/pb/client/attribute_types.proto";
+import "bgs/low/pb/client/entity_types.proto";
+import "bgs/low/pb/client/invitation_types.proto";
+import "bgs/low/pb/client/rpc_types.proto";
+
+option optimize_for = CODE_SIZE;
+
+message Message {
+    repeated Attribute attribute = 1;
+    
+    extensions 100 to 9999;
+}
+
+message ListChannelsOptions {
+    optional uint32 start_index = 1 [default = 0];
+    optional uint32 max_results = 2 [default = 16];
+    optional string name = 3;
+    optional fixed32 program = 4;
+    optional fixed32 locale = 5;
+    optional uint32 capacity_full = 6;
+    required AttributeFilter attribute_filter = 7;
+    optional string channel_type = 8;
+}
+
+message ChannelDescription {
+    required EntityId channel_id = 1;
+    optional uint32 current_members = 2;
+    optional ChannelState state = 3;
+}
+
+message ChannelInfo {
+    required ChannelDescription description = 1;
+    repeated Member member = 2;
+}
+
+message ChannelState {
+    optional uint32 max_members = 1;
+    optional uint32 min_members = 2;
+    repeated Attribute attribute = 3;
+    repeated Invitation invitation = 4;
+    optional uint32 reason = 6;
+    
+    optional PrivacyLevel privacy_level = 7 [default = PRIVACY_LEVEL_OPEN];
+    enum PrivacyLevel {
+        PRIVACY_LEVEL_OPEN = 1;
+        PRIVACY_LEVEL_OPEN_INVITATION_AND_FRIEND = 2;
+        PRIVACY_LEVEL_OPEN_INVITATION = 3;
+        PRIVACY_LEVEL_CLOSED = 4;
+    }
+    
+    optional string name = 8;
+    optional string channel_type = 10 [default = "default"];
+    optional fixed32 program = 11 [default = 0];
+    optional bool subscribe_to_presence = 13 [default = true];
+    
+    extensions 100 to 9999;
+}
+
+message MemberAccountInfo {
+    optional string battle_tag = 3;
+}
+
+message MemberState {
+    repeated Attribute attribute = 1;
+    repeated uint32 role = 2 [packed = true];
+    optional uint64 privileges = 3 [default = 0];
+    optional MemberAccountInfo info = 4;
+}
+
+message Member {
+    required Identity identity = 1;
+    required MemberState state = 2;
+}
