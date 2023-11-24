@@ -1,4 +1,7 @@
-use std::{path::Path, sync::RwLock};
+use std::{
+    path::Path,
+    sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
+};
 
 use tracing::{error, info, instrument};
 
@@ -7,7 +10,7 @@ mod structs;
 
 pub use structs::*;
 
-use crate::AzResult;
+use crate::{get_g, mut_g, AzResult};
 
 pub struct ConfigMgr {
     filename: String,
@@ -16,6 +19,14 @@ pub struct ConfigMgr {
 }
 
 impl ConfigMgr {
+    pub fn r() -> RwLockReadGuard<'static, Self> {
+        get_g!(CONFIG_MGR)
+    }
+
+    pub fn m() -> RwLockWriteGuard<'static, Self> {
+        mut_g!(CONFIG_MGR)
+    }
+
     const fn new() -> ConfigMgr {
         ConfigMgr {
             filename: String::new(),
@@ -96,4 +107,4 @@ impl ConfigMgr {
     }
 }
 
-pub static CONFIG_MGR: RwLock<ConfigMgr> = RwLock::new(ConfigMgr::new());
+static CONFIG_MGR: RwLock<ConfigMgr> = RwLock::new(ConfigMgr::new());

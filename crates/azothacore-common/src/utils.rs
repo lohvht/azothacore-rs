@@ -1,4 +1,10 @@
-use std::{fs, io, path::Path, process};
+use std::{
+    fs,
+    io,
+    path::Path,
+    process,
+    sync::{Arc, OnceLock, Weak},
+};
 
 use bincode::Options;
 
@@ -36,4 +42,59 @@ pub fn buffered_file_open<P: AsRef<Path>>(p: P) -> io::Result<io::BufReader<fs::
 
 pub fn buffered_file_create<P: AsRef<Path>>(p: P) -> io::Result<io::BufWriter<fs::File>> {
     Ok(io::BufWriter::with_capacity(DEFAULT_BUFFER_SIZE, fs::File::create(p)?))
+}
+
+/// SharedFromSelfBase is the base implementation of C++'s std::shared_from_self
+/// It contains a weak pointer to T.
+pub struct SharedFromSelfBase<T> {
+    weak: OnceLock<Weak<T>>,
+}
+
+impl<T> SharedFromSelfBase<T> {
+    pub const fn new() -> SharedFromSelfBase<T> {
+        SharedFromSelfBase { weak: OnceLock::new() }
+    }
+
+    pub fn initialise(&self, r: &Arc<T>) {
+        self.weak.get_or_init(|| Arc::downgrade(r));
+    }
+}
+
+/// SharedFromSelf is the accompanying trait for C++'s std::shared_from_self
+///
+/// The old required method to be implemented is `get_base`.
+///
+/// Below is a contrived example of how to use this trait:
+///
+/// ```
+/// struct MyStruct {
+///     base: SharedFromSelfBase<MyStruct>,
+/// }
+/// impl SharedFromSelf<MyStruct> for MyStruct {
+///     fn get_base(&self) -> &SharedFromSelfBase<MyStruct> {
+///         &self.base
+///     }
+/// }
+/// impl MyStruct {
+///     fn new() -> Arc<MyStruct> {
+///         let r = Arc::new(MyStruct {
+///             base: SharedFromSelfBase::new(),
+///         });
+///         r.base.initialise(&r);
+///         r
+///     }
+///     pub fn hello(&self) {
+///         println!("Hello!");
+///     }
+/// }
+/// let my_struct = MyStruct::new();
+/// let my_struct_2 = my_struct.shared_from_self();
+/// my_struct_2.hello();
+/// ```
+pub trait SharedFromSelf<T> {
+    fn get_base(&self) -> &SharedFromSelfBase<T>;
+
+    fn shared_from_self(&self) -> Arc<T> {
+        self.get_base().weak.get().unwrap().upgrade().unwrap()
+    }
 }

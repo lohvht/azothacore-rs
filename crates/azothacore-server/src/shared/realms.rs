@@ -1,3 +1,5 @@
+pub mod realm_list;
+
 use std::net::IpAddr;
 
 use azothacore_common::AccountTypes;
@@ -50,7 +52,7 @@ flags! {
 
 #[derive(Debug)]
 pub struct Realm {
-    pub id:                     u32,
+    pub id:                     BnetRealmHandle,
     pub build:                  u32,
     pub external_address:       IpAddr,
     pub local_address:          IpAddr,
@@ -69,3 +71,61 @@ impl Realm {
         todo!("NOT IMPL, check Realm::GetAddressForClient");
     }
 }
+
+#[derive(Copy, Clone, Debug)]
+pub struct BnetRealmHandle {
+    region: u8,
+    site:   u8,
+    /// primary key in `realmlist` table
+    realm:  u32,
+}
+
+impl BnetRealmHandle {
+    pub const fn new(region: u8, battlegroup: u8, index: u32) -> Self {
+        Self {
+            region,
+            site: battlegroup,
+            realm: index,
+        }
+    }
+
+    pub fn from_realm_address(realm_address: u32) -> Self {
+        Self {
+            region: u8::try_from((realm_address >> 24) & 0xFF).unwrap(),
+            site:   u8::try_from((realm_address >> 16) & 0xFF).unwrap(),
+            realm:  realm_address & 0xFFFF,
+        }
+    }
+
+    pub fn get_address(&self) -> u32 {
+        (u32::from(self.region) << 24) | (u32::from(self.site) << 16) | self.realm
+    }
+
+    pub fn get_address_string(&self) -> String {
+        format!("{}-{}-{}", self.region, self.site, self.realm)
+    }
+
+    pub fn get_sub_region_address(&self) -> String {
+        format!("{}-{}-0", self.region, self.site)
+    }
+}
+
+impl PartialOrd for BnetRealmHandle {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for BnetRealmHandle {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.realm.cmp(&other.realm)
+    }
+}
+
+impl PartialEq for BnetRealmHandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.realm == other.realm
+    }
+}
+
+impl Eq for BnetRealmHandle {}

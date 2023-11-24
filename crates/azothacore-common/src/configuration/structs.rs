@@ -11,6 +11,7 @@ use serde_default::DefaultFromSerde;
 use serde_inline_default::serde_inline_default;
 use thiserror::Error;
 use toml::{self, map::Map as TomlMap};
+use tracing::error;
 
 use crate::deref_boilerplate;
 
@@ -112,6 +113,9 @@ impl ConfigTable {
                 },
             }
         };
+        if let Err(e) = &res {
+            error!(target:"server.loading", "Missing or bad value some kind of other error when retrieving config from this table: {e}");
+        }
         res
     }
 }

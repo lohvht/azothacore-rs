@@ -337,7 +337,7 @@ impl<T: ScriptObject + ?Sized> ScriptRegistry<T> {
                 Err(e) => {
                     if !script_name.contains("Smart") {
                         tracing::error!(
-                            target = "sql::sql",
+                            target:"sql::sql",
                             err = e,
                             "Script named '{}' is not assigned in the database.",
                             script_name,

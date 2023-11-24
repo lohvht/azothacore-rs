@@ -5,7 +5,7 @@ use sqlx::MySql;
 use thiserror::Error;
 use tracing::{error, info};
 
-use crate::database::sql;
+use crate::database::query;
 
 #[derive(Error, Debug)]
 pub enum DatabaseLoaderError {
@@ -57,8 +57,7 @@ pub async fn apply_file<P: AsRef<Path>>(pool: &sqlx::Pool<MySql>, f: P) -> Resul
             p.span()
         };
         let stmt_str = &file_data[p_span];
-
-        let res = sql(stmt_str).execute(&mut tx).await;
+        let res = query(stmt_str).execute(&mut *tx).await;
         if let Err(e) = res {
             error!(
                 "Applying of file \'{}\' to database failed!\n\

@@ -17,9 +17,9 @@ use walkdir::WalkDir;
 
 use crate::database::{
     database_loader_utils::{apply_file, DatabaseLoaderError},
-    qargs,
-    sql,
-    sql_w_args,
+    params,
+    query,
+    query_with,
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Copy)]
@@ -110,7 +110,7 @@ impl<'u> UpdateFetcher<'u> {
         &self,
         pool: &sqlx::Pool<MySql>,
     ) -> Result<impl Iterator<Item = (PathBuf, FetcherState)>, DatabaseLoaderError> {
-        let mut directories: Vec<(PathBuf, FetcherState)> = sql("SELECT `path`, `state` FROM `updates_include`")
+        let mut directories: Vec<(PathBuf, FetcherState)> = query("SELECT `path`, `state` FROM `updates_include`")
             .fetch_all(pool)
             .await?
             .iter()
@@ -199,7 +199,7 @@ impl<'u> UpdateFetcher<'u> {
     #[instrument(skip(self, pool))]
     async fn receive_applied_files(&self, pool: &sqlx::Pool<MySql>) -> Result<BTreeMap<PathBuf, AppliedFileEntry>, DatabaseLoaderError> {
         let map: BTreeMap<PathBuf, AppliedFileEntry> =
-            sql("SELECT `name`, `hash`, `state`, UNIX_TIMESTAMP(`timestamp`) as `unix_timestamp` FROM `updates` ORDER BY `name` ASC")
+            query("SELECT `name`, `hash`, `state`, UNIX_TIMESTAMP(`timestamp`) as `unix_timestamp` FROM `updates` ORDER BY `name` ASC")
                 .fetch_all(pool)
                 .await?
                 .iter()
@@ -343,7 +343,7 @@ fn get_sha256_hash<P: AsRef<Path>>(fp: P) -> Result<String, DatabaseLoaderError>
 
 #[instrument(skip(pool))]
 async fn update_state(pool: &sqlx::Pool<MySql>, file_name: String, state: FetcherState) -> Result<(), DatabaseLoaderError> {
-    sql("UPDATE `updates` SET `state` = ? where `name` = ?").execute(pool).await?;
+    query("UPDATE `updates` SET `state` = ? where `name` = ?").execute(pool).await?;
     Ok(())
 }
 
@@ -466,8 +466,8 @@ async fn apply_update_file(
 
 #[instrument(skip(pool))]
 async fn rename_entry(pool: &sqlx::Pool<MySql>, from: &str, to: &str) -> Result<(), DatabaseLoaderError> {
-    sql("DELETE FROM `updates` WHERE `name`= ?").bind(to).execute(pool).await?;
-    sql_w_args("UPDATE `updates` SET `name`=? WHERE `name`=?", qargs!(to, from))
+    query("DELETE FROM `updates` WHERE `name`= ?").bind(to).execute(pool).await?;
+    query_with("UPDATE `updates` SET `name`=? WHERE `name`=?", params!(to, from))
         .execute(pool)
         .await?;
     Ok(())
@@ -481,9 +481,9 @@ async fn update_entry(
     state: &FetcherState,
     speed: Duration,
 ) -> Result<(), DatabaseLoaderError> {
-    sql_w_args(
+    query_with(
         "REPLACE INTO `updates` (`name`, `hash`, `state`, `speed`) VALUES (?,?,?,?)",
-        qargs!(filename, hash, state.to_string(), speed.as_millis().to_string()),
+        params!(filename, hash, state.to_string(), speed.as_millis().to_string()),
     )
     .execute(pool)
     .await?;
@@ -493,7 +493,7 @@ async fn update_entry(
 #[instrument(skip(pool))]
 async fn clean_up(pool: &sqlx::Pool<MySql>, storage: Vec<String>) -> Result<(), DatabaseLoaderError> {
     let q = format!("DELETE FROM `updates` WHERE `name` IN ({})", vec!["?"; storage.len()].join(","));
-    let mut q = sql(q.as_str());
+    let mut q = query(q.as_str());
     for name in storage {
         q = q.bind(name);
     }

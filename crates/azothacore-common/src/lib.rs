@@ -11,6 +11,7 @@ pub mod recastnavigation_handles;
 pub mod utils;
 
 pub type AzResult<T> = anyhow::Result<T>;
+pub type AzError = anyhow::Error;
 use std::{
     fmt::{Debug, Display},
     str::FromStr,
@@ -24,7 +25,7 @@ use num_derive::FromPrimitive;
 use thiserror::Error;
 use tracing::warn;
 
-#[derive(Debug, FromPrimitive)]
+#[derive(Copy, Clone, Debug, FromPrimitive)]
 pub enum AccountTypes {
     SecPlayer = 0,
     SecModerator = 1,
@@ -97,6 +98,14 @@ impl FromStr for Locale {
             "itIT" => Ok(Locale::itIT),
             _ => Err(LocaleParseError { got: s.to_string() }),
         }
+    }
+}
+
+impl Locale {
+    /// GetLocaleByName
+    pub fn from_name(name: &str) -> Self {
+        // including enGB case
+        Self::from_str(name).unwrap_or(Locale::enUS)
     }
 }
 
