@@ -1,3 +1,4 @@
 [submodule "CascLib"]
 	path = crates/casclib-sys/CascLib
-	url = https://github.com/ladislav-zezula/CascLib
+	url = https://github.com/lohvht/CascLib
+	branch = feat/azothacore-overrides
