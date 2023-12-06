@@ -7,12 +7,32 @@ tagged to version 7.3.5 (rev 269672), using Rust.
 
 It is completely open source and still a work in progress; Community involvement is highly encouraged.
 
+Run the following to clone the repo, including submodules.
+
+```
+git clone --recurse-submodules git@github.com:lohvht/azothacore-rs.git
+```
+
 # Requirements
 
 Ensure that you're on a *NIGHTLY* toolchain for rust as the project uses a few features that are not
 stable yet.
 
-TODO: FILL THIS IN WITH CMAKE/C++ REQUIREMENTS AND TEST OUT BUILDS FOR WINDOWS
+There are several other dependencies required to compile this project other than a **nightly** build
+due to the project's dependencies on non-rust components. These are the crates in the `crates/`
+directory ending with `-sys`. As well as [recastnavigation-sys](https://github.com/andriyDev/recastnavigation-rs-sys)
+
+These are the following requirements needed at the moment:
+- cmake
+- clang
+- C/C++ compiler
+
+For `casclib-sys`, Cmake and a C++ compiler is required to compile [CascLib](https://github.com/ladislav-zezula/CascLib)
+while clang is required to parse the C++ headers to generate bindings to CascLib.
+
+A C++ compiler and clang is also required to compile recastnavigation-sys.
+
+TODO: FILL THIS IN WITH CMAKE/C++ REQUIREMENTS AND TEST OUT BUILDS FOR WINDOWS/Other Systems
 
 # Roadmap checklist (To be updated as it goes)
 - [x] Extractors/Generators
@@ -20,10 +40,14 @@ TODO: FILL THIS IN WITH CMAKE/C++ REQUIREMENTS AND TEST OUT BUILDS FOR WINDOWS
     - [x] Vmap4 Extractor
     - [x] Vmap4 Assembler
     - [x] Mmap Generator
+- [ ] Authserver netcode
+    - [ ] Login REST service
+    - [ ] Auth session handling
+    - [ ] SSL/TLS cert patching / override
+    - [ ] Test can login to login screen in UI
 - [ ] Loading game assets
 - [ ] Loading DB fixes
 - [ ] Migrations / DB reloader
-- [ ] Authserver netcode
 - [ ] Worldserver netcode
 - [ ] ...
 
