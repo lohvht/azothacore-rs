@@ -44,6 +44,10 @@ fn setup_casc_build() {
     println!("cargo:rustc-link-lib=static=casc");
     println!("cargo:rerun-if-changed={}", wrapper_header);
     println!("cargo:rustc-link-lib=dylib=stdc++");
+    // // NOTE: Usually If system has zlib, we need to include this line
+    // // But we have forked the underlying casclib to not use
+    // // system zlib for now.
+    // println!("cargo:rustc-link-lib=dylib=z");
 
     let bindings = bindgen::Builder::default()
         .header(wrapper_header)
@@ -112,7 +116,7 @@ fn setup_casc_build() {
         .blocklist_function("UnhandledExceptionFilter")
         .blocklist_function("__C_specific_handler")
         .layout_tests(false)
-        .rustfmt_bindings(true)
+        .formatter(bindgen::Formatter::Rustfmt)
         .generate()
         .expect("Unable to generate bindings");
     let out_path = PathBuf::from(env::var("OUT_DIR").unwrap());
