@@ -1,11 +1,10 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    net::{self, IpAddr, ToSocketAddrs},
     sync::{RwLock, RwLockReadGuard, RwLockWriteGuard},
     time::Duration,
 };
 
-use azothacore_common::{az_error, get_g, mut_g, AccountTypes, AzResult};
+use azothacore_common::{get_g, mut_g, utils::net_resolve, AccountTypes};
 use flagset::FlagSet;
 use sqlx::Row;
 use tokio::runtime::Handle as TokioRtHandle;
@@ -23,15 +22,6 @@ pub struct RealmList {
     update_interval_duration: Duration,
     realms:                   BTreeMap<BnetRealmHandle, Realm>,
     sub_regions:              BTreeSet<String>,
-}
-
-fn net_resolve(addr_str: &str, port: u16) -> AzResult<IpAddr> {
-    let addr = addr_str.parse::<net::IpAddr>()?;
-    if (addr, port).to_socket_addrs()?.next().is_none() {
-        Err(az_error!("Could not resolve address {addr_str}:{port}"))
-    } else {
-        Ok(addr)
-    }
 }
 
 impl RealmList {
@@ -94,21 +84,21 @@ impl RealmList {
                 let local_subnet_mask: String = fields.get("localSubnetMask");
                 let port = fields.get("port");
 
-                let external_address = match net_resolve(&external_address, port) {
+                let external_address = match net_resolve((external_address.as_str(), port)) {
                     Err(e) => {
                         error!(target:"realmlist", err=e.to_string(), "Could not resolve address {external_address} for realm \"{}\" id {}", name, realm_id);
                         continue;
                     },
                     Ok(a) => a,
                 };
-                let local_address = match net_resolve(&local_address, port) {
+                let local_address = match net_resolve((local_address.as_str(), port)) {
                     Err(e) => {
                         error!(target:"realmlist", err=e.to_string(), "Could not resolve localAddress {local_address} for realm \"{}\" id {}", name, realm_id);
                         continue;
                     },
                     Ok(a) => a,
                 };
-                let local_subnet_mask = match net_resolve(&local_subnet_mask, port) {
+                let local_subnet_mask = match net_resolve((local_subnet_mask.as_str(), port)) {
                     Err(e) => {
                         error!(target:"realmlist", err=e.to_string(),"Could not resolve localSubnetMask {local_subnet_mask} for realm \"{}\" id {}", name, realm_id);
                         continue;

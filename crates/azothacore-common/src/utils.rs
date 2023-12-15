@@ -1,9 +1,11 @@
 use std::{
     fs,
     io,
+    net::{self, ToSocketAddrs},
     path::Path,
     process,
     sync::{Arc, OnceLock, Weak},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use bincode::Options;
@@ -13,6 +15,16 @@ pub fn create_pid_file<P: AsRef<Path>>(filename: P) -> io::Result<u32> {
     let pid = process::id();
     fs::write(filename, pid.to_string().as_bytes())?;
     Ok(pid)
+}
+
+pub fn net_resolve<T: ToSocketAddrs>(t: T) -> io::Result<net::SocketAddr> {
+    match t.to_socket_addrs()?.next() {
+        None => Err(io::Error::new(
+            io::ErrorKind::AddrNotAvailable,
+            "Could not resolve address {addr_str}:{port}",
+        )),
+        Some(a) => Ok(a),
+    }
 }
 
 macro_rules! bincode_cfg {
@@ -42,6 +54,10 @@ pub fn buffered_file_open<P: AsRef<Path>>(p: P) -> io::Result<io::BufReader<fs::
 
 pub fn buffered_file_create<P: AsRef<Path>>(p: P) -> io::Result<io::BufWriter<fs::File>> {
     Ok(io::BufWriter::with_capacity(DEFAULT_BUFFER_SIZE, fs::File::create(p)?))
+}
+
+pub fn unix_now() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
 }
 
 /// SharedFromSelfBase is the base implementation of C++'s std::shared_from_self
