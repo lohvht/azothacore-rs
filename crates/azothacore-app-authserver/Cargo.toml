@@ -9,18 +9,23 @@ azothacore-common.workspace=true
 azothacore-server.workspace=true
 bnet-rpc.workspace=true
 # External crates
-ipnet.workspace = true
+axum-extra.workspace = true
 axum.workspace = true
 bytes.workspace = true
-sqlx.workspace = true
 clap.workspace = true
-num-bigint.workspace = true
-rand.workspace = true
-tokio.workspace = true
-tokio-util.workspace = true
-tracing.workspace = true
-prost.workspace = true
-rustls = { version = "0" }
-rustls-pemfile = { version = "1" }
 hyper = { version = "1" }
+hyper-util = { version = "0" }
+ipnet.workspace = true
+num-bigint.workspace = true
+prost.workspace = true
+rand.workspace = true
+rustls-pemfile = { version = "1" }
+serde.workspace = true
+sha2.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
 tokio-rustls = { version = "0", features=["tls12"] }
+tokio-util.workspace = true
+tokio.workspace = true
+tower-service = "0"
+tracing.workspace = true

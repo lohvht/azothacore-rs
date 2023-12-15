@@ -20,6 +20,7 @@ use std::{
 pub use anyhow::{anyhow as az_error, Context as AzContext};
 pub use compile_options::*;
 use flagset::{flags, FlagSet};
+pub use hex_fmt::HexFmt;
 use num::FromPrimitive;
 use num_derive::FromPrimitive;
 use thiserror::Error;

@@ -19,10 +19,7 @@ pub fn create_pid_file<P: AsRef<Path>>(filename: P) -> io::Result<u32> {
 
 pub fn net_resolve<T: ToSocketAddrs>(t: T) -> io::Result<net::SocketAddr> {
     match t.to_socket_addrs()?.next() {
-        None => Err(io::Error::new(
-            io::ErrorKind::AddrNotAvailable,
-            "Could not resolve address {addr_str}:{port}",
-        )),
+        None => Err(io::Error::new(io::ErrorKind::AddrNotAvailable, "Could not resolve address {addr_str}:{port}")),
         Some(a) => Ok(a),
     }
 }

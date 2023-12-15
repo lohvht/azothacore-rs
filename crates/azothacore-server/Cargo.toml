@@ -16,14 +16,13 @@ wow-db2.workspace = true
 async-trait = "0"
 bytes.workspace = true
 flagset.workspace = true
-hex_fmt = "0"
 hugsqlx = { version = "0", features = [ "mysql" ] }
 nalgebra.workspace = true
 num-derive.workspace = true
 num-traits.workspace = true
 num.workspace = true
 serde.workspace = true
-sha2 = "0"
+sha2.workspace = true
 sql-parse = "0"
 sqlx.workspace = true
 thiserror.workspace = true

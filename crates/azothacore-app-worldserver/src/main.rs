@@ -158,7 +158,7 @@ fn main() -> AzResult<()> {
 
     let realm_id = ConfigMgr::r().get_option::<u32>("RealmID")?;
     rt.block_on(async { start_db(realm_id).await })?;
-    let _db_handle = dropper_wrapper_fn(rt.handle(), || async { stop_db().await });
+    let _db_handle = dropper_wrapper_fn(rt.handle(), stop_db);
 
     // set server offline (not connectable)
 

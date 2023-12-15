@@ -7,8 +7,7 @@ use std::{
     time::Duration,
 };
 
-use azothacore_common::configuration::DbUpdates;
-use hex_fmt::HexFmt;
+use azothacore_common::{configuration::DbUpdates, hex_str};
 use sha2::{Digest, Sha256};
 use sqlx::{MySql, Row};
 use tokio::time::Instant;
@@ -80,12 +79,7 @@ pub struct UpdateFetcher<'u> {
 }
 
 impl<'u> UpdateFetcher<'u> {
-    pub fn new<Iter: IntoIterator<Item = String>>(
-        src_directory: String,
-        module_target: String,
-        module_iterator: Iter,
-        update_cfg: &'u DbUpdates,
-    ) -> Self {
+    pub fn new<Iter: IntoIterator<Item = String>>(src_directory: String, module_target: String, module_iterator: Iter, update_cfg: &'u DbUpdates) -> Self {
         let mut module_list = BTreeSet::new();
         module_list.extend(module_iterator);
         Self {
@@ -106,10 +100,7 @@ impl<'u> UpdateFetcher<'u> {
     }
 
     #[instrument(skip(self, pool))]
-    async fn receive_included_directories(
-        &self,
-        pool: &sqlx::Pool<MySql>,
-    ) -> Result<impl Iterator<Item = (PathBuf, FetcherState)>, DatabaseLoaderError> {
+    async fn receive_included_directories(&self, pool: &sqlx::Pool<MySql>) -> Result<impl Iterator<Item = (PathBuf, FetcherState)>, DatabaseLoaderError> {
         let mut directories: Vec<(PathBuf, FetcherState)> = query("SELECT `path`, `state` FROM `updates_include`")
             .fetch_all(pool)
             .await?
@@ -252,37 +243,18 @@ impl<'u> UpdateFetcher<'u> {
         // Apply default updates
         for (avail_file, avail_file_state) in available.iter() {
             if !matches!(avail_file_state, FetcherState::Custom | FetcherState::Module) {
-                imported_updates += apply_update_file(
-                    self.update_cfg,
-                    pool,
-                    &mut applied,
-                    &hash_to_filename,
-                    &available,
-                    avail_file,
-                    avail_file_state,
-                )
-                .await?;
+                imported_updates += apply_update_file(self.update_cfg, pool, &mut applied, &hash_to_filename, &available, avail_file, avail_file_state).await?;
             }
         }
         // Apply only custom/module updates
         for (avail_file, avail_file_state) in available.iter() {
             if matches!(avail_file_state, FetcherState::Custom | FetcherState::Module) {
-                imported_updates += apply_update_file(
-                    self.update_cfg,
-                    pool,
-                    &mut applied,
-                    &hash_to_filename,
-                    &available,
-                    avail_file,
-                    avail_file_state,
-                )
-                .await?;
+                imported_updates += apply_update_file(self.update_cfg, pool, &mut applied, &hash_to_filename, &available, avail_file, avail_file_state).await?;
             }
         }
         // Cleanup up orphaned entries (if enabled)
         if !applied.is_empty() {
-            let do_cleanup =
-                self.update_cfg.CleanDeadRefMaxCount.is_none() || applied.len() <= self.update_cfg.CleanDeadRefMaxCount.unwrap();
+            let do_cleanup = self.update_cfg.CleanDeadRefMaxCount.is_none() || applied.len() <= self.update_cfg.CleanDeadRefMaxCount.unwrap();
             let to_cleanup = applied
                 .into_iter()
                 .filter_map(|entry| {
@@ -322,11 +294,7 @@ fn get_sha256_hash<P: AsRef<Path>>(fp: P) -> Result<String, DatabaseLoaderError>
             inner: e,
         })
         .map_err(|e| {
-            let f = if let DatabaseLoaderError::OpenApplyFile { file, .. } = &e {
-                file
-            } else {
-                ""
-            };
+            let f = if let DatabaseLoaderError::OpenApplyFile { file, .. } = &e { file } else { "" };
             error!(
                 "Failed to open the sql update {} for reading! \n\
                 Stopping the server to keep the database integrity, \n\
@@ -338,7 +306,7 @@ fn get_sha256_hash<P: AsRef<Path>>(fp: P) -> Result<String, DatabaseLoaderError>
     let mut hasher = Sha256::new();
     hasher.update(file_content.as_bytes());
     let hash_bytes = &hasher.finalize()[..];
-    Ok(format!("{}", HexFmt(hash_bytes)))
+    Ok(hex_str!(hash_bytes))
 }
 
 #[instrument(skip(pool))]
@@ -396,11 +364,7 @@ async fn apply_update_file(
             );
         } else {
             if iter.state != *file_state {
-                debug!(
-                    ">> Updating the state of \"{}\" to \'{:?}\'...",
-                    file_path.to_string_lossy(),
-                    file_state,
-                );
+                debug!(">> Updating the state of \"{}\" to \'{:?}\'...", file_path.to_string_lossy(), file_state,);
                 update_state(pool, file_path.to_string_lossy().to_string(), *file_state).await?
             }
             debug!(">> Update is already applied and matches the hash \'{}\'.", hash);
@@ -474,13 +438,7 @@ async fn rename_entry(pool: &sqlx::Pool<MySql>, from: &str, to: &str) -> Result<
 }
 
 #[instrument(skip(pool))]
-async fn update_entry(
-    pool: &sqlx::Pool<MySql>,
-    filename: &str,
-    hash: &str,
-    state: &FetcherState,
-    speed: Duration,
-) -> Result<(), DatabaseLoaderError> {
+async fn update_entry(pool: &sqlx::Pool<MySql>, filename: &str, hash: &str, state: &FetcherState, speed: Duration) -> Result<(), DatabaseLoaderError> {
     query_with(
         "REPLACE INTO `updates` (`name`, `hash`, `state`, `speed`) VALUES (?,?,?,?)",
         params!(filename, hash, state.to_string(), speed.as_millis().to_string()),

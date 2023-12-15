@@ -1,6 +1,6 @@
 pub mod realm_list;
 
-use std::net::IpAddr;
+use std::net::SocketAddr;
 
 use azothacore_common::AccountTypes;
 use flagset::{flags, FlagSet};
@@ -54,9 +54,9 @@ flags! {
 pub struct Realm {
     pub id:                     BnetRealmHandle,
     pub build:                  u32,
-    pub external_address:       IpAddr,
-    pub local_address:          IpAddr,
-    pub local_subnet_mask:      IpAddr,
+    pub external_address:       SocketAddr,
+    pub local_address:          SocketAddr,
+    pub local_subnet_mask:      SocketAddr,
     pub port:                   u16,
     pub realm_type:             RealmType,
     pub name:                   String,

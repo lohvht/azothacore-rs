@@ -3,6 +3,7 @@ use std::{
     hash::Hash,
     io,
     path::{Path, PathBuf},
+    time::Duration,
 };
 
 use flagset::{flags, FlagSet};
@@ -199,6 +200,26 @@ pub struct DatabaseInfo {
     pub BaseFilePath: String,
     #[serde_inline_default("".to_string())]
     pub DBModuleName: String,
+}
+
+#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
+pub enum WrongPassBanType {
+    BanIP,
+    BanAccount,
+}
+
+#[serde_inline_default]
+#[derive(Deserialize, Serialize, DefaultFromSerde, Clone, Debug, PartialEq)]
+#[expect(non_snake_case)]
+pub struct WrongPass {
+    #[serde_inline_default(5)]
+    pub MaxCount: u64,
+    #[serde_inline_default(Duration::from_secs(600))]
+    pub BanTime:  Duration,
+    #[serde_inline_default(WrongPassBanType::BanIP)]
+    pub BanType:  WrongPassBanType,
+    #[serde_inline_default(false)]
+    pub Logging:  bool,
 }
 
 impl DatabaseInfo {
@@ -596,6 +617,11 @@ mod tests {
 
     #[test]
     fn configtable_expects_errors() {
+        #[derive(serde::Deserialize, serde::Serialize, Clone, Debug, PartialEq)]
+        struct A {
+            a: String,
+        }
+
         let t = configtable_helper(
             r#"
             nested_not_found.key1 = "key1"
@@ -613,6 +639,8 @@ mod tests {
             t.get::<String>("serde_error2"),
             Err(ConfigGetError::TomlDeserialisation(_))
         ));
+        assert!(matches!(t.get::<A>("serde_error2.table"), Ok(v) if v == A { a: "b".to_string() }));
+        assert!(matches!(t.get::<A>("serde_error3"), Err(ConfigGetError::KeyNotFound { keyname }) if keyname == *"serde_error3"));
         assert!(matches!(
             t.get::<String>("nested_bad_table_reference.key1.key2"),
             Err(
