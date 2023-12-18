@@ -25,9 +25,12 @@ pub fn azotha_banner_show<F>(application_name: &str, log_extra_info: F)
 where
     F: Fn(),
 {
-    info!("{} ({})", GIT_VERSION, application_name);
-    info!("<Ctrl-C> to stop.\n");
-    info!("{}", BANNER);
+    info!(
+        target: "server",
+        r#"{GIT_VERSION} ({application_name})
+    <Ctrl-C> to stop.
+    {BANNER}"#
+    );
 
     log_extra_info();
 }

@@ -36,10 +36,7 @@ fn file_stem_if_ext_matched<P: AsRef<Path>>(p: P, extension_to_match: &str) -> A
             Some(s) => s.to_string(),
         },
         None => {
-            return Err(az_error!(
-                "Path does not have an extension_to_match; p was {}",
-                p.as_ref().display()
-            ));
+            return Err(az_error!("Path does not have an extension_to_match; p was {}", p.as_ref().display()));
         },
     };
     Ok(file_stem)
@@ -150,13 +147,7 @@ impl StaticMapTree {
 
     /// unload_map_tile unloads the map tile. returns if the resultant operation has resulted in no
     /// loaded trees
-    pub fn unload_map_tile(
-        &mut self,
-        tile_x: u16,
-        tile_y: u16,
-        model_store: Arc<Mutex<VMapModelStore>>,
-        parent_map_data: Arc<HashMap<u32, u32>>,
-    ) {
+    pub fn unload_map_tile(&mut self, tile_x: u16, tile_y: u16, model_store: Arc<Mutex<VMapModelStore>>, parent_map_data: Arc<HashMap<u32, u32>>) {
         let tile_id = (tile_x, tile_y);
         // Drop the spawns in `loaded_tiles`
         let had_tile_loaded = match self.loaded_tiles.remove(&tile_id) {
@@ -203,11 +194,7 @@ impl StaticMapTree {
     }
 
     pub fn get_tile_model_instances(&self, tile_x: u16, tile_y: u16) -> Vec<Arc<ModelInstance>> {
-        self.loaded_tiles
-            .get(&(tile_x, tile_y))
-            .into_iter()
-            .flat_map(|v| v.iter().cloned())
-            .collect()
+        self.loaded_tiles.get(&(tile_x, tile_y)).into_iter().flat_map(|v| v.iter().cloned()).collect()
     }
 
     pub fn has_no_loaded_tiles(&self) -> bool {
@@ -301,13 +288,7 @@ impl StaticMapTree {
         Ok(())
     }
 
-    fn open_map_tile_spawns_file<P>(
-        dir: P,
-        map_id: u32,
-        x: u16,
-        y: u16,
-        parent_map_data: Arc<HashMap<u32, u32>>,
-    ) -> AzResult<TileFileOpenResult>
+    fn open_map_tile_spawns_file<P>(dir: P, map_id: u32, x: u16, y: u16, parent_map_data: Arc<HashMap<u32, u32>>) -> AzResult<TileFileOpenResult>
     where
         P: AsRef<Path>,
     {

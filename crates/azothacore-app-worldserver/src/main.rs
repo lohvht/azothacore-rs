@@ -5,7 +5,7 @@ use azothacore_common::{
     banner,
     configuration::{
         ConfigMgr,
-        DatabaseTypeFlags::{Character as DBFlagCharacter, Login as DBFlagLogin, World as DBFlagWorld},
+        DatabaseTypeFlags::{Character as DBFlagCharacter, Hotfix as DBFlagHotfix, Login as DBFlagLogin, World as DBFlagWorld},
     },
     get_g,
     log::init_logging,
@@ -20,7 +20,7 @@ use azothacore_common::{
 use azothacore_modules::scripts as module_scripts;
 use azothacore_server::{
     database::{
-        database_env::{CharacterDatabase, LoginDatabase, WorldDatabase},
+        database_env::{CharacterDatabase, HotfixDatabase, LoginDatabase, WorldDatabase},
         database_loader::DatabaseLoader,
         params,
         query_with,
@@ -175,11 +175,7 @@ fn main() -> AzResult<()> {
         .await
     })?;
 
-    RealmList::init(
-        rt.handle(),
-        token.clone(),
-        ConfigMgr::r().get_option("RealmsStateUpdateDelay").unwrap_or(10),
-    );
+    RealmList::init(rt.handle(), token.clone(), ConfigMgr::r().get_option("RealmsStateUpdateDelay").unwrap_or(10));
 
     // // TODO: Implement metrics?
     // sMetric->Initialize(realm.Name, *ioContext, []()
@@ -212,29 +208,35 @@ fn main() -> AzResult<()> {
 }
 
 async fn start_db(realm_id: u32) -> AzResult<()> {
-    let (updates, auth_cfg, world_cfg, character_cfg) = {
+    let updates;
+    let auth_cfg;
+    let world_cfg;
+    let character_cfg;
+    let hotfix_cfg;
+    {
         let config_mgr_r = ConfigMgr::r();
-        (
-            config_mgr_r.get_option("Updates")?,
-            config_mgr_r.get_option("LoginDatabaseInfo")?,
-            config_mgr_r.get_option("WorldDatabaseInfo")?,
-            config_mgr_r.get_option("CharacterDatabaseInfo")?,
-        )
-    };
+        updates = config_mgr_r.get_option("Updates")?;
+        auth_cfg = config_mgr_r.get_option("LoginDatabaseInfo")?;
+        world_cfg = config_mgr_r.get_option("WorldDatabaseInfo")?;
+        character_cfg = config_mgr_r.get_option("CharacterDatabaseInfo")?;
+        hotfix_cfg = config_mgr_r.get_option("HotfixDatabaseInfo")?;
+    }
     let registered_modules = module_scripts();
     let login_db_loader = DatabaseLoader::new(DBFlagLogin, registered_modules.iter().map(String::from), &auth_cfg, &updates);
     let world_db_loader = DatabaseLoader::new(DBFlagWorld, registered_modules.iter().map(String::from), &world_cfg, &updates);
-    let chars_db_laoder = DatabaseLoader::new(
-        DBFlagCharacter,
-        registered_modules.iter().map(String::from),
-        &character_cfg,
-        &updates,
-    );
+    let chars_db_loader = DatabaseLoader::new(DBFlagCharacter, registered_modules.iter().map(String::from), &character_cfg, &updates);
+    let hotfixes_db_loader = DatabaseLoader::new(DBFlagHotfix, registered_modules.iter().map(String::from), &hotfix_cfg, &updates);
 
-    let (auth_db, world_db, chars_db) = tokio::try_join!(login_db_loader.load(), world_db_loader.load(), chars_db_laoder.load())?;
+    let (auth_db, world_db, chars_db, hotfix_db) = tokio::try_join!(
+        login_db_loader.load(),
+        world_db_loader.load(),
+        chars_db_loader.load(),
+        hotfixes_db_loader.load()
+    )?;
     LoginDatabase::set(auth_db);
     WorldDatabase::set(world_db);
     CharacterDatabase::set(chars_db);
+    HotfixDatabase::set(hotfix_db);
 
     //- Get the realm Id from the configuration file
     if realm_id > 255 {
@@ -254,12 +256,9 @@ async fn start_db(realm_id: u32) -> AzResult<()> {
     clear_online_accounts(realm_id).await?;
 
     // Insert version info into DB
-    query_with(
-        "UPDATE version SET core_version = ?, core_revision = ?",
-        params!(GIT_VERSION, GIT_HASH),
-    )
-    .execute(WorldDatabase::get())
-    .await?;
+    query_with("UPDATE version SET core_version = ?, core_revision = ?", params!(GIT_VERSION, GIT_HASH))
+        .execute(WorldDatabase::get())
+        .await?;
 
     mut_g!(S_WORLD).load_db_version()?;
 

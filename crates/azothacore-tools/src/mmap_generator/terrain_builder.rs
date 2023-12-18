@@ -13,16 +13,7 @@ use flagset::FlagSet;
 use nalgebra::{DMatrix, SMatrix, Vector3};
 use tracing::{debug, instrument, warn};
 
-use crate::mmap_generator::common::{
-    MeshData,
-    GRID_PART_SIZE,
-    GRID_SIZE,
-    INVALID_MAP_LIQ_HEIGHT_MAX,
-    V8_SIZE,
-    V8_SIZE_SQ,
-    V9_SIZE,
-    V9_SIZE_SQ,
-};
+use crate::mmap_generator::common::{MeshData, GRID_PART_SIZE, GRID_SIZE, INVALID_MAP_LIQ_HEIGHT_MAX, V8_SIZE, V8_SIZE_SQ, V9_SIZE, V9_SIZE_SQ};
 
 #[derive(Debug)]
 enum Spot {
@@ -147,16 +138,13 @@ impl TerrainBuilder<'_> {
             let map_id = match used_map_id {
                 None => {
                     break Err(az_error!(
-                    "error retrieving map spot for the map {map_id:04}[{tile_x},{tile_y}], tried finding from these maps: {tried_map_ids:?}"
-                ))
+                        "error retrieving map spot for the map {map_id:04}[{tile_x},{tile_y}], tried finding from these maps: {tried_map_ids:?}"
+                    ))
                 },
                 Some(i) => i,
             };
             let map_file_name = GridMap::file_name(&self.maps_path, map_id, tile_y, tile_x);
-            let f = match buffered_file_open(&map_file_name)
-                .map_err(|e| e.into())
-                .and_then(|mut f| MapFile::read(&mut f))
-            {
+            let f = match buffered_file_open(&map_file_name).map_err(|e| e.into()).and_then(|mut f| MapFile::read(&mut f)) {
                 Err(_) => {
                     tried_map_ids.push(map_id);
                     used_map_id = self.vmap_mgr.get_parent_map_id(map_id);
@@ -431,11 +419,7 @@ impl TerrainBuilder<'_> {
 
             // transform data
             let scale = instance.i_scale;
-            let rotation = matrix3_from_euler_angles_xyz(
-                -instance.i_rot.z.to_radians(),
-                -instance.i_rot.x.to_radians(),
-                -instance.i_rot.y.to_radians(),
-            );
+            let rotation = matrix3_from_euler_angles_xyz(-instance.i_rot.z.to_radians(), -instance.i_rot.x.to_radians(), -instance.i_rot.y.to_radians());
             let mut position = instance.i_pos;
             position.x -= 32.0 * GRID_SIZE;
             position.y -= 32.0 * GRID_SIZE;
@@ -503,11 +487,7 @@ impl TerrainBuilder<'_> {
                     let (verts_y, verts_x) = data.shape();
                     for x in 0..verts_x {
                         for y in 0..verts_y {
-                            let vert = Vector3::new(
-                                corner.x + x as f32 * GRID_PART_SIZE,
-                                corner.y + y as f32 * GRID_PART_SIZE,
-                                data[(y, x)],
-                            );
+                            let vert = Vector3::new(corner.x + x as f32 * GRID_PART_SIZE, corner.y + y as f32 * GRID_PART_SIZE, data[(y, x)]);
                             let mut vert = rotation.transpose() * vert * scale + position;
                             vert.x *= -1.0;
                             vert.y *= -1.0;

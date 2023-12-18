@@ -4,12 +4,15 @@ use std::net::SocketAddr;
 
 use azothacore_common::AccountTypes;
 use flagset::{flags, FlagSet};
-use num::FromPrimitive;
-use num_derive::FromPrimitive;
+use ipnet::IpNet;
+use num::{FromPrimitive, ToPrimitive};
+use num_derive::{FromPrimitive, ToPrimitive};
 use thiserror::Error;
 
+use super::networking::socket::AddressOrName;
+
 /// Type of server, this is values from second column of Cfg_Configs.dbc
-#[derive(Debug, FromPrimitive)]
+#[derive(Debug, FromPrimitive, ToPrimitive)]
 pub enum RealmType {
     Normal = 0,
     Pvp = 1,
@@ -21,6 +24,8 @@ pub enum RealmType {
     /// replaced by REALM_PVP in realm list
     FfaPvp = 16,
 }
+
+const CONFIG_ID_BY_TYPE: [u32; 14] = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14];
 
 #[derive(Error, Debug, Clone)]
 #[error("parse realm type error: got {got}")]
@@ -56,7 +61,7 @@ pub struct Realm {
     pub build:                  u32,
     pub external_address:       SocketAddr,
     pub local_address:          SocketAddr,
-    pub local_subnet_mask:      SocketAddr,
+    pub local_network:          IpNet,
     pub port:                   u16,
     pub realm_type:             RealmType,
     pub name:                   String,
@@ -67,8 +72,31 @@ pub struct Realm {
 }
 
 impl Realm {
-    pub fn get_address_for_client(&self) {
-        todo!("NOT IMPL, check Realm::GetAddressForClient");
+    pub fn config_id(&self) -> u32 {
+        CONFIG_ID_BY_TYPE[self.realm_type.to_usize().unwrap()]
+    }
+
+    pub fn address_for_client<'a>(&'a self, client_address: &'a AddressOrName) -> &'a SocketAddr {
+        let client_address = match client_address {
+            // If its a name, we use local address
+            AddressOrName::Name(_) => return &self.local_address,
+            AddressOrName::Addr(a) => a,
+        };
+
+        if client_address.ip().is_loopback() {
+            // Try guessing if realm is also connected locally
+            if self.local_address.ip().is_loopback() || self.external_address.ip().is_loopback() {
+                client_address
+            } else {
+                // Assume that user connecting from the machine that bnetserver is located on
+                // has all realms available in his local network
+                &self.local_address
+            }
+        } else if self.local_network.contains(&client_address.ip()) {
+            &self.local_address
+        } else {
+            &self.external_address
+        }
     }
 }
 

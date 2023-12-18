@@ -1,0 +1,33 @@
+# docker-compose.yml for Azothacore.
+#
+# Start the server with `docker compose up -d --build`
+#
+# Don't make changes this file! make a `docker-compose.override.yml` and make your
+# changes there instead.
+
+version: '3'
+services:
+  database:
+    image: mariadb:lts
+    networks:
+      - az-network
+    ports:
+      - ${DOCKER_DB_EXTERNAL_PORT:-3306}:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=${DOCKER_DB_ROOT_PASSWORD:-password}
+    volumes:
+      - type: volume
+        source: az-database
+        target: /var/lib/mysql
+    restart: unless-stopped
+    healthcheck:
+      test: "/usr/bin/mysql --user=root --password=$$MYSQL_ROOT_PASSWORD --execute \"SHOW DATABASES;\""
+      interval: 5s
+      timeout: 10s
+      retries: 40
+
+volumes:
+  az-database:
+
+networks:
+  az-network:

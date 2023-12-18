@@ -41,15 +41,7 @@ use azothacore_server::{
 };
 
 use crate::{
-    adt::{
-        AdtChunkMcnk,
-        AdtChunkMfbo,
-        AdtChunkMh2o,
-        ADT_LIQUID_TYPE_MAGMA,
-        ADT_LIQUID_TYPE_OCEAN,
-        ADT_LIQUID_TYPE_SLIME,
-        ADT_LIQUID_TYPE_WATER,
-    },
+    adt::{AdtChunkMcnk, AdtChunkMfbo, AdtChunkMh2o, ADT_LIQUID_TYPE_MAGMA, ADT_LIQUID_TYPE_OCEAN, ADT_LIQUID_TYPE_SLIME, ADT_LIQUID_TYPE_WATER},
     extractor_common::{
         casc_handles::{CascFileHandle, CascLocale, CascStorageHandle},
         ChunkedFile,
@@ -329,13 +321,7 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> AzResu
 
         let chunk = wdt
             .chunks()
-            .find_map(|(fcc, data)| {
-                if fcc == b"MAIN" {
-                    Some(WdtChunkMain::from((fcc, data)))
-                } else {
-                    None
-                }
-            })
+            .find_map(|(fcc, data)| if fcc == b"MAIN" { Some(WdtChunkMain::from((fcc, data))) } else { None })
             .unwrap();
         // Loadup map grid data
         for y in 0..WDT_MAP_SIZE {
@@ -413,8 +399,7 @@ pub fn convert_adt(
     let mut map_area_ids = [[0; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
     let mut map_height_v9 = SMatrix::<f32, ADT_GRID_SIZE_PLUS_ONE, ADT_GRID_SIZE_PLUS_ONE>::zeros();
     let mut map_height_v8 = SMatrix::<f32, ADT_GRID_SIZE, ADT_GRID_SIZE>::zeros();
-    let mut map_liquid_flags: [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID] =
-        [[None.into(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
+    let mut map_liquid_flags: [[FlagSet<MapLiquidTypeFlag>; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID] = [[None.into(); ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
     let mut map_liquid_entry = [[0; ADT_CELLS_PER_GRID]; ADT_CELLS_PER_GRID];
     let mut map_holes = [[[0u8; 8]; 16]; 16];
     let mut has_holes = false;
@@ -570,13 +555,7 @@ pub fn convert_adt(
                         map_liquid_flags[i][j] |= MapLiquidTypeFlag::Slime;
                     },
                     _ => {
-                        warn!(
-                            "Can't find Liquid type {} for map {}. chunk {},{}",
-                            h.liquid_type.get(),
-                            storage_path,
-                            i,
-                            j
-                        );
+                        warn!("Can't find Liquid type {} for map {}. chunk {},{}", h.liquid_type.get(), storage_path, i, j);
                     },
                 };
 
@@ -601,17 +580,11 @@ pub fn convert_adt(
         }
     }
 
-    if let Some(mfbo) = adt.chunks().find_map(|(fcc, data)| {
-        if fcc == b"MFBO" {
-            Some(AdtChunkMfbo::from((fcc, data)))
-        } else {
-            None
-        }
-    }) {
-        map_height_flight_box_max_min = Some(MapHeightFlightBox {
-            max: mfbo.max,
-            min: mfbo.min,
-        });
+    if let Some(mfbo) = adt
+        .chunks()
+        .find_map(|(fcc, data)| if fcc == b"MFBO" { Some(AdtChunkMfbo::from((fcc, data))) } else { None })
+    {
+        map_height_flight_box_max_min = Some(MapHeightFlightBox { max: mfbo.max, min: mfbo.min });
     }
 
     //============================================

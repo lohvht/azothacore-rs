@@ -20,7 +20,7 @@ const fn unwrap_default(o: Option<&'static str>, s: &'static str) -> &'static st
 pub const CONF_DIR: &str = unwrap_default(option_env!("CONF_DIR"), "configs\\");
 
 #[cfg(target_os = "linux")]
-pub const CONF_DIR: &str = unwrap_default(option_env!("CONF_DIR"), "env/dist/etc");
+pub const CONF_DIR: &str = unwrap_default(option_env!("CONF_DIR"), "env/etc");
 #[cfg(target_os = "windows")]
 pub const CONF_MODULES_DIR: &str = unwrap_default(option_env!("CONF_MODULES_DIR"), formatcp!("{CONF_DIR}\\modules"));
 #[cfg(target_os = "linux")]

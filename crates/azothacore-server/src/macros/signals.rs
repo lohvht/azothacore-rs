@@ -25,7 +25,7 @@ macro_rules! receive_signal_and_run_expr {
                             return Err(::std::io::Error::new(::std::io::ErrorKind::Other, e));
                         }
                         Ok(r) => {
-                            tracing::info!("Cleanup task result: {}", r)
+                            tracing::info!("Cleanup task result: {r:?}")
                         }
                     }
                 }

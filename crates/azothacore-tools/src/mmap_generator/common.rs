@@ -39,13 +39,7 @@ pub struct TileInfo {
     pub nav_mesh_params: DetourNavMeshParams,
 }
 
-pub fn load_off_mesh_connections<P: AsRef<Path>>(
-    map_id: u32,
-    tile_x: u16,
-    tile_y: u16,
-    offmesh_path: Option<P>,
-    mesh_data: &mut MeshData,
-) -> AzResult<()> {
+pub fn load_off_mesh_connections<P: AsRef<Path>>(map_id: u32, tile_x: u16, tile_y: u16, offmesh_path: Option<P>, mesh_data: &mut MeshData) -> AzResult<()> {
     // no meshfile input given?
     let offmesh_path = match offmesh_path {
         None => return Ok(()),
@@ -56,20 +50,7 @@ pub fn load_off_mesh_connections<P: AsRef<Path>>(
     // pretty silly thing, as we parse entire file and load only the tile we need
     // but we don't expect this file to be too large
     for l in buf.split('\n') {
-        let scanned = match sscanf::sscanf!(
-            l,
-            "{} {},{} ({} {} {}) ({} {} {}) {}",
-            u32,
-            u16,
-            u16,
-            f32,
-            f32,
-            f32,
-            f32,
-            f32,
-            f32,
-            f32
-        ) {
+        let scanned = match sscanf::sscanf!(l, "{} {},{} ({} {} {}) ({} {} {}) {}", u32, u16, u16, f32, f32, f32, f32, f32, f32, f32) {
             Ok(scanned) => scanned,
             Err(_) => continue,
         };

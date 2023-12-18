@@ -79,17 +79,7 @@ pub trait VMapMgrTrait {
 
     #[expect(clippy::too_many_arguments)]
     // TODO: refactor this to return instead of taking in multiple mutable parmas?
-    fn is_in_line_of_sight(
-        &self,
-        p_map_id: u32,
-        x1: f32,
-        y1: f32,
-        z1: f32,
-        x2: f32,
-        y2: f32,
-        z2: f32,
-        ignore_flags: FlagSet<ModelIgnoreFlags>,
-    ) -> bool;
+    fn is_in_line_of_sight(&self, p_map_id: u32, x1: f32, y1: f32, z1: f32, x2: f32, y2: f32, z2: f32, ignore_flags: FlagSet<ModelIgnoreFlags>) -> bool;
     fn get_height(&self, p_map_id: u32, x: f32, y: f32, z: f32, max_search_dist: f32) -> f32;
     /// test if we hit an object. return true if we hit one. rx, ry, rz will hold the hit position or the dest position, if no intersection was found
     /// return a position, that is pReduceDist closer to the origin
@@ -125,31 +115,11 @@ pub trait VMapMgrTrait {
     /// \param z gets adjusted to the ground height for which this are info is valid
     #[expect(clippy::too_many_arguments)]
     // TODO: refactor this to return instead of taking in multiple mutable parmas?
-    fn get_area_info(
-        &self,
-        p_map_id: u32,
-        x: f32,
-        y: f32,
-        z: &mut f32,
-        flags: &mut u32,
-        adt_id: &mut u16,
-        root_id: &mut u32,
-        group_id: &mut u32,
-    ) -> bool;
+    fn get_area_info(&self, p_map_id: u32, x: f32, y: f32, z: &mut f32, flags: &mut u32, adt_id: &mut u16, root_id: &mut u32, group_id: &mut u32) -> bool;
 
     #[expect(clippy::too_many_arguments)]
     // TODO: refactor this to return instead of taking in multiple mutable parmas?
-    fn get_liquid_level(
-        &self,
-        p_map_id: u32,
-        x: f32,
-        y: f32,
-        z: f32,
-        req_liquid_type: u8,
-        level: &mut f32,
-        floor: &mut f32,
-        typ: &mut u32,
-    ) -> bool;
+    fn get_liquid_level(&self, p_map_id: u32, x: f32, y: f32, z: f32, req_liquid_type: u8, level: &mut f32, floor: &mut f32, typ: &mut u32) -> bool;
 }
 
 //  /**

@@ -274,10 +274,7 @@ impl<'tb> MapBuilder<'tb> {
                 let work_handler = s.spawn(move |_| {
                     while let Ok((count, num_tiles, ti, tp)) = recv.recv() {
                         let ret = build_tile_work(vmap_mgr.clone(), count, num_tiles, ti, tp);
-                        #[expect(
-                            clippy::question_mark,
-                            reason = "Explicit return here so that we don't need to type annotate the errs vec later"
-                        )]
+                        #[expect(clippy::question_mark, reason = "Explicit return here so that we don't need to type annotate the errs vec later")]
                         if ret.is_err() {
                             return ret;
                         }
@@ -497,24 +494,14 @@ impl<'tb> MapBuilder<'tb> {
     }
 }
 
-fn build_tile_work<'vm>(
-    vmap_mgr: Arc<VMapMgr2<'vm, 'vm>>,
-    count: Arc<AtomicUsize>,
-    num_tiles: usize,
-    ti: TileInfo,
-    tp: TileBuilderParams,
-) -> AzResult<()> {
+fn build_tile_work<'vm>(vmap_mgr: Arc<VMapMgr2<'vm, 'vm>>, count: Arc<AtomicUsize>, num_tiles: usize, ti: TileInfo, tp: TileBuilderParams) -> AzResult<()> {
     let count = count.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-    info!(
-        "{}/{} building for Map {:04} - {:02},{:02}",
-        count, num_tiles, ti.map_id, ti.tile_x, ti.tile_y
-    );
+    info!("{}/{} building for Map {:04} - {:02},{:02}", count, num_tiles, ti.map_id, ti.tile_x, ti.tile_y);
     let (tib, teb) = tp.into_builder(vmap_mgr);
-    tib.build_tile(&teb, ti.map_id, ti.tile_x, ti.tile_y, &ti.nav_mesh_params)
-        .map_err(|e| {
-            error!("Build tile failed because of error: {e}");
-            e
-        })?;
+    tib.build_tile(&teb, ti.map_id, ti.tile_x, ti.tile_y, &ti.nav_mesh_params).map_err(|e| {
+        error!("Build tile failed because of error: {e}");
+        e
+    })?;
     Ok(())
 }
 
@@ -553,10 +540,10 @@ fn get_grid_bounds(tb: &TerrainBuilder<'_>, map_id: u32) -> AzResult<(u16, u16, 
 fn is_transport_map(map_id: u32) -> bool {
     match map_id {
         // transport maps
-        582 | 584 | 586 | 587 | 588 | 589 | 590 | 591 | 592 | 593 | 594 | 596 | 610 | 612 | 613 | 614 | 620 | 621 | 622 | 623 | 641
-        | 642 | 647 | 662 | 672 | 673 | 674 | 712 | 713 | 718 | 738 | 739 | 740 | 741 | 742 | 743 | 747 | 748 | 749 | 750 | 762 | 763
-        | 765 | 766 | 767 | 1113 | 1132 | 1133 | 1172 | 1173 | 1192 | 1231 | 1459 | 1476 | 1484 | 1555 | 1556 | 1559 | 1560 | 1628
-        | 1637 | 1638 | 1639 | 1649 | 1650 | 1711 | 1751 | 1752 | 1856 | 1857 | 1902 | 1903 => true,
+        582 | 584 | 586 | 587 | 588 | 589 | 590 | 591 | 592 | 593 | 594 | 596 | 610 | 612 | 613 | 614 | 620 | 621 | 622 | 623 | 641 | 642 | 647 | 662 | 672
+        | 673 | 674 | 712 | 713 | 718 | 738 | 739 | 740 | 741 | 742 | 743 | 747 | 748 | 749 | 750 | 762 | 763 | 765 | 766 | 767 | 1113 | 1132 | 1133 | 1172
+        | 1173 | 1192 | 1231 | 1459 | 1476 | 1484 | 1555 | 1556 | 1559 | 1560 | 1628 | 1637 | 1638 | 1639 | 1649 | 1650 | 1711 | 1751 | 1752 | 1856 | 1857
+        | 1902 | 1903 => true,
         _ => false,
     }
 }

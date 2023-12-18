@@ -7,7 +7,7 @@
   },
   "rust-analyzer.linkedProjects": [
     "./Cargo.toml",
-    "./Cargo.toml"
   ],
+  "debug.allowBreakpointsEverywhere": true,
   "editor.tabSize": 4
 }

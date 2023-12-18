@@ -259,14 +259,12 @@ pub fn init_logging<P: AsRef<Path>>(logs_dir: P, appenders: &[LogAppender], logg
                 return false;
             }
 
-            appender_logger_targets
-                .iter()
-                .any(|(target, (target_min_level, target_max_level))| {
-                    if !(*target_max_level..=*target_min_level).contains(m.level()) {
-                        return false;
-                    }
-                    is_target_in_logger_targets(m, target)
-                })
+            appender_logger_targets.iter().any(|(target, (target_min_level, target_max_level))| {
+                if !(*target_max_level..=*target_min_level).contains(m.level()) {
+                    return false;
+                }
+                is_target_in_logger_targets(m, target)
+            })
         });
 
         let layer = tsfmt::Layer::new()

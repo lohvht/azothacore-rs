@@ -98,16 +98,8 @@ impl WmoRoot {
                     s.n_doodad_sets = f.read_u32::<LittleEndian>()?; // , 4
                     s.color = f.read_u32::<LittleEndian>()?; // , 4
                     s.root_wmoid = f.read_u32::<LittleEndian>()?; // , 4
-                    s.bbcorn1 = Vector3::new(
-                        f.read_f32::<LittleEndian>()?,
-                        f.read_f32::<LittleEndian>()?,
-                        f.read_f32::<LittleEndian>()?,
-                    ); // , 12
-                    s.bbcorn2 = Vector3::new(
-                        f.read_f32::<LittleEndian>()?,
-                        f.read_f32::<LittleEndian>()?,
-                        f.read_f32::<LittleEndian>()?,
-                    ); // , 12
+                    s.bbcorn1 = Vector3::new(f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?); // , 12
+                    s.bbcorn2 = Vector3::new(f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?); // , 12
                     s.flags = f.read_u16::<LittleEndian>()?; // , 2
                     s.num_lod = f.read_u16::<LittleEndian>()?; // , 2
                 },
@@ -145,11 +137,7 @@ impl WmoRoot {
                         s.doodad_data.spawns.push(WmoModd {
                             name_index: f.read_u24::<LittleEndian>()?,
                             flags:      f.read_u8()?,
-                            position:   Vector3::new(
-                                f.read_f32::<LittleEndian>()?,
-                                f.read_f32::<LittleEndian>()?,
-                                f.read_f32::<LittleEndian>()?,
-                            ),
+                            position:   Vector3::new(f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?, f.read_f32::<LittleEndian>()?),
                             rotation:   Vector4::new(
                                 f.read_f32::<LittleEndian>()?,
                                 f.read_f32::<LittleEndian>()?,
@@ -217,10 +205,7 @@ impl WmoRoot {
                 let doodad = &self.doodad_data.spawns[*group_reference as usize];
                 let path = match wmo_paths.get(&(doodad.name_index as usize)) {
                     None => {
-                        debug!(
-                            "doodad.name_index {} should exist in {:?} but it doesn't",
-                            doodad.name_index, wmo_paths,
-                        );
+                        debug!("doodad.name_index {} should exist in {:?} but it doesn't", doodad.name_index, wmo_paths,);
                         continue;
                     },
                     Some(s) => s,
@@ -360,10 +345,7 @@ impl WmoGroup {
         let mut s = Self::default();
 
         // MOGP should exist
-        let mogp = f
-            .chunks()
-            .find_map(|(fcc, data)| if fcc == b"MOGP" { Some(data) } else { None })
-            .unwrap();
+        let mogp = f.chunks().find_map(|(fcc, data)| if fcc == b"MOGP" { Some(data) } else { None }).unwrap();
         let mut mogp_data = io::Cursor::new(&mogp);
         s.group_name = mogp_data.read_u32::<LittleEndian>()?; // , 4
         s.desc_group_name = mogp_data.read_u32::<LittleEndian>()?; // , 4
@@ -509,17 +491,9 @@ impl WmoGroup {
         if s.mopy.len() == s.movi.len() {
             Ok(s)
         } else if s.hlq.xverts != s.hlq.xtiles + 1 {
-            Err(az_error!(
-                "SANITY CHECK, xverts {} must be 1 more than xtiles {}",
-                s.hlq.xverts,
-                s.hlq.xtiles
-            ))
+            Err(az_error!("SANITY CHECK, xverts {} must be 1 more than xtiles {}", s.hlq.xverts, s.hlq.xtiles))
         } else if s.hlq.yverts != s.hlq.ytiles + 1 {
-            Err(az_error!(
-                "SANITY CHECK, yverts {} must be 1 more than ytiles {}",
-                s.hlq.yverts,
-                s.hlq.ytiles
-            ))
+            Err(az_error!("SANITY CHECK, yverts {} must be 1 more than ytiles {}", s.hlq.yverts, s.hlq.ytiles))
         } else {
             Err(az_error!(
                 "SANITY CHECK FAILED: MOPY and MOVI should be the same, s.mopy.len()={}, movi.len()={}",

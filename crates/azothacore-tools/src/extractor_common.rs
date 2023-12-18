@@ -227,15 +227,9 @@ pub fn chunked_data_offsets(chunk_data: &[u8]) -> AzResult<Vec<([u8; 4], usize, 
     let mut chunks_offsets = vec![];
     let mut pos = 0;
     while pos < chunk_data.len() {
-        let mut fcc: [u8; 4] = chunk_data[pos..pos + 4]
-            .try_into()
-            .map_err(|e| az_error!("error getting fcc: {e}"))?;
+        let mut fcc: [u8; 4] = chunk_data[pos..pos + 4].try_into().map_err(|e| az_error!("error getting fcc: {e}"))?;
         fcc.reverse();
-        let size = u32::from_le_bytes(
-            chunk_data[pos + 4..pos + 8]
-                .try_into()
-                .map_err(|e| az_error!("error getting size: {e}"))?,
-        );
+        let size = u32::from_le_bytes(chunk_data[pos + 4..pos + 8].try_into().map_err(|e| az_error!("error getting size: {e}"))?);
         let start = pos + 8;
         let end = start + size as usize;
         chunks_offsets.push((fcc, start, end));
@@ -286,9 +280,7 @@ impl ChunkedFile {
     }
 
     pub fn chunks(&self) -> impl Iterator<Item = (&[u8; 4], &[u8])> {
-        self.chunks_offsets
-            .iter()
-            .map(|(fcc, start, end)| (fcc, &self.chunk_data[*start..*end]))
+        self.chunks_offsets.iter().map(|(fcc, start, end)| (fcc, &self.chunk_data[*start..*end]))
     }
 }
 
@@ -302,10 +294,7 @@ pub fn get_dir_contents<'a, P: AsRef<Path> + 'a>(dirpath: P, filter: &str) -> io
         .map_err(|e| {
             io::Error::new(
                 io::ErrorKind::Other,
-                format!(
-                    "path pattern error from path: {} for filter {filter}; err {e}",
-                    dirpath.as_ref().display()
-                ),
+                format!("path pattern error from path: {} for filter {filter}; err {e}", dirpath.as_ref().display()),
             )
         })?
         .filter_map(|g| match g {

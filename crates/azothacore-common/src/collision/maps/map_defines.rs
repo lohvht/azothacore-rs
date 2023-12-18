@@ -94,10 +94,7 @@ impl MmapTileFileHeader {
                 self.dt_version
             ))
         } else if self.mmap_version != MMAP_VERSION {
-            Err(az_error!(
-                "MMAP version mismatch: got {}, current supports {MMAP_VERSION}",
-                self.mmap_version
-            ))
+            Err(az_error!("MMAP version mismatch: got {}, current supports {MMAP_VERSION}", self.mmap_version))
         } else if self.mmap_magic != *MMAP_MAGIC {
             Err(az_error!(
                 "MMAP magic mismatch: got {}, current supports {}",
@@ -146,12 +143,7 @@ impl MmapTileFile {
         // file output
         tracing::info!("Writing to mmtile file {}...", p.display());
         let mut file = match buffered_file_create(&p) {
-            Err(e) => {
-                return Err(az_error!(
-                    "[Map {map_id:04}] Failed to open {} for writing! err was {e}",
-                    p.display()
-                ))
-            },
+            Err(e) => return Err(az_error!("[Map {map_id:04}] Failed to open {} for writing! err was {e}", p.display())),
             Ok(f) => f,
         };
         self.write(&mut file)
@@ -170,20 +162,10 @@ impl MmapTileFile {
         Ok(header)
     }
 
-    pub fn read_header_from_mmtile<P: AsRef<Path>>(
-        mmap_dir_path: P,
-        map_id: u32,
-        tile_y: u16,
-        tile_x: u16,
-    ) -> AzResult<MmapTileFileHeader> {
+    pub fn read_header_from_mmtile<P: AsRef<Path>>(mmap_dir_path: P, map_id: u32, tile_y: u16, tile_x: u16) -> AzResult<MmapTileFileHeader> {
         let p = Self::mmap_tile_filepath(mmap_dir_path, map_id, tile_y, tile_x);
         let mut file = match buffered_file_open(&p) {
-            Err(e) => {
-                return Err(az_error!(
-                    "[Map {map_id:04}] Failed to open {} for writing! err was {e}",
-                    p.display()
-                ))
-            },
+            Err(e) => return Err(az_error!("[Map {map_id:04}] Failed to open {} for writing! err was {e}", p.display())),
             Ok(f) => f,
         };
         Self::read_header(&mut file)
@@ -192,12 +174,7 @@ impl MmapTileFile {
     pub fn read_from_mmtile<P: AsRef<Path>>(mmap_dir_path: P, map_id: u32, tile_y: u16, tile_x: u16) -> AzResult<Self> {
         let p = Self::mmap_tile_filepath(mmap_dir_path, map_id, tile_y, tile_x);
         let mut file = match buffered_file_open(&p) {
-            Err(e) => {
-                return Err(az_error!(
-                    "[Map {map_id:04}] Failed to open {} for writing! err was {e}",
-                    p.display()
-                ))
-            },
+            Err(e) => return Err(az_error!("[Map {map_id:04}] Failed to open {} for writing! err was {e}", p.display())),
             Ok(f) => f,
         };
         Self::read(&mut file)

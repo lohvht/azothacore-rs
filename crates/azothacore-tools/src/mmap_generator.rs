@@ -84,9 +84,7 @@ pub fn main_path_generator(args: &ExtractorConfig, first_installed_locale: Local
     vmgr2.set_map_data(&map_id_to_child_map_ids);
     vmgr2.set_callbacks(
         Arc::new(move |liq_id| {
-            let ret = liquid_types
-                .get(&liq_id)
-                .map_or_else(|| None.into(), |liq_sound_bank| *liq_sound_bank);
+            let ret = liquid_types.get(&liq_id).map_or_else(|| None.into(), |liq_sound_bank| *liq_sound_bank);
 
             ret
         }),

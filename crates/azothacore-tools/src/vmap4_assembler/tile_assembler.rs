@@ -148,10 +148,7 @@ pub fn tile_assembler_convert_world2(
     export_gameobject_models(&src, &dst, temp_gameobject_models, &mut spawned_model_files)?;
     // export objects
     info!("Converting Model Files");
-    let rt = tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .max_blocking_threads(50)
-        .build()?;
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().max_blocking_threads(50).build()?;
     let mut jhs = Vec::with_capacity(spawned_model_files.len());
     for mfile_name in spawned_model_files {
         let src = src.clone();
@@ -274,10 +271,7 @@ fn export_gameobject_models<P: AsRef<Path> + std::marker::Sync>(
             let raw_model_file_path = src.as_ref().join(get_fixed_plain_name(&model_name));
             let mut raw_model_file = match buffered_file_open(&raw_model_file_path) {
                 Err(e) => {
-                    warn!(
-                        "cannot open raw file for some reason: path: {}, err {e}",
-                        raw_model_file_path.display()
-                    );
+                    warn!("cannot open raw file for some reason: path: {}, err {e}", raw_model_file_path.display());
                     return;
                 },
                 Ok(f) => f,

@@ -285,9 +285,7 @@ impl<'a> AdtChunkMh2o<'a> {
         };
 
         match lvf {
-            LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_DEPTH
-            | LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_TEXTURE_COORD
-            | LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_DEPTH_TEXTURE_COORD => {
+            LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_DEPTH | LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_TEXTURE_COORD | LIQUID_VERTEX_FORMAT_TYPE_HEIGHT_DEPTH_TEXTURE_COORD => {
                 let offset = h.offset_vertex_data.get() as usize + pos * 4;
                 f32::from_le_bytes(self.raw_data[offset..offset + 4].try_into().unwrap())
             },
@@ -518,27 +516,11 @@ impl From<(&[u8; 4], &[u8])> for AdtChunkModf {
         while cursor.position() < data_len as u64 {
             let id = read_le_unwrap!(cursor, u32);
             let unique_id = read_le_unwrap!(cursor, u32);
-            let position = Vector3::new(
-                read_le_unwrap!(cursor, f32),
-                read_le_unwrap!(cursor, f32),
-                read_le_unwrap!(cursor, f32),
-            );
-            let rotation = Vector3::new(
-                read_le_unwrap!(cursor, f32),
-                read_le_unwrap!(cursor, f32),
-                read_le_unwrap!(cursor, f32),
-            );
+            let position = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
+            let rotation = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
             let bounds = [
-                Vector3::new(
-                    read_le_unwrap!(cursor, f32),
-                    read_le_unwrap!(cursor, f32),
-                    read_le_unwrap!(cursor, f32),
-                ),
-                Vector3::new(
-                    read_le_unwrap!(cursor, f32),
-                    read_le_unwrap!(cursor, f32),
-                    read_le_unwrap!(cursor, f32),
-                ),
+                Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32)),
+                Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32)),
             ];
             let flags = read_le_unwrap!(cursor, u16);
             let doodad_set = read_le_unwrap!(cursor, u16);
@@ -586,16 +568,8 @@ impl From<(&[u8; 4], &[u8])> for AdtChunkMddf {
         while cursor.position() < data_len {
             let id = read_le_unwrap!(cursor, u32);
             let unique_id = read_le_unwrap!(cursor, u32);
-            let position = Vector3::new(
-                read_le_unwrap!(cursor, f32),
-                read_le_unwrap!(cursor, f32),
-                read_le_unwrap!(cursor, f32),
-            );
-            let rotation = Vector3::new(
-                read_le_unwrap!(cursor, f32),
-                read_le_unwrap!(cursor, f32),
-                read_le_unwrap!(cursor, f32),
-            );
+            let position = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
+            let rotation = Vector3::new(read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32), read_le_unwrap!(cursor, f32));
             let scale = read_le_unwrap!(cursor, u16);
             let flags = read_le_unwrap!(cursor, u16);
             doodad_defs.push(AdtDoodadDef {

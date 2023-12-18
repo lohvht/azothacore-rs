@@ -73,10 +73,7 @@ impl<'d, 'u> DatabaseLoader<'d, 'u> {
             return Ok(());
         }
         if let Err(e) = db_updater_populate(pool, self.database_config).await {
-            error!(
-                "Could not populate the {} database, see log for details.",
-                self.database_config.DatabaseName,
-            );
+            error!("Could not populate the {} database, see log for details.", self.database_config.DatabaseName,);
             return Err(e);
         };
         Ok(())
@@ -84,10 +81,7 @@ impl<'d, 'u> DatabaseLoader<'d, 'u> {
 
     async fn update_database(&self, pool: &sqlx::Pool<MySql>) -> Result<(), DatabaseLoaderError> {
         if let Err(e) = db_updater_update(pool, self.database_config, self.update_config, &self.modules_list).await {
-            error!(
-                "Could not update the {} database, see log for details.",
-                self.database_config.DatabaseName,
-            );
+            error!("Could not update the {} database, see log for details.", self.database_config.DatabaseName,);
             return Err(e);
         };
         Ok(())

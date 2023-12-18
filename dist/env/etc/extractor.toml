@@ -1,5 +1,6 @@
-input_path = "/PATH/TO/YOUR/WOW/CLIENT/ROOT"
-output_path = "/PATH/TO/AZOTHACORE/SERVER/DATA/DIR"
+input_path = "/home/vloh/HDD/HDD1/Nextcloud/LocalMedia/Games/WoW Koi Legion 7.3.5 (26972)"
+# input_path = "/home/vloh/HDD/HDD1/Nextcloud/LocalMedia/Games/World of Warcraft Legion 7.3.5"
+output_path = "/home/vloh/HDD/HDD1/Downloads/out"
 # locales = 0
 run_stage_flags = 7
 

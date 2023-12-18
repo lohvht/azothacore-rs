@@ -327,8 +327,9 @@ dependencies = [
  "num-bigint",
  "prost",
  "rand",
- "rustls-pemfile",
+ "rustls-pemfile 2.0.0",
  "serde",
+ "serde_json",
  "sha2",
  "sqlx",
  "thiserror",
@@ -365,6 +366,7 @@ dependencies = [
  "bincode",
  "console-subscriber",
  "const_format",
+ "convert_case",
  "flagset",
  "git-version",
  "hex_fmt",
@@ -377,6 +379,7 @@ dependencies = [
  "serde",
  "serde-inline-default",
  "serde_default",
+ "serde_json",
  "thiserror",
  "toml",
  "tracing",
@@ -402,11 +405,15 @@ dependencies = [
  "bytes",
  "flagset",
  "hugsqlx",
+ "ipnet",
+ "libz-sys",
  "nalgebra",
  "num",
  "num-derive 0.4.1",
  "num-traits",
+ "rand",
  "serde",
+ "serde_json",
  "sha2",
  "sql-parse",
  "sqlx",
@@ -439,7 +446,6 @@ dependencies = [
  "parry3d",
  "rayon",
  "recastnavigation-sys",
- "regex",
  "serde",
  "serde-inline-default",
  "serde_default",
@@ -1733,6 +1739,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "libz-sys"
+version = "1.1.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d97137b25e321a73eef1418d1d5d2eda4d77e12813f8e6dead84bc52c5870a7b"
+dependencies = [
+ "cc",
+ "libc",
+ "pkg-config",
+ "vcpkg",
+]
+
+[[package]]
 name = "linux-raw-sys"
 version = "0.4.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2516,6 +2534,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustls-pemfile"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "35e4980fa29e4c4b212ffb3db068a564cbf560e51d3944b7c88bd8bf5bec64f4"
+dependencies = [
+ "base64",
+ "rustls-pki-types",
+]
+
+[[package]]
 name = "rustls-pki-types"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2883,7 +2911,7 @@ dependencies = [
  "paste",
  "percent-encoding",
  "rustls 0.21.10",
- "rustls-pemfile",
+ "rustls-pemfile 1.0.4",
  "serde",
  "serde_json",
  "sha2",

@@ -5,7 +5,7 @@ use std::{
     path::Path,
     process,
     sync::{Arc, OnceLock, Weak},
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use bincode::Options;
@@ -53,8 +53,8 @@ pub fn buffered_file_create<P: AsRef<Path>>(p: P) -> io::Result<io::BufWriter<fs
     Ok(io::BufWriter::with_capacity(DEFAULT_BUFFER_SIZE, fs::File::create(p)?))
 }
 
-pub fn unix_now() -> u64 {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_secs()
+pub fn unix_now() -> Duration {
+    SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
 }
 
 /// SharedFromSelfBase is the base implementation of C++'s std::shared_from_self

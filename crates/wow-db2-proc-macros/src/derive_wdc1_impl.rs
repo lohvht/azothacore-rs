@@ -1,22 +1,7 @@
 use itertools::Itertools;
 use proc_macro2::{Ident, Span, TokenStream};
 use quote::{quote, quote_spanned};
-use syn::{
-    parse::ParseStream,
-    spanned::Spanned,
-    Attribute,
-    Data,
-    DeriveInput,
-    Error,
-    Field,
-    Fields,
-    Index,
-    LitInt,
-    Member,
-    Result,
-    Type,
-    Visibility,
-};
+use syn::{parse::ParseStream, spanned::Spanned, Attribute, Data, DeriveInput, Error, Field, Fields, Index, LitInt, Member, Result, Type, Visibility};
 
 pub fn derive(node: &DeriveInput) -> Result<TokenStream> {
     let input = WDC1Struct::from_syn(node)?;
@@ -93,10 +78,7 @@ impl WDC1FieldAttrs {
     fn from_syn(field_idx: usize, num_fields: usize, field: &Field, processed_field_ty: WDC1FieldType) -> Result<Self> {
         syn::custom_keyword!(inline);
 
-        let mut a = Self {
-            parent: None,
-            id:     None,
-        };
+        let mut a = Self { parent: None, id: None };
 
         for attr in &field.attrs {
             if attr.path().is_ident("id") {
@@ -110,17 +92,16 @@ impl WDC1FieldAttrs {
                 }
 
                 // checking for #[parent(inline)]. explicit inlining here
-                let has_inlined_keyword: Result<bool> =
-                    match attr.parse_args_with(|input: ParseStream| Ok(input.parse::<Option<inline>>()?.is_some())) {
-                        Err(e) => {
-                            let err_string = e.to_compile_error().to_string();
-                            if !err_string.contains("expected attribute arguments in parentheses") {
-                                return Err(e);
-                            }
-                            Ok(false)
-                        },
-                        Ok(r) => Ok(r),
-                    };
+                let has_inlined_keyword: Result<bool> = match attr.parse_args_with(|input: ParseStream| Ok(input.parse::<Option<inline>>()?.is_some())) {
+                    Err(e) => {
+                        let err_string = e.to_compile_error().to_string();
+                        if !err_string.contains("expected attribute arguments in parentheses") {
+                            return Err(e);
+                        }
+                        Ok(false)
+                    },
+                    Ok(r) => Ok(r),
+                };
                 // i.e. inline if theres an explicit inline keyword, otherwise, if its not the last elem
                 let parent_inline = if has_inlined_keyword? { true } else { field_idx != num_fields - 1 };
                 a.parent = Some(parent_inline);
@@ -129,10 +110,7 @@ impl WDC1FieldAttrs {
         if let Some(name) = &field.ident {
             if *name == "id" && a.id.is_none() {
                 if !matches!(processed_field_ty, WDC1FieldType::Single(WDC1FieldSingleType::U32)) {
-                    return Err(Error::new_spanned(
-                        field,
-                        format!("ID field must be of u32 type, got {:?}", processed_field_ty),
-                    ));
+                    return Err(Error::new_spanned(field, format!("ID field must be of u32 type, got {:?}", processed_field_ty)));
                 }
                 a.id = Some(false)
             }
@@ -261,18 +239,12 @@ impl WDC1Field {
                 let args_typ = match &seg.arguments {
                     syn::PathArguments::AngleBracketed(args) => {
                         if args.args.is_empty() {
-                            return Err(Error::new_spanned(
-                                mem.clone(),
-                                "Vector3 should at least one type defined in angled brackets",
-                            ));
+                            return Err(Error::new_spanned(mem.clone(), "Vector3 should at least one type defined in angled brackets"));
                         }
                         match &args.args[0] {
                             syn::GenericArgument::Type(t) => Self::validate_ty(mem, t, true)?,
                             ga => {
-                                return Err(Error::new_spanned(
-                                    mem.clone(),
-                                    format!("Vector3 args should be types, got ga {ga:?}"),
-                                ));
+                                return Err(Error::new_spanned(mem.clone(), format!("Vector3 args should be types, got ga {ga:?}")));
                             },
                         }
                     },
@@ -299,18 +271,12 @@ impl WDC1Field {
                 let args_typ = match &seg.arguments {
                     syn::PathArguments::AngleBracketed(args) => {
                         if args.args.is_empty() {
-                            return Err(Error::new_spanned(
-                                mem.clone(),
-                                "Vector4 should at least one type defined in angled brackets",
-                            ));
+                            return Err(Error::new_spanned(mem.clone(), "Vector4 should at least one type defined in angled brackets"));
                         }
                         match &args.args[0] {
                             syn::GenericArgument::Type(t) => Self::validate_ty(mem, t, true)?,
                             ga => {
-                                return Err(Error::new_spanned(
-                                    mem.clone(),
-                                    format!("Vector4 args should be types, got ga {ga:?}"),
-                                ));
+                                return Err(Error::new_spanned(mem.clone(), format!("Vector4 args should be types, got ga {ga:?}")));
                             },
                         }
                     },
@@ -350,12 +316,7 @@ impl WDC1Field {
                 };
                 WDC1FieldType::Array { arity, typ }
             },
-            p => {
-                return Err(Error::new_spanned(
-                    mem.clone(),
-                    format!("type {p:?} not supported for the following field"),
-                ))
-            },
+            p => return Err(Error::new_spanned(mem.clone(), format!("type {p:?} not supported for the following field"))),
         };
         Ok(res)
     }
@@ -442,10 +403,7 @@ impl WDC1Struct {
         let has_id_tup = if let Some(e) = has_id {
             e
         } else {
-            return Err(Error::new_spanned(
-                self.original.clone(),
-                "must contain at least one field with #[id]",
-            ));
+            return Err(Error::new_spanned(self.original.clone(), "must contain at least one field with #[id]"));
         };
         let (idx, from_attr) = has_id_tup;
         if !from_attr && idx != 0 {
@@ -491,11 +449,7 @@ impl WDC1Struct {
         let has_inlined_id = id_field.attrs.id.unwrap();
 
         let id_field_index = LitInt::new(&id_field.idx.to_string(), id_field.member.span());
-        let id_index_res = if has_inlined_id {
-            quote!( Some(#id_field_index) )
-        } else {
-            quote!(None)
-        };
+        let id_index_res = if has_inlined_id { quote!( Some(#id_field_index) ) } else { quote!(None) };
         let id_index_method = quote! {
             fn id_index() -> std::option::Option<usize> {
                 #id_index_res

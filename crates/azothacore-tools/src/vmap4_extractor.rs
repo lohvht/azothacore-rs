@@ -237,14 +237,7 @@ impl AdtWithDirFileCache {
                     .is_ok();
                 if ok {
                     _ = vm_ex
-                        .doodad_extract(
-                            doodad_def,
-                            &name,
-                            map_id,
-                            original_map_id,
-                            &mut p_dir_file,
-                            &mut self.dir_file_cache,
-                        )
+                        .doodad_extract(doodad_def, &name, map_id, original_map_id, &mut p_dir_file, &mut self.dir_file_cache)
                         .map_err(|e| {
                             warn!("AdtWithDirFileCache::init doodad_extract err for {name} due to err: {e}");
                         });
@@ -272,15 +265,7 @@ impl AdtWithDirFileCache {
                 });
 
                 _ = vm_ex
-                    .mapobject_extract(
-                        map_obj_def,
-                        &name,
-                        false,
-                        map_id,
-                        original_map_id,
-                        &mut p_dir_file,
-                        &mut self.dir_file_cache,
-                    )
+                    .mapobject_extract(map_obj_def, &name, false, map_id, original_map_id, &mut p_dir_file, &mut self.dir_file_cache)
                     .map_err(|e| {
                         warn!("AdtWithDirFileCache::init mapobject_extract err for name {name} due to err: {e}");
                     });
@@ -305,12 +290,7 @@ impl AdtWithDirFileCache {
 }
 
 impl VmapExtractor {
-    fn extract_game_object_models(
-        &self,
-        storage: &CascStorageHandle,
-        locale: Locale,
-        wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
-    ) -> AzResult<()> {
+    fn extract_game_object_models(&self, storage: &CascStorageHandle, locale: Locale, wmo_doodads: &mut BTreeMap<String, WmoDoodadData>) -> AzResult<()> {
         info!("Extracting GameObject models...");
 
         let source = storage.open_file("DBFilesClient/GameObjectDisplayInfo.db2", CascLocale::None.into())?;
@@ -367,12 +347,7 @@ impl VmapExtractor {
         Ok(())
     }
 
-    fn extract_single_wmo(
-        &self,
-        storage: &CascStorageHandle,
-        file_name: &str,
-        wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
-    ) -> AzResult<()> {
+    fn extract_single_wmo(&self, storage: &CascStorageHandle, file_name: &str, wmo_doodads: &mut BTreeMap<String, WmoDoodadData>) -> AzResult<()> {
         let plain_name = get_fixed_plain_name(file_name);
         let sz_local_file = self.temp_vmap_dir.join(&plain_name);
         if let Some((_prefix, rest)) = plain_name.rsplit_once('_') {
@@ -397,18 +372,11 @@ impl VmapExtractor {
             info!("Extracting to vmap: {}", file_name);
         }
         let mut froot = WmoRoot::build(storage, file_name)?;
-        froot
-            .doodad_data
-            .references
-            .retain(|_k, s| self.extract_single_model(storage, s).is_ok());
+        froot.doodad_data.references.retain(|_k, s| self.extract_single_model(storage, s).is_ok());
         if !file_exist {
             // save only if not exist. The above code is also to ensure that the model spawns are always idempotent.
             let mut output = buffered_file_create(&sz_local_file).map_err(|e| {
-                error!(
-                    "can't create the output file '{}' for writing, err was: {}",
-                    sz_local_file.display(),
-                    e
-                );
+                error!("can't create the output file '{}' for writing, err was: {}", sz_local_file.display(), e);
                 e
             })?;
             let vmap = froot.convert_to_vmap(self.precise_vector_data);
@@ -442,11 +410,7 @@ impl VmapExtractor {
         let mdl = Model::build(storage, file_name)?;
         let vmap = mdl.convert_to_vmap();
         let mut output = buffered_file_create(&sz_local_file).map_err(|e| {
-            error!(
-                "can't create the output file '{}' for writing, err was: {}",
-                sz_local_file.display(),
-                e
-            );
+            error!("can't create the output file '{}' for writing, err was: {}", sz_local_file.display(), e);
             e
         })?;
         vmap.write(&mut output)?;
@@ -487,11 +451,7 @@ impl VmapExtractor {
         };
         // cache ADTs for maps that have parent maps
         let cache = maps_that_are_parents.get(&map_id).is_some();
-        let adt_cache = if cache {
-            Some(vec![vec![None; WDT_MAP_SIZE]; WDT_MAP_SIZE])
-        } else {
-            None
-        };
+        let adt_cache = if cache { Some(vec![vec![None; WDT_MAP_SIZE]; WDT_MAP_SIZE]) } else { None };
         let mut p_dir_file = io::BufWriter::new(fs::File::options().append(true).open(&self.model_spawns_tmp).ok()?);
         let mut dir_file_cache = None;
         // do some extraction also
@@ -517,16 +477,7 @@ impl VmapExtractor {
                         warn!("get_wdt mapobject_extract err for name {name} due to err: {e}");
                     });
                 _ = self
-                    .doodad_extractset(
-                        &name,
-                        map_obj_def,
-                        true,
-                        map_id,
-                        map_id,
-                        wmo_doodads,
-                        &mut p_dir_file,
-                        &mut dir_file_cache,
-                    )
+                    .doodad_extractset(&name, map_obj_def, true, map_id, map_id, wmo_doodads, &mut p_dir_file, &mut dir_file_cache)
                     .map_err(|e| {
                         warn!("get_wdt doodad_extractset err for name {name} due to err: {e}");
                     });
@@ -685,11 +636,7 @@ impl VmapExtractor {
         }
 
         let mut wmo_position = Vector3::new(wmo.position.z, wmo.position.x, wmo.position.y);
-        let wmo_rotation = Rotation::from_euler_angles(
-            wmo.rotation.z.to_radians(),
-            wmo.rotation.x.to_radians(),
-            wmo.rotation.y.to_radians(),
-        );
+        let wmo_rotation = Rotation::from_euler_angles(wmo.rotation.z.to_radians(), wmo.rotation.x.to_radians(), wmo.rotation.y.to_radians());
         if is_global_wmo {
             wmo_position += Vector3::new((1600.0 / 3.0) * 32.0, (1600.0 / 3.0) * 32.0, 0.0);
         }
@@ -717,8 +664,7 @@ impl VmapExtractor {
                 };
                 let model_inst_name = plain_name.to_string_lossy().to_string();
                 let tempname = self.temp_vmap_dir.join(&model_inst_name);
-                let mut input = match buffered_file_open(&tempname).map_err(|e| az_error!("READ_ERR: path={}, err={e}", tempname.display()))
-                {
+                let mut input = match buffered_file_open(&tempname).map_err(|e| az_error!("READ_ERR: path={}, err={e}", tempname.display())) {
                     Err(e) => {
                         error!("Unable to open file at {} to read vertices: {e}", tempname.display());
                         continue;

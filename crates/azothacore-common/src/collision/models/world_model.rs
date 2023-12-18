@@ -232,11 +232,7 @@ impl WmoLiquid {
 
     pub fn get_liquid_height(&self, pos: &Vector3<f32>) -> Option<f32> {
         // simple case
-        let WmoLiquidVertexHeightAndFlags {
-            i_flags,
-            i_height,
-            i_corner,
-        } = match &self.heights {
+        let WmoLiquidVertexHeightAndFlags { i_flags, i_height, i_corner } = match &self.heights {
             Err(liq_height) => return Some(*liq_height),
             Ok(hf) => hf,
         };

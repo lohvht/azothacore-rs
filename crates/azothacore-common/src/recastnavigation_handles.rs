@@ -143,14 +143,7 @@ impl DetourNavMesh {
 
         let res = unsafe {
             let mut tile_ref = 0;
-            let status = dtNavMesh_addTile(
-                self.handle,
-                data,
-                data_size as _,
-                dtTileFlags_DT_TILE_FREE_DATA as _,
-                0,
-                &mut tile_ref,
-            );
+            let status = dtNavMesh_addTile(self.handle, data, data_size as _, dtTileFlags_DT_TILE_FREE_DATA as _, 0, &mut tile_ref);
 
             DetourStatus::from_raw_status(status).wrap_result(tile_ref)
         };
@@ -200,10 +193,7 @@ impl DetourNavMeshParams {
     }
 }
 
-pub fn detour_create_nav_mesh_data<W: io::Write>(
-    params: &mut dtNavMeshCreateParams,
-    w: &mut W,
-) -> Result<usize, Box<dyn std::error::Error>> {
+pub fn detour_create_nav_mesh_data<W: io::Write>(params: &mut dtNavMeshCreateParams, w: &mut W) -> Result<usize, Box<dyn std::error::Error>> {
     unsafe {
         let mut data: *mut u8 = std::ptr::null_mut();
         let mut n = 0;
@@ -246,7 +236,8 @@ pub fn detour_create_nav_mesh_data<W: io::Write>(
             params.detailMeshes.is_null(),
             params.detailVerts.is_null(),
             params.detailTris.is_null(),
-        ).into())
+        )
+        .into())
     } else if params.polyCount == 0 || params.polys.is_null()
     // || TILES_PER_MAP * TILES_PER_MAP == (params.polyCount as usize)
     {

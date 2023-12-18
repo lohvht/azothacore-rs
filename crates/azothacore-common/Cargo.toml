@@ -10,6 +10,7 @@ anyhow = { version = "1" }
 bincode = { version = "1" }
 console-subscriber = { version = "0" }
 const_format = { version = "0" }
+convert_case = { version = "0" }
 flagset.workspace = true
 git-version = { version = "0" }
 hex_fmt = { version = "0" }
@@ -20,6 +21,7 @@ num.workspace = true
 parry3d.workspace = true
 recastnavigation-sys.workspace = true
 serde_default.workspace = true
+serde_json.workspace = true
 serde-inline-default.workspace = true
 serde.workspace = true
 thiserror.workspace = true

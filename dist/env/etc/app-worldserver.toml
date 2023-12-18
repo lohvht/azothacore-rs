@@ -65,20 +65,20 @@ RealmID = 1
 #    DataDir
 #        Description: Data directory setting.
 #        Important:   DataDir needs to be quoted, as the string might contain space characters.
-#        Example:     "@prefix@\home\youruser\azerothcore\data"
-#        Default:     "."
+#        Example:     "@prefix@\home\youruser\azothacore\data"
+#        Default:     "data"
 
-DataDir = "."
+DataDir = "data"
 
 #
 #    LogsDir
 #        Description: Logs directory setting.
 #        Important:   LogsDir needs to be quoted, as the string might contain space characters.
 #                     Logs directory must exists, or log file creation will be disabled.
-#        Example:     "/home/youruser/azerothcore/logs"
+#        Example:     "/home/youruser/azothacore/logs"
 #        Default:     "" - (Log files will be stored in the current path)
 
-LogsDir = ""
+LogsDir = "logs"
 
 #
 #    LoginDatabaseInfo
@@ -94,29 +94,33 @@ LogsDir = ""
 #        Default:     "127.0.0.1;3306;azcore;azcore;azcore_auth"       - (LoginDatabaseInfo)
 #                     "127.0.0.1;3306;azcore;azcore;azcore_world"      - (WorldDatabaseInfo)
 #                     "127.0.0.1;3306;azcore;azcore;azcore_characters" - (CharacterDatabaseInfo)
-[LoginDatabaseInfo]
-Address="127.0.0.1:3306"
-User="azcore"
-Password="azcore"
-DatabaseName="azcore_auth"
-BaseFilePath="data/sql/base/db_auth"
-DBModuleName="db-auth"
+LoginDatabaseInfo.Address="127.0.0.1:3306"
+LoginDatabaseInfo.User="azcore"
+LoginDatabaseInfo.Password="azcore"
+LoginDatabaseInfo.DatabaseName="azcore_auth"
+LoginDatabaseInfo.BaseFilePath="data/sql/base/db_auth"
+LoginDatabaseInfo.DBModuleName="db-auth"
 
-[WorldDatabaseInfo]
-Address="127.0.0.1:3306"
-User="azcore"
-Password="azcore"
-DatabaseName="azcore_world"
-BaseFilePath="data/sql/base/db_world"
-DBModuleName="db-world"
+WorldDatabaseInfo.Address="127.0.0.1:3306"
+WorldDatabaseInfo.User="azcore"
+WorldDatabaseInfo.Password="azcore"
+WorldDatabaseInfo.DatabaseName="azcore_world"
+WorldDatabaseInfo.BaseFilePath="data/sql/base/db_world"
+WorldDatabaseInfo.DBModuleName="db-world"
 
-[CharacterDatabaseInfo]
-Address="127.0.0.1:3306"
-User="azcore"
-Password="azcore"
-DatabaseName="azcore_characters"
-BaseFilePath="data/sql/base/db_characters"
-DBModuleName="db-characters"
+CharacterDatabaseInfo.Address="127.0.0.1:3306"
+CharacterDatabaseInfo.User="azcore"
+CharacterDatabaseInfo.Password="azcore"
+CharacterDatabaseInfo.DatabaseName="azcore_characters"
+CharacterDatabaseInfo.BaseFilePath="data/sql/base/db_characters"
+CharacterDatabaseInfo.DBModuleName="db-characters"
+
+HotfixDatabaseInfo.Address="127.0.0.1:3306"
+HotfixDatabaseInfo.User="azcore"
+HotfixDatabaseInfo.Password="azcore"
+HotfixDatabaseInfo.DatabaseName="azcore_hotfixes"
+HotfixDatabaseInfo.BaseFilePath="data/sql/base/db_hotfixes"
+HotfixDatabaseInfo.DBModuleName="db-hotfixes"
 
 #
 #    MaxPingTime
@@ -153,7 +157,7 @@ CMakeCommand = ""
 #    BuildDirectory
 #        Description: The path to your build directory.
 #                     If the path is left empty, the built-in CMAKE_BINARY_DIR is used.
-#        Example:     "../AzerothCore"
+#        Example:     "../azothacore"
 #        Default:     ""
 
 BuildDirectory = ""
@@ -1200,22 +1204,22 @@ FlashAtStart = true
 #        Description: Message of the Day, displayed at login.
 #                     Use '@' for a newline and be sure to escape special characters.
 #        Example:     "Welcome to John\'s Server@"
-#        Default:     "Welcome to an AzerothCore server."
+#        Default:     "Welcome to an Azothacore server."
 
-Motd = "Welcome to an AzerothCore server."
+Motd = "Welcome to an Azothacore server."
 
 #    PLEASE NOTE: another (hardcoded) text will appear below the MOTD:
 #
-#        "This server runs on AzerothCore www.azerothcore.org"
+#        "This server runs on Azothacore"
 #
-#    All the AzerothCore contributors, as well as its father projects (MaNGOS, TrinityCore, etc..),
+#    All the Azothacore contributors, as well as its father projects (MaNGOS, TrinityCore, Azerothcore etc..),
 #    have worked for free to provide you this software. Please do not remove the credits.
 #
 #    Changing or removing such hardcoded text is considered a violation of our license
 #    and it's not allowed. We reserve the right to take legal action in case of violations.
 #    Furthermore, any kind of support will be always denied.
 #
-#    All AzerothCore contributors and its father projects are publicly listed in
+#    All Azothacore contributors and its father projects are publicly listed in
 #    our official repository. Credits to open source contributions should always be shown.
 #
 
@@ -3783,6 +3787,117 @@ ChangeFaction.MaxMoney = 0
 ###################################################################################################
 
 ###################################################################################################
+# PACKET SPOOF PROTECTION SETTINGS
+#
+# These settings determine which action to take when harmful packet spoofing is detected.
+#
+#    PacketSpoof.Policy
+#        Description: Determines the course of action when packet spoofing is detected.
+#        Values:     0 - Log only
+#                    1 - Log + kick
+#                    2 - Log + kick + ban
+
+PacketSpoof.Policy = 1
+
+#
+#    PacketSpoof.BanMode
+#        Description: If PacketSpoof.Policy equals 2, this will determine the ban mode.
+#        Values:     0 - Ban Account
+#                    1 - Ban IP
+#        Note: Banning by character not supported for logical reasons.
+#
+
+PacketSpoof.BanMode = 0
+
+#
+#    PacketSpoof.BanDuration
+#        Description: Duration of the ban in seconds. Only valid if PacketSpoof.Policy is set to 2.
+#                     Set to 0 for permanent ban.
+#        Default:     86400 seconds (1 day)
+#
+
+PacketSpoof.BanDuration = 86400
+
+#
+###################################################################################################
+
+###################################################################################################
+# DEBUG
+#
+#    Debug.Battleground
+#        Description: E nable or disable Battleground 1v0 mode. (If enabled, the in-game command is disabled.)
+#        Default: false - (Disabled)
+#                 true - (Enabled)
+
+Debug.Battleground = false
+
+#
+#    Debug.Arena
+#        Description: E nable or disable Arena 1v1 mode. (If enabled, the in-game command is disabled.)
+#        Default: false - (Disabled)
+#                 true - (Enabled)
+
+Debug.Arena = false
+
+#
+###################################################################################################
+
+###################################################################################################
+# METRIC SETTINGS
+#
+# These settings control the statistics sent to the metric database (currently InfluxDB)
+#
+#    Metric.Enable
+#        Description: Enabl es statistics sent to the metric database.
+#        Default:     false - (Disabled)
+#                     true - (Enabled)
+#
+
+Metric.Enable = false
+
+#
+#    Metric.Interval
+#        Description: Interval between every batch of data sent in seconds
+#        Default:     10 seconds
+#
+
+Metric.Interval = 10
+
+#
+#    Metric.ConnectionInfo
+#        Description: Connection settings for metric database (currently InfluxDB).
+#        Example:     "hostname;port;database"
+#        Default:     "127.0.0.1;8086;worldserver"
+#
+
+Metric.ConnectionInfo = {Hostname="127.0.0.1", Port="8086", Database="worldserver"}
+
+#
+#    Metric.OverallStatusInterval
+#        Description: Interval between every gathering of overall worldserver status data in seconds
+#        Default:     1 second
+#
+
+Metric.OverallStatusInterval = 1
+
+#
+#  Metric threshold values: Given a metric "name"
+#    Metric.Threshold.name
+#        Description: Skips sending statistics with a value lower than the config value.
+#                     If the threshold is commented out, the metric will be ignored.
+#                     Only metrics logged with METRIC_DETAILED_TIMER in the sources are affected.
+#                     Disabled by default. Requires WITH_DETAILED_METRICS CMake flag.
+#
+#        Format:      Value as integer
+#
+
+#Metric.Threshold.world_update_sessions_time = 100
+#Metric.Threshold.worldsession_update_opcode_time = 50
+
+#
+###################################################################################################
+
+###################################################################################################
 # LOGGING SYSTEM SETTINGS
 #
 #  Appender config values: Given an appender "name"
@@ -3995,118 +4110,6 @@ appenders=["Console", "Server"]
 #Logger.vehicles=4,Console Server
 #Logger.warden=4,Console Server
 #Logger.weather=4,Console Server
-
-
-#
-###################################################################################################
-
-###################################################################################################
-# PACKET SPOOF PROTECTION SETTINGS
-#
-# These settings determine which action to take when harmful packet spoofing is detected.
-#
-#    PacketSpoof.Policy
-#        Description: Determines the course of action when packet spoofing is detected.
-#        Values:     0 - Log only
-#                    1 - Log + kick
-#                    2 - Log + kick + ban
-
-PacketSpoof.Policy = 1
-
-#
-#    PacketSpoof.BanMode
-#        Description: If PacketSpoof.Policy equals 2, this will determine the ban mode.
-#        Values:     0 - Ban Account
-#                    1 - Ban IP
-#        Note: Banning by character not supported for logical reasons.
-#
-
-PacketSpoof.BanMode = 0
-
-#
-#    PacketSpoof.BanDuration
-#        Description: Duration of the ban in seconds. Only valid if PacketSpoof.Policy is set to 2.
-#                     Set to 0 for permanent ban.
-#        Default:     86400 seconds (1 day)
-#
-
-PacketSpoof.BanDuration = 86400
-
-#
-###################################################################################################
-
-###################################################################################################
-# DEBUG
-#
-#    Debug.Battleground
-#        Description: E nable or disable Battleground 1v0 mode. (If enabled, the in-game command is disabled.)
-#        Default: false - (Disabled)
-#                 true - (Enabled)
-
-Debug.Battleground = false
-
-#
-#    Debug.Arena
-#        Description: E nable or disable Arena 1v1 mode. (If enabled, the in-game command is disabled.)
-#        Default: false - (Disabled)
-#                 true - (Enabled)
-
-Debug.Arena = false
-
-#
-###################################################################################################
-
-###################################################################################################
-# METRIC SETTINGS
-#
-# These settings control the statistics sent to the metric database (currently InfluxDB)
-#
-#    Metric.Enable
-#        Description: Enabl es statistics sent to the metric database.
-#        Default:     false - (Disabled)
-#                     true - (Enabled)
-#
-
-Metric.Enable = false
-
-#
-#    Metric.Interval
-#        Description: Interval between every batch of data sent in seconds
-#        Default:     10 seconds
-#
-
-Metric.Interval = 10
-
-#
-#    Metric.ConnectionInfo
-#        Description: Connection settings for metric database (currently InfluxDB).
-#        Example:     "hostname;port;database"
-#        Default:     "127.0.0.1;8086;worldserver"
-#
-
-Metric.ConnectionInfo = {Hostname="127.0.0.1", Port="8086", Database="worldserver"}
-
-#
-#    Metric.OverallStatusInterval
-#        Description: Interval between every gathering of overall worldserver status data in seconds
-#        Default:     1 second
-#
-
-Metric.OverallStatusInterval = 1
-
-#
-#  Metric threshold values: Given a metric "name"
-#    Metric.Threshold.name
-#        Description: Skips sending statistics with a value lower than the config value.
-#                     If the threshold is commented out, the metric will be ignored.
-#                     Only metrics logged with METRIC_DETAILED_TIMER in the sources are affected.
-#                     Disabled by default. Requires WITH_DETAILED_METRICS CMake flag.
-#
-#        Format:      Value as integer
-#
-
-#Metric.Threshold.world_update_sessions_time = 100
-#Metric.Threshold.worldsession_update_opcode_time = 50
 
 #
 ###################################################################################################

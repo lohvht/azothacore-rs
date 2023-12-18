@@ -301,10 +301,8 @@ impl io::Read for CascFileHandle {
 
         let res = unsafe { CascReadFile(self.h, buf_ptr, len_to_read as u32, &mut len_read) };
         if !res {
-            let last_error = CascError::try_from(unsafe { GetCascError() }).map_or_else(
-                |e| io::Error::new(io::ErrorKind::Other, e),
-                |e| io::Error::new(io::ErrorKind::Other, e),
-            );
+            let last_error = CascError::try_from(unsafe { GetCascError() })
+                .map_or_else(|e| io::Error::new(io::ErrorKind::Other, e), |e| io::Error::new(io::ErrorKind::Other, e));
             return Err(last_error);
         }
         self.current_pos += u64::from(len_read);
@@ -322,10 +320,8 @@ impl io::Seek for CascFileHandle {
 
         let res = unsafe { CascSetFilePointer64(self.h, to_move, &mut self.current_pos, method) };
         if !res {
-            let last_error = CascError::try_from(unsafe { GetCascError() }).map_or_else(
-                |e| io::Error::new(io::ErrorKind::Other, e),
-                |e| io::Error::new(io::ErrorKind::Other, e),
-            );
+            let last_error = CascError::try_from(unsafe { GetCascError() })
+                .map_or_else(|e| io::Error::new(io::ErrorKind::Other, e), |e| io::Error::new(io::ErrorKind::Other, e));
             return Err(last_error);
         }
         Ok(self.current_pos)

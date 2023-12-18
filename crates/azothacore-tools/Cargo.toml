@@ -23,7 +23,6 @@ num-traits.workspace = true
 num.workspace = true
 parry3d.workspace = true
 rayon = "1"
-regex = "1"
 serde_default.workspace = true
 serde-inline-default.workspace = true
 serde.workspace = true

@@ -284,31 +284,11 @@ impl<'liq, 'vd> VMapMgrTrait for VMapMgr2<'liq, 'vd> {
         todo!()
     }
 
-    fn get_area_info(
-        &self,
-        p_map_id: u32,
-        x: f32,
-        y: f32,
-        z: &mut f32,
-        flags: &mut u32,
-        adt_id: &mut u16,
-        root_id: &mut u32,
-        group_id: &mut u32,
-    ) -> bool {
+    fn get_area_info(&self, p_map_id: u32, x: f32, y: f32, z: &mut f32, flags: &mut u32, adt_id: &mut u16, root_id: &mut u32, group_id: &mut u32) -> bool {
         todo!()
     }
 
-    fn get_liquid_level(
-        &self,
-        p_map_id: u32,
-        x: f32,
-        y: f32,
-        z: f32,
-        req_liquid_type: u8,
-        level: &mut f32,
-        floor: &mut f32,
-        typ: &mut u32,
-    ) -> bool {
+    fn get_liquid_level(&self, p_map_id: u32, x: f32, y: f32, z: f32, req_liquid_type: u8, level: &mut f32, floor: &mut f32, typ: &mut u32) -> bool {
         todo!()
     }
 }

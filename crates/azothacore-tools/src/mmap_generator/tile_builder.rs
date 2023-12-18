@@ -105,14 +105,7 @@ pub struct TileBuilder {
 
 impl TileBuilder {
     #[instrument(skip_all, fields(tile = format!("[Map {map_id:04}] [{tile_x:02},{tile_y:02}]")))]
-    pub fn build_tile(
-        &self,
-        terrain_builder: &TerrainBuilder,
-        map_id: u32,
-        tile_x: u16,
-        tile_y: u16,
-        nav_mesh_params: &DetourNavMeshParams,
-    ) -> AzResult<()> {
+    pub fn build_tile(&self, terrain_builder: &TerrainBuilder, map_id: u32, tile_x: u16, tile_y: u16, nav_mesh_params: &DetourNavMeshParams) -> AzResult<()> {
         info!("Start building tile");
         // get heightmap data
         let mut mesh_data = MeshData::default();
@@ -203,11 +196,7 @@ impl TileBuilder {
         // these are WORLD UNIT based metrics
         // this are basic unit dimentions
         // value have to divide GRID_SIZE(533.3333f) ( aka: 0.5333, 0.2666, 0.3333, 0.1333, etc )
-        let BASE_UNIT_DIM: f32 = if self.big_base_unit {
-            GRID_SIZE / 1000.0
-        } else {
-            GRID_SIZE / 1000.0 / 2.0
-        };
+        let BASE_UNIT_DIM: f32 = if self.big_base_unit { GRID_SIZE / 1000.0 } else { GRID_SIZE / 1000.0 / 2.0 };
 
         // All are in UNIT metrics!
         let VERTEX_PER_MAP: usize = (GRID_SIZE / BASE_UNIT_DIM + 0.5) as usize;
@@ -238,15 +227,7 @@ impl TileBuilder {
         config.detailSampleMaxError = config.ch * 2.0;
 
         // this sets the dimensions of the heightfield - should maybe happen before border padding
-        unsafe {
-            rcCalcGridSize(
-                config.bmin.as_ptr(),
-                config.bmax.as_ptr(),
-                config.cs,
-                &mut config.width,
-                &mut config.height,
-            )
-        }
+        unsafe { rcCalcGridSize(config.bmin.as_ptr(), config.bmax.as_ptr(), config.cs, &mut config.width, &mut config.height) }
 
         // // allocate subregions : tiles
         // let mut tiles = (0..TILES_PER_MAP * TILES_PER_MAP).map(|_| None).collect::<Vec<Option<_>>>();
@@ -336,9 +317,7 @@ impl TileBuilder {
                 // compact heightfield spans
                 let tile_chf = unsafe { rcAllocCompactHeightfield() };
                 if tile_chf.is_null()
-                    || !unsafe {
-                        rcBuildCompactHeightfield(rc_context, tile_cfg.walkableHeight, tile_cfg.walkableClimb, tile_solid, tile_chf)
-                    }
+                    || !unsafe { rcBuildCompactHeightfield(rc_context, tile_cfg.walkableHeight, tile_cfg.walkableClimb, tile_solid, tile_chf) }
                 {
                     warn!("Failed compacting heightfield!");
                     continue;
@@ -355,31 +334,13 @@ impl TileBuilder {
                     continue;
                 }
 
-                if !unsafe {
-                    rcBuildRegions(
-                        rc_context,
-                        tile_chf,
-                        tile_cfg.borderSize,
-                        tile_cfg.minRegionArea,
-                        tile_cfg.mergeRegionArea,
-                    )
-                } {
+                if !unsafe { rcBuildRegions(rc_context, tile_chf, tile_cfg.borderSize, tile_cfg.minRegionArea, tile_cfg.mergeRegionArea) } {
                     warn!("Failed building regions!");
                     continue;
                 }
 
                 let tile_cset = unsafe { rcAllocContourSet() };
-                if tile_cset.is_null()
-                    || !unsafe {
-                        rcBuildContours(
-                            rc_context,
-                            tile_chf,
-                            tile_cfg.maxSimplificationError,
-                            tile_cfg.maxEdgeLen,
-                            tile_cset,
-                            1,
-                        )
-                    }
+                if tile_cset.is_null() || !unsafe { rcBuildContours(rc_context, tile_chf, tile_cfg.maxSimplificationError, tile_cfg.maxEdgeLen, tile_cset, 1) }
                 {
                     warn!("Failed building contours!");
                     continue;

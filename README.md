@@ -5,6 +5,8 @@ tagged to version 7.3.5 (rev 269672), using Rust.
 
 7.3.5 source reference is based on TrinityCore's [7.3.5/269672](https://github.com/TrinityCore/TrinityCore/tree/7.3.5/26972) release.
 
+Referencing Database files notes from here: https://github.com/TrinityCore/TrinityCore/commit/7f2b7dc9c2165d2608742473a931f55b1c1a753a
+
 It is completely open source and still a work in progress; Community involvement is highly encouraged.
 
 Run the following to clone the repo, including submodules.
@@ -40,6 +42,11 @@ TODO: FILL THIS IN WITH CMAKE/C++ REQUIREMENTS AND TEST OUT BUILDS FOR WINDOWS/O
     - [x] Vmap4 Extractor
     - [x] Vmap4 Assembler
     - [x] Mmap Generator
+- [ ] CI/CD helpers
+    - [ ] Database pending updates / archive / etc (to prevent clashes)
+    - [ ] CI lint / format
+    - [ ] compile check for windows / linux / macos
+    - [ ] Tests + Coverage
 - [ ] Authserver netcode
     - [ ] Login REST service
     - [ ] Auth session handling

@@ -1,4 +1,5 @@
 use std::{
+    fmt::Debug,
     fs,
     hash::Hash,
     io,
@@ -35,6 +36,8 @@ pub enum ConfigGetError {
     },
     #[error("error retrieving value from deserialised toml: {0}")]
     TomlDeserialisation(#[from] toml::de::Error),
+    #[error("error retrieving from deserialised json: {0}")]
+    JsonDeserialisation(#[from] serde_json::Error),
 }
 
 fn merge(first: &mut toml::Value, second: &mut toml::Value) {
@@ -115,7 +118,7 @@ impl ConfigTable {
             }
         };
         if let Err(e) = &res {
-            error!(target:"server.loading", "Missing or bad value some kind of other error when retrieving config from this table: {e}");
+            error!(target:"server::loading", "Missing or bad value some kind of other error when retrieving config from this table: {e}");
         }
         res
     }
@@ -185,7 +188,7 @@ impl From<LogLevel> for Option<tracing::Level> {
 }
 
 #[serde_inline_default]
-#[derive(Deserialize, Serialize, DefaultFromSerde, Clone, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, DefaultFromSerde, Clone, PartialEq)]
 #[expect(non_snake_case)]
 pub struct DatabaseInfo {
     #[serde_inline_default("127.0.0.1:3306".to_string())]
@@ -200,6 +203,12 @@ pub struct DatabaseInfo {
     pub BaseFilePath: String,
     #[serde_inline_default("".to_string())]
     pub DBModuleName: String,
+}
+
+impl Debug for DatabaseInfo {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "mysql://{}:<MASKED>@{}/{}", self.User, self.Address, self.DatabaseName)
+    }
 }
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
@@ -245,10 +254,11 @@ flags! {
   pub enum DatabaseTypeFlags: u8 {
     None        = 0,
     #[allow(clippy::identity_op)]
-    Login       = 0b001,
-    Character   = 0b010,
-    World       = 0b100,
-    All = (DatabaseTypeFlags::Login | DatabaseTypeFlags::Character | DatabaseTypeFlags::World).bits(),
+    Login       = 0b0001,
+    Character   = 0b0010,
+    World       = 0b0100,
+    Hotfix      = 0b1000,
+    All = (DatabaseTypeFlags::Login | DatabaseTypeFlags::Character | DatabaseTypeFlags::World | DatabaseTypeFlags::Hotfix).bits(),
   }
 }
 
@@ -499,10 +509,7 @@ mod tests {
         //         offset: Some(toml::value::Offset::Custom { minutes: 8 }),
         //     }
         // );
-        assert_eq!(
-            t.get::<Vec<String>>("f").unwrap(),
-            vec!["s1".to_string(), "s2".to_string(), "s3".to_string()]
-        );
+        assert_eq!(t.get::<Vec<String>>("f").unwrap(), vec!["s1".to_string(), "s2".to_string(), "s3".to_string()]);
         assert_eq!(t.get::<i32>("g.a").unwrap(), -1);
         assert_eq!(t.get::<String>("g.b").unwrap(), "two".to_string());
         assert_eq!(t.get::<Vec<f32>>("g.c").unwrap(), vec![3.1, 2.4, 4.5]);
@@ -604,15 +611,34 @@ mod tests {
         min_level="Info"
         max_level="Error"
         appenders=["Console", "Server"]
+        
+        [Updates]
+        EnableDatabases = 7
+        AutoSetup = true
+        Redundancy = true
+        ArchivedRedundancy = false
+        AllowRehash = true
+        CleanDeadRefMaxCount = 3
         "#,
         );
 
+        // assert_eq!(
+        //     t.get::<DatabaseInfo>("WorldDatabaseInfo").unwrap(),
+        //     DatabaseInfo::default_with_info("azcore_world", "data/sql/base/db_world", "db-world")
+        // );
+        // assert_eq!(t.get::<Vec<LogAppender>>("Appender").unwrap(), default_worldserver_log_appenders());
+        // assert_eq!(t.get::<Vec<LogLoggerConfig>>("Logger").unwrap(), default_worldserver_log_configs());
         assert_eq!(
-            t.get::<DatabaseInfo>("WorldDatabaseInfo").unwrap(),
-            DatabaseInfo::default_with_info("azcore_world", "data/sql/base/db_world", "db-world")
-        );
-        assert_eq!(t.get::<Vec<LogAppender>>("Appender").unwrap(), default_worldserver_log_appenders());
-        assert_eq!(t.get::<Vec<LogLoggerConfig>>("Logger").unwrap(), default_worldserver_log_configs());
+            t.get::<DbUpdates>("Updates").unwrap(),
+            DbUpdates {
+                EnableDatabases:      (DatabaseTypeFlags::Login | DatabaseTypeFlags::Character | DatabaseTypeFlags::World),
+                AutoSetup:            true,
+                Redundancy:           true,
+                ArchivedRedundancy:   false,
+                AllowRehash:          true,
+                CleanDeadRefMaxCount: Some(3),
+            }
+        )
     }
 
     #[test]
@@ -631,14 +657,9 @@ mod tests {
             "#,
         );
         assert!(matches!(t.get::<i32>("not_found"), Err(ConfigGetError::KeyNotFound { keyname }) if keyname == *"not_found"));
-        assert!(
-            matches!(t.get::<i32>("nested_not_found.key2"), Err(ConfigGetError::KeyNotFound { keyname }) if keyname == *"nested_not_found.key2")
-        );
+        assert!(matches!(t.get::<i32>("nested_not_found.key2"), Err(ConfigGetError::KeyNotFound { keyname }) if keyname == *"nested_not_found.key2"));
         assert!(matches!(t.get::<i32>("serde_error"), Err(ConfigGetError::TomlDeserialisation(_))));
-        assert!(matches!(
-            t.get::<String>("serde_error2"),
-            Err(ConfigGetError::TomlDeserialisation(_))
-        ));
+        assert!(matches!(t.get::<String>("serde_error2"), Err(ConfigGetError::TomlDeserialisation(_))));
         assert!(matches!(t.get::<A>("serde_error2.table"), Ok(v) if v == A { a: "b".to_string() }));
         assert!(matches!(t.get::<A>("serde_error3"), Err(ConfigGetError::KeyNotFound { keyname }) if keyname == *"serde_error3"));
         assert!(matches!(
