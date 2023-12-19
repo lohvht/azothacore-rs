@@ -16,7 +16,6 @@ clap.workspace = true
 hyper = { version = "1" }
 hyper-util = { version = "0" }
 ipnet.workspace = true
-num-bigint.workspace = true
 prost.workspace = true
 rand.workspace = true
 rustls-pemfile = { version = "2" }

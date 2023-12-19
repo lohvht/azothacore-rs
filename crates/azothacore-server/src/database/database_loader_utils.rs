@@ -1,7 +1,6 @@
 use std::{fs, io, path::Path};
 
-use sql_parse::{Spanned, Statement::InsertReplace};
-use sqlx::MySql;
+use sqlx::{Executor, MySql};
 use thiserror::Error;
 use tracing::{error, info};
 
@@ -26,62 +25,25 @@ pub enum DatabaseLoaderError {
 }
 
 /// Applies the file's content to the given pool.
-/// HACKFIX: hiro@19/03/2023: sqlx doesnt really play well with mysql style comments
-/// Specifically ones that are generated via mysqldump:
-/// https://dev.mysql.com/doc/refman/8.0/en/comments.html
-/// i.e. comments like this following: `/*!50110 KEY_BLOCK_SIZE=1024 */;`. This function
-/// will just swap the positions of the last few tokens `*/;` to `;*/` instead.
 pub async fn apply_file<P: AsRef<Path>>(pool: &sqlx::Pool<MySql>, f: P) -> Result<(), DatabaseLoaderError> {
-    info!(">> Applying \'{}\'...", f.as_ref().display());
+    let file_path = f.as_ref().display();
+    info!(">> Applying \'{file_path}\'...");
 
     let file_data = fs::read_to_string(f.as_ref()).map_err(|e| DatabaseLoaderError::OpenApplyFile {
-        file:  f.as_ref().to_string_lossy().to_string(),
+        file:  file_path.to_string(),
         inner: e,
     })?;
     let mut tx = pool.begin().await?;
-    let mut issues = Vec::new();
-    let ast = sql_parse::parse_statements(
-        &file_data,
-        &mut issues,
-        &sql_parse::ParseOptions::new()
-            .dialect(sql_parse::SQLDialect::MariaDB)
-            .arguments(sql_parse::SQLArguments::None),
-    );
-    for p in ast {
-        let p_span = if let InsertReplace(insert_rep) = p {
-            // TODO: Report this error for span for insert replace here
-            // The generated range doesnt include the last char in `sql_parse` crate
-            let s = insert_rep.span();
-            s.start..s.end + 1
-        } else {
-            p.span()
-        };
-        let stmt_str = &file_data[p_span];
-        let res = query(stmt_str).execute(&mut *tx).await;
-        if let Err(e) = res {
-            error!(
-                "Applying of file \'{}\' to database failed!\n\
-                  If you are a user, please pull the latest revision from the repository.\n\
-                  Also make sure you have not applied any of the databases with your sql client.\n\
-                  You cannot use auto-update system and import sql files from the repository with your sql client. \n\
-                  If you are a developer, please fix your sql query.\nstatement applied was:\n{}\n",
-                f.as_ref().display(),
-                stmt_str,
-            );
-            tx.rollback().await?;
-            if !issues.is_empty() {
-                error!("there were additional potential issues with queries");
-                let mut i = 0;
-                for is in &issues {
-                    i += 1;
-                    let iss_span = &file_data[is.span.to_owned()];
-                    error!(">> issue {}: spanned => {}, verbose_issue => {:?}", i, iss_span, is);
-                }
-            }
-            return Err(e.into());
-        }
-    }
-
+    _ = tx.execute(query(&file_data)).await.map_err(|e| {
+        error!(
+            r#"Applying of file '{file_path}' to database failed!
+              If you are a user, please pull the latest revision from the repository.
+              Also make sure you have not applied any of the databases with your sql client.
+              You cannot use auto-update system and import sql files from the repository with your sql client.
+              If you are a developer, please fix your sql query. Err was:{e}"#,
+        );
+        e
+    })?;
     tx.commit().await?;
     Ok(())
 }

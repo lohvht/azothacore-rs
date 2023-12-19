@@ -32,12 +32,10 @@ macro_rules! add_script_modules {
             Ok(())
         }
 
-        pub fn scripts() -> Vec<String> {
-            vec![
-                $(
-                    String::from(stringify!($module_name)),
-                )*
-            ]
-        }
+        pub static scripts: &[&str] = &[
+            $(
+                stringify!($module_name),
+            )*
+        ];
     };
 }

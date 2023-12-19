@@ -1,4 +1,4 @@
-use std::{collections::BTreeSet, path::Path};
+use std::path::Path;
 
 use azothacore_common::configuration::{DatabaseInfo, DbUpdates};
 use sqlx::{MySql, MySqlConnection};
@@ -70,12 +70,7 @@ pub async fn db_updater_populate(pool: &sqlx::Pool<MySql>, cfg: &DatabaseInfo) -
 }
 
 #[instrument(skip(pool))]
-pub async fn db_updater_update(
-    pool: &sqlx::Pool<MySql>,
-    cfg: &DatabaseInfo,
-    update_cfg: &DbUpdates,
-    modules_list: &BTreeSet<String>,
-) -> Result<(), DatabaseLoaderError> {
+pub async fn db_updater_update(pool: &sqlx::Pool<MySql>, cfg: &DatabaseInfo, update_cfg: &DbUpdates, modules_list: &[&str]) -> Result<(), DatabaseLoaderError> {
     info!("Updating {} database...", cfg.DatabaseName);
 
     check_update_table(pool, cfg, "updates").await?;

@@ -3,7 +3,7 @@ use std::{path::Path, time::Duration};
 use azothacore_app_authserver::{rest::LoginRESTService, ssl_context::SslContext, BnetSessionManager};
 use azothacore_common::{
     banner,
-    configuration::{ConfigMgr, DatabaseTypeFlags},
+    configuration::{ConfigMgr, DatabaseTypeFlags, DbUpdates},
     log::init_logging,
     utils::create_pid_file,
     AzResult,
@@ -23,8 +23,7 @@ use azothacore_server::{
     },
 };
 use clap::Parser;
-use num_bigint::RandBigInt;
-use rand::rngs::OsRng;
+use rand::{rngs::OsRng, Rng};
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
@@ -105,7 +104,7 @@ fn main() -> AzResult<()> {
     });
     // Seed the OsRng here.
     // That way it won't auto-seed when calling OsRng and slow down the first world login
-    OsRng.gen_bigint(16 * 8);
+    OsRng.gen::<u64>();
 
     // worldserver PID file creation
     if let Ok(pid_file) = &ConfigMgr::r().get_option::<String>("PidFile") {
@@ -203,9 +202,10 @@ async fn ban_expiry_task(cancel_token: CancellationToken, ban_expiry_check_inter
 async fn start_db() -> AzResult<()> {
     let (updates, auth_cfg) = {
         let config_mgr_r = ConfigMgr::r();
-        (config_mgr_r.get_option("Updates")?, config_mgr_r.get_option("LoginDatabaseInfo")?)
+        (config_mgr_r.get_option::<DbUpdates>("Updates")?, config_mgr_r.get_option("LoginDatabaseInfo")?)
     };
-    let login_db_loader = DatabaseLoader::new(DatabaseTypeFlags::Login, vec![], &auth_cfg, &updates);
+
+    let login_db_loader = DatabaseLoader::new(updates.EnableDatabases.contains(DatabaseTypeFlags::Login), &[], &auth_cfg, &updates);
     let auth_db = login_db_loader.load().await?;
     LoginDatabase::set(auth_db);
     info!("Started auth database connection pool.");

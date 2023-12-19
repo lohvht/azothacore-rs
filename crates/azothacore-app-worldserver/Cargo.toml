@@ -11,8 +11,6 @@ azothacore-server.workspace=true
 # External crates
 clap.workspace = true
 flagset.workspace =true
-futures.workspace = true
-num-bigint.workspace = true
 rand.workspace = true
 sqlx.workspace = true
 tokio-util.workspace = true

@@ -1,5 +1,5 @@
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
     str::FromStr,
@@ -71,17 +71,15 @@ struct AppliedFileEntry {
     unix_timestamp: u64,
 }
 
-pub struct UpdateFetcher<'u> {
+pub struct UpdateFetcher<'l, 'u> {
     src_directory: String,
     module_target: String,
-    module_list:   BTreeSet<String>,
+    module_list:   &'l [&'l str],
     update_cfg:    &'u DbUpdates,
 }
 
-impl<'u> UpdateFetcher<'u> {
-    pub fn new<Iter: IntoIterator<Item = String>>(src_directory: String, module_target: String, module_iterator: Iter, update_cfg: &'u DbUpdates) -> Self {
-        let mut module_list = BTreeSet::new();
-        module_list.extend(module_iterator);
+impl<'l, 'u> UpdateFetcher<'l, 'u> {
+    pub fn new(src_directory: String, module_target: String, module_list: &'l [&'l str], update_cfg: &'u DbUpdates) -> Self {
         Self {
             src_directory,
             module_target,
@@ -93,7 +91,7 @@ impl<'u> UpdateFetcher<'u> {
     fn module_path_iterator(&self) -> impl Iterator<Item = PathBuf> + '_ {
         let r = self.module_list.iter().map(|e| {
             let mut p = Path::new(&self.src_directory).to_path_buf();
-            p.extend(&["src", "modules", e, "data/sql", &self.module_target]);
+            p.extend(&["azothacore-script-modules", e, "data/sql", &self.module_target]);
             p
         });
         r

@@ -324,7 +324,6 @@ dependencies = [
  "hyper 1.0.1",
  "hyper-util",
  "ipnet",
- "num-bigint",
  "prost",
  "rand",
  "rustls-pemfile 2.0.0",
@@ -349,8 +348,6 @@ dependencies = [
  "azothacore-server",
  "clap",
  "flagset",
- "futures",
- "num-bigint",
  "rand",
  "sqlx",
  "tokio",
@@ -415,7 +412,6 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
- "sql-parse",
  "sqlx",
  "thiserror",
  "tokio",
@@ -597,7 +593,6 @@ dependencies = [
  "protobuf-src",
  "quote",
  "syn 2.0.41",
- "tokio",
  "tracing",
  "walkdir",
 ]
@@ -1942,7 +1937,6 @@ dependencies = [
  "autocfg",
  "num-integer",
  "num-traits",
- "rand",
 ]
 
 [[package]]
@@ -2851,12 +2845,6 @@ dependencies = [
  "base64ct",
  "der",
 ]
-
-[[package]]
-name = "sql-parse"
-version = "0.16.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dda2436e0801cdaba3900bf2634649367c2c56eb049b91b464a96a4e81aefd30"
 
 [[package]]
 name = "sqlformat"

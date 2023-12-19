@@ -6,6 +6,7 @@ use azothacore_common::{
     configuration::{
         ConfigMgr,
         DatabaseTypeFlags::{Character as DBFlagCharacter, Hotfix as DBFlagHotfix, Login as DBFlagLogin, World as DBFlagWorld},
+        DbUpdates,
     },
     get_g,
     log::init_logging,
@@ -40,8 +41,7 @@ use azothacore_server::{
 };
 use clap::Parser;
 use flagset::FlagSet;
-use num_bigint::RandBigInt;
-use rand::rngs::OsRng;
+use rand::{rngs::OsRng, Rng};
 use tokio::task::JoinHandle;
 use tracing::{error, info, info_span, instrument, Instrument};
 
@@ -114,7 +114,7 @@ fn main() -> AzResult<()> {
     });
     // Seed the OsRng here.
     // That way it won't auto-seed when calling OsRng and slow down the first world login
-    OsRng.gen_bigint(16 * 8);
+    OsRng.gen::<u64>();
 
     // worldserver PID file creation
     if let Ok(pid_file) = &ConfigMgr::r().get_option::<String>("PidFile") {
@@ -215,17 +215,16 @@ async fn start_db(realm_id: u32) -> AzResult<()> {
     let hotfix_cfg;
     {
         let config_mgr_r = ConfigMgr::r();
-        updates = config_mgr_r.get_option("Updates")?;
+        updates = config_mgr_r.get_option::<DbUpdates>("Updates")?;
         auth_cfg = config_mgr_r.get_option("LoginDatabaseInfo")?;
         world_cfg = config_mgr_r.get_option("WorldDatabaseInfo")?;
         character_cfg = config_mgr_r.get_option("CharacterDatabaseInfo")?;
         hotfix_cfg = config_mgr_r.get_option("HotfixDatabaseInfo")?;
     }
-    let registered_modules = module_scripts();
-    let login_db_loader = DatabaseLoader::new(DBFlagLogin, registered_modules.iter().map(String::from), &auth_cfg, &updates);
-    let world_db_loader = DatabaseLoader::new(DBFlagWorld, registered_modules.iter().map(String::from), &world_cfg, &updates);
-    let chars_db_loader = DatabaseLoader::new(DBFlagCharacter, registered_modules.iter().map(String::from), &character_cfg, &updates);
-    let hotfixes_db_loader = DatabaseLoader::new(DBFlagHotfix, registered_modules.iter().map(String::from), &hotfix_cfg, &updates);
+    let login_db_loader = DatabaseLoader::new(updates.EnableDatabases.contains(DBFlagLogin), module_scripts, &auth_cfg, &updates);
+    let world_db_loader = DatabaseLoader::new(updates.EnableDatabases.contains(DBFlagWorld), module_scripts, &world_cfg, &updates);
+    let chars_db_loader = DatabaseLoader::new(updates.EnableDatabases.contains(DBFlagCharacter), module_scripts, &character_cfg, &updates);
+    let hotfixes_db_loader = DatabaseLoader::new(updates.EnableDatabases.contains(DBFlagHotfix), module_scripts, &hotfix_cfg, &updates);
 
     let (auth_db, world_db, chars_db, hotfix_db) = tokio::try_join!(
         login_db_loader.load(),
