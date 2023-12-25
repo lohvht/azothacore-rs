@@ -104,7 +104,8 @@ impl LoginRESTService {
     pub async fn stop() -> AzResult<()> {
         let this = Self::get();
         this.cancel_token.cancel();
-        if let Some(task) = mut_g!(this.task).take() {
+        let task = mut_g!(this.task).take();
+        if let Some(task) = task {
             match task.await {
                 Err(e) => {
                     error!(target:"server::rest", cause=?e, "error when joining during on stopping login service");

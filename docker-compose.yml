@@ -19,6 +19,10 @@ services:
       - type: volume
         source: az-database
         target: /var/lib/mysql
+    command:
+      - mariadbd
+      - --max_allowed_packet
+      - "1073741824"
     restart: unless-stopped
     healthcheck:
       test: "/usr/bin/mysql --user=root --password=$$MYSQL_ROOT_PASSWORD --execute \"SHOW DATABASES;\""

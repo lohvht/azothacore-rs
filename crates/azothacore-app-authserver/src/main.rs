@@ -3,7 +3,7 @@ use std::{path::Path, time::Duration};
 use azothacore_app_authserver::{rest::LoginRESTService, ssl_context::SslContext, BnetSessionManager};
 use azothacore_common::{
     banner,
-    configuration::{ConfigMgr, DatabaseTypeFlags, DbUpdates},
+    configuration::{ConfigMgr, DatabaseType, DbUpdates},
     log::init_logging,
     utils::create_pid_file,
     AzResult,
@@ -205,7 +205,7 @@ async fn start_db() -> AzResult<()> {
         (config_mgr_r.get_option::<DbUpdates>("Updates")?, config_mgr_r.get_option("LoginDatabaseInfo")?)
     };
 
-    let login_db_loader = DatabaseLoader::new(updates.EnableDatabases.contains(DatabaseTypeFlags::Login), &[], &auth_cfg, &updates);
+    let login_db_loader = DatabaseLoader::new(DatabaseType::Login, &auth_cfg, &updates, &[]);
     let auth_db = login_db_loader.load().await?;
     LoginDatabase::set(auth_db);
     info!("Started auth database connection pool.");

@@ -10,7 +10,7 @@ use ipnet::IpNet;
 use rand::{rngs::OsRng, RngCore};
 use sqlx::Row;
 use tokio::runtime::Handle as TokioRtHandle;
-use tracing::{debug, error, info};
+use tracing::{error, info};
 
 use crate::{
     database::{
@@ -349,7 +349,7 @@ impl RealmList {
         )
         .await
         {
-            debug!(target:"realmlist", "error trying to login for account {account_name}: err={e}");
+            error!(target:"realmlist", "error trying to login for account {account_name}: err={e}");
             return Err(JoinRealmError::General);
         }
         Ok(server_secret)
@@ -370,7 +370,7 @@ impl RealmList {
                 }
                 i = interval.tick() => i,
             };
-            debug!(target:"realmlist", "Updating Realm List...");
+            info!(target:"realmlist", "Updating Realm List...");
 
             let mut existing_realms = BTreeMap::new();
             for p in get_g!(Self::get().realms).iter() {
@@ -457,7 +457,7 @@ impl RealmList {
                 if existing_realms.contains_key(&id) {
                     info!(target:"realmlist", "Added realm \"{name}\" at {external_address}:{port}.");
                 } else {
-                    debug!(target:"realmlist", "Updating realm \"{name}\" at {external_address}:{port}.");
+                    info!(target:"realmlist", "Updating realm \"{name}\" at {external_address}:{port}.");
                 }
                 new_realms.insert(id, realm);
 

@@ -224,8 +224,6 @@ LoginDatabaseInfo.Address="127.0.0.1:3306"
 LoginDatabaseInfo.User="azcore"
 LoginDatabaseInfo.Password="azcore"
 LoginDatabaseInfo.DatabaseName="azcore_auth"
-LoginDatabaseInfo.BaseFilePath="data/sql/base/db_auth"
-LoginDatabaseInfo.DBModuleName="db-auth"
 
 #
 ###################################################################################################

@@ -98,29 +98,21 @@ LoginDatabaseInfo.Address="127.0.0.1:3306"
 LoginDatabaseInfo.User="azcore"
 LoginDatabaseInfo.Password="azcore"
 LoginDatabaseInfo.DatabaseName="azcore_auth"
-LoginDatabaseInfo.BaseFilePath="data/sql/base/db_auth"
-LoginDatabaseInfo.DBModuleName="db-auth"
 
 WorldDatabaseInfo.Address="127.0.0.1:3306"
 WorldDatabaseInfo.User="azcore"
 WorldDatabaseInfo.Password="azcore"
 WorldDatabaseInfo.DatabaseName="azcore_world"
-WorldDatabaseInfo.BaseFilePath="data/sql/base/db_world"
-WorldDatabaseInfo.DBModuleName="db-world"
 
 CharacterDatabaseInfo.Address="127.0.0.1:3306"
 CharacterDatabaseInfo.User="azcore"
 CharacterDatabaseInfo.Password="azcore"
 CharacterDatabaseInfo.DatabaseName="azcore_characters"
-CharacterDatabaseInfo.BaseFilePath="data/sql/base/db_characters"
-CharacterDatabaseInfo.DBModuleName="db-characters"
 
 HotfixDatabaseInfo.Address="127.0.0.1:3306"
 HotfixDatabaseInfo.User="azcore"
 HotfixDatabaseInfo.Password="azcore"
 HotfixDatabaseInfo.DatabaseName="azcore_hotfixes"
-HotfixDatabaseInfo.BaseFilePath="data/sql/base/db_hotfixes"
-HotfixDatabaseInfo.DBModuleName="db-hotfixes"
 
 #
 #    MaxPingTime

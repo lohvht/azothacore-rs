@@ -5,7 +5,7 @@ use azothacore_common::{
     banner,
     configuration::{
         ConfigMgr,
-        DatabaseTypeFlags::{Character as DBFlagCharacter, Hotfix as DBFlagHotfix, Login as DBFlagLogin, World as DBFlagWorld},
+        DatabaseType::{Character as DBFlagCharacter, Hotfix as DBFlagHotfix, Login as DBFlagLogin, World as DBFlagWorld},
         DbUpdates,
     },
     get_g,
@@ -18,7 +18,7 @@ use azothacore_common::{
     GIT_HASH,
     GIT_VERSION,
 };
-use azothacore_modules::scripts as module_scripts;
+use azothacore_modules::SCRIPTS as MODULES_LIST;
 use azothacore_server::{
     database::{
         database_env::{CharacterDatabase, HotfixDatabase, LoginDatabase, WorldDatabase},
@@ -221,21 +221,15 @@ async fn start_db(realm_id: u32) -> AzResult<()> {
         character_cfg = config_mgr_r.get_option("CharacterDatabaseInfo")?;
         hotfix_cfg = config_mgr_r.get_option("HotfixDatabaseInfo")?;
     }
-    let login_db_loader = DatabaseLoader::new(updates.EnableDatabases.contains(DBFlagLogin), module_scripts, &auth_cfg, &updates);
-    let world_db_loader = DatabaseLoader::new(updates.EnableDatabases.contains(DBFlagWorld), module_scripts, &world_cfg, &updates);
-    let chars_db_loader = DatabaseLoader::new(updates.EnableDatabases.contains(DBFlagCharacter), module_scripts, &character_cfg, &updates);
-    let hotfixes_db_loader = DatabaseLoader::new(updates.EnableDatabases.contains(DBFlagHotfix), module_scripts, &hotfix_cfg, &updates);
+    let login_db_loader = DatabaseLoader::new(DBFlagLogin, &auth_cfg, &updates, MODULES_LIST);
+    let world_db_loader = DatabaseLoader::new(DBFlagWorld, &world_cfg, &updates, MODULES_LIST);
+    let chars_db_loader = DatabaseLoader::new(DBFlagCharacter, &character_cfg, &updates, MODULES_LIST);
+    let hotfixes_db_loader = DatabaseLoader::new(DBFlagHotfix, &hotfix_cfg, &updates, MODULES_LIST);
 
-    let (auth_db, world_db, chars_db, hotfix_db) = tokio::try_join!(
-        login_db_loader.load(),
-        world_db_loader.load(),
-        chars_db_loader.load(),
-        hotfixes_db_loader.load()
-    )?;
-    LoginDatabase::set(auth_db);
-    WorldDatabase::set(world_db);
-    CharacterDatabase::set(chars_db);
-    HotfixDatabase::set(hotfix_db);
+    LoginDatabase::set(login_db_loader.load().await?);
+    WorldDatabase::set(world_db_loader.load().await?);
+    CharacterDatabase::set(chars_db_loader.load().await?);
+    HotfixDatabase::set(hotfixes_db_loader.load().await?);
 
     //- Get the realm Id from the configuration file
     if realm_id > 255 {
@@ -272,6 +266,7 @@ async fn stop_db() -> AzResult<()> {
     LoginDatabase::get().close().await;
     WorldDatabase::get().close().await;
     CharacterDatabase::get().close().await;
+    HotfixDatabase::get().close().await;
 
     Ok(())
 }

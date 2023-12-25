@@ -1,20 +1,18 @@
-use std::path::Path;
-
-use azothacore_common::configuration::{DatabaseInfo, DbUpdates};
-use sqlx::{MySql, MySqlConnection};
+use sqlx::Connection;
 use tracing::{error, info, instrument, warn};
 use walkdir::{DirEntry, WalkDir};
 
 use crate::database::{
     database_loader_utils::{apply_file, DatabaseLoaderError},
     database_update_fetcher::UpdateFetcher,
-    params,
     query,
-    query_with,
+    DbDriver,
+    DbExecutor,
+    ExtendedDBInfo,
 };
 
 #[instrument(skip(executor))]
-pub async fn db_updater_create(executor: &mut MySqlConnection, cfg: &DatabaseInfo) -> Result<(), DatabaseLoaderError> {
+pub async fn db_updater_create<'e, E: DbExecutor<'e>>(executor: E, cfg: &ExtendedDBInfo<'_, '_>) -> Result<(), DatabaseLoaderError> {
     warn!("Database {} does not exist!", cfg.DatabaseName);
     info!("Creating database '{}'...", cfg.DatabaseName);
     query(&format!(
@@ -27,22 +25,23 @@ pub async fn db_updater_create(executor: &mut MySqlConnection, cfg: &DatabaseInf
     Ok(())
 }
 
-#[instrument(skip(pool))]
-pub async fn db_updater_populate(pool: &sqlx::Pool<MySql>, cfg: &DatabaseInfo) -> Result<(), DatabaseLoaderError> {
-    let res = query("SHOW TABLES").fetch_optional(pool).await?;
+#[instrument(skip(conn))]
+pub async fn db_updater_populate<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(conn: A, cfg: &ExtendedDBInfo<'_, '_>) -> Result<(), DatabaseLoaderError> {
+    let mut conn = conn.acquire().await?;
+
+    let res = query("SHOW TABLES").fetch_optional(&mut *conn).await?;
     if res.is_some() {
         return Ok(());
     }
     info!("database '{}' is empty, auto populating it...", cfg.DatabaseName);
 
-    let dir_path = Path::new(&cfg.BaseFilePath);
+    let dir_path = cfg.base_files_dir();
     if !dir_path.is_dir() {
-        error!(">> Directory '{}' not exist", dir_path.display());
-        return Err(DatabaseLoaderError::NoBaseDirToPopulate {
-            path: cfg.BaseFilePath.clone(),
-        });
+        let path = format!("{}", dir_path.display());
+        error!(">> Directory '{path}' not exist");
+        return Err(DatabaseLoaderError::NoBaseDirToPopulate { path });
     }
-    let files: Vec<DirEntry> = WalkDir::new(dir_path)
+    let files: Vec<DirEntry> = WalkDir::new(&dir_path)
         .sort_by(|a, b| a.path().cmp(b.path()))
         .into_iter()
         .filter_map(|e| {
@@ -56,30 +55,41 @@ pub async fn db_updater_populate(pool: &sqlx::Pool<MySql>, cfg: &DatabaseInfo) -
         .collect();
 
     if files.is_empty() {
-        error!(">> In directory \"{}\" not exist '*.sql' files", dir_path.display());
-        return Err(DatabaseLoaderError::NoBaseDirToPopulate {
-            path: cfg.BaseFilePath.clone(),
-        });
+        let path = format!("{}", dir_path.display());
+        error!(">> In directory \"{path}\" not exist '*.sql' files");
+        return Err(DatabaseLoaderError::NoBaseDirToPopulate { path });
     }
 
     for f in files {
-        apply_file(pool, f.path()).await?;
+        conn.transaction(|tx| {
+            Box::pin(async move {
+                apply_file(&mut **tx, f.path()).await?;
+                Ok::<_, DatabaseLoaderError>(())
+            })
+        })
+        .await?;
     }
     info!(">> Done!\n");
     Ok(())
 }
 
-#[instrument(skip(pool))]
-pub async fn db_updater_update(pool: &sqlx::Pool<MySql>, cfg: &DatabaseInfo, update_cfg: &DbUpdates, modules_list: &[&str]) -> Result<(), DatabaseLoaderError> {
+#[instrument(skip(conn))]
+pub async fn db_updater_update<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
+    conn: A,
+    cfg: &ExtendedDBInfo<'_, '_>,
+    modules_list: &[&str],
+) -> Result<(), DatabaseLoaderError> {
+    let mut conn = conn.acquire().await?;
+
     info!("Updating {} database...", cfg.DatabaseName);
 
-    check_update_table(pool, cfg, "updates").await?;
-    check_update_table(pool, cfg, "updates_include").await?;
+    check_update_table(&mut *conn, cfg, "updates").await?;
+    check_update_table(&mut *conn, cfg, "updates_include").await?;
 
     let source_directory = ".".to_string();
-    let uf = UpdateFetcher::new(source_directory, cfg.DBModuleName.clone(), modules_list.clone(), update_cfg);
+    let uf = UpdateFetcher::new(source_directory, modules_list, cfg);
 
-    let (updated, recent, archived) = uf.update(pool).await?;
+    let (updated, recent, archived) = uf.update(&mut *conn).await?;
     let info = format!("Containing {} new and {} archived updates.", recent, archived);
     if updated > 0 {
         info!(">> {} database is up-to-date! {}", cfg.DatabaseName, info);
@@ -89,24 +99,31 @@ pub async fn db_updater_update(pool: &sqlx::Pool<MySql>, cfg: &DatabaseInfo, upd
     Ok(())
 }
 
-#[instrument(skip(pool))]
-async fn check_update_table(pool: &sqlx::Pool<MySql>, cfg: &DatabaseInfo, table_name: &str) -> Result<(), DatabaseLoaderError> {
-    let res = query_with("SHOW TABLES LIKE ?", params!(table_name)).fetch_optional(pool).await?;
+#[instrument(skip(conn))]
+async fn check_update_table<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
+    conn: A,
+    cfg: &ExtendedDBInfo<'_, '_>,
+    table_name: &str,
+) -> Result<(), DatabaseLoaderError> {
+    let mut conn = conn.acquire().await?;
+
+    let res = query(&format!("SHOW TABLES LIKE '{}'", table_name)).fetch_optional(&mut *conn).await?;
     if res.is_some() {
         return Ok(());
     }
     warn!("> Table '{}' not exist! Try add based table", table_name);
 
-    let mut f = Path::new(&cfg.BaseFilePath).to_path_buf();
+    let mut f = cfg.base_files_dir();
     f.push(format!("{table_name}.sql"));
 
-    apply_file(pool, f).await.map_err(|e| {
-        error!(
-            "Failed apply file to database {} due to error: {e}! Does the user (named in *.conf) have `INSERT` and `DELETE` privileges on the MySQL server?",
-            &cfg.DatabaseName,
-        );
-        e
-    })?;
-
-    Ok(())
+    let db_name = cfg.DatabaseName.clone();
+    conn.transaction(|tx| Box::pin(async move {
+        apply_file(&mut **tx, f).await.map_err(|e| {
+            error!(
+                "Failed apply file to database {db_name} due to error: {e}! Does the user (named in *.conf) have `INSERT` and `DELETE` privileges on the MySQL server?",
+            );
+            e
+        })?;
+        Ok(())
+    })).await
 }

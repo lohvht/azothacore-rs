@@ -59,14 +59,14 @@ pub struct AdtChunkMcnkSubchunkMclq {
     pub height2: f32,
     pub liquid:  [[AdtChunkMcnkSubchunkMclqLiquidData; ADT_CELL_SIZE + 1]; ADT_CELL_SIZE + 1],
 
-    /// ```
+    ///
     /// 1<<0 - ocean
     /// 1<<1 - lava/slime
     /// 1<<2 - water
     /// 1<<6 - all water
     /// 1<<7 - dark water
     /// == 0x0F - not show liquid
-    /// ```
+    ///
     pub flags: [[u8; ADT_CELL_SIZE]; ADT_CELL_SIZE],
     pub data:  [u8; 84],
 }

@@ -32,44 +32,44 @@ pub struct MapHeightData {
     pub flight_box:      Option<MapHeightFlightBox>,
 }
 
-/// Height
-///
-/// Height values for triangles stored in order:
-///
-/// ````
-///  1     2     3     4     5     6     7     8     9
-///
-///     10    11    12    13    14    15    16    17
-///
-///  18    19    20    21    22    23    24    25    26
-///
-///     27    28    29    30    31    32    33    34
-///
-///  . . . . . . . .
-/// ````
-///
-///  For better get height values merge it to V9 and V8 map
-///
-///  V9 height map:
-///
-/// ````
-///  1     2     3     4     5     6     7     8     9
-///
-///  18    19    20    21    22    23    24    25    26
-///
-///  . . . . . . . .
-/// ````
-///
-///  V8 height map:
-///
-/// ````
-///     10    11    12    13    14    15    16    17
-///
-///     27    28    29    30    31    32    33    34
-///
-///  . . . . . . . .
-/// ````
-///
+// Height
+//
+// Height values for triangles stored in order:
+//
+// ````
+//  1     2     3     4     5     6     7     8     9
+//
+//     10    11    12    13    14    15    16    17
+//
+//  18    19    20    21    22    23    24    25    26
+//
+//     27    28    29    30    31    32    33    34
+//
+//  . . . . . . . .
+// ````
+//
+//  For better get height values merge it to V9 and V8 map
+//
+//  V9 height map:
+//
+// ````
+//  1     2     3     4     5     6     7     8     9
+//
+//  18    19    20    21    22    23    24    25    26
+//
+//  . . . . . . . .
+// ````
+//
+//  V8 height map:
+//
+// ````
+//     10    11    12    13    14    15    16    17
+//
+//     27    28    29    30    31    32    33    34
+//
+//  . . . . . . . .
+// ````
+//
 #[expect(clippy::large_enum_variant)]
 #[derive(PartialEq, Debug, serde::Deserialize, serde::Serialize)]
 pub enum MapFilev9v8 {

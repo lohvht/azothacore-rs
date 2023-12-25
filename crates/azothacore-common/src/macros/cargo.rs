@@ -32,7 +32,7 @@ macro_rules! add_script_modules {
             Ok(())
         }
 
-        pub static scripts: &[&str] = &[
+        pub static SCRIPTS: &[&str] = &[
             $(
                 stringify!($module_name),
             )*

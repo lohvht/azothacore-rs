@@ -80,6 +80,9 @@ impl<T> SharedFromSelfBase<T> {
 /// Below is a contrived example of how to use this trait:
 ///
 /// ```
+/// use azothacore_common::utils::{SharedFromSelfBase, SharedFromSelf};
+/// use std::sync::Arc;
+///
 /// struct MyStruct {
 ///     base: SharedFromSelfBase<MyStruct>,
 /// }

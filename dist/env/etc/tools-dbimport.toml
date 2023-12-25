@@ -64,10 +64,25 @@ LogsDir = "logs"
 #    any value other than 'ssl' is set, TLS will not be used.
 #
 
-LoginDatabaseInfo     = "127.0.0.1;3306;azcore;azcore;azcore_auth"
-WorldDatabaseInfo     = "127.0.0.1;3306;azcore;azcore;azcore_world"
-CharacterDatabaseInfo = "127.0.0.1;3306;azcore;azcore;azcore_characters"
-HotfixDatabaseInfo = "127.0.0.1;3306;azcore;azcore;azcore_characters"
+LoginDatabaseInfo.Address="127.0.0.1:3306"
+LoginDatabaseInfo.User="azcore"
+LoginDatabaseInfo.Password="azcore"
+LoginDatabaseInfo.DatabaseName="azcore_auth"
+
+WorldDatabaseInfo.Address="127.0.0.1:3306"
+WorldDatabaseInfo.User="azcore"
+WorldDatabaseInfo.Password="azcore"
+WorldDatabaseInfo.DatabaseName="azcore_world"
+
+CharacterDatabaseInfo.Address="127.0.0.1:3306"
+CharacterDatabaseInfo.User="azcore"
+CharacterDatabaseInfo.Password="azcore"
+CharacterDatabaseInfo.DatabaseName="azcore_characters"
+
+HotfixDatabaseInfo.Address="127.0.0.1:3306"
+HotfixDatabaseInfo.User="azcore"
+HotfixDatabaseInfo.Password="azcore"
+HotfixDatabaseInfo.DatabaseName="azcore_hotfixes"
 
 ###################################################################################################
 
@@ -202,8 +217,20 @@ Updates.CleanDeadRefMaxCount = 3
 #                         Example:  536870912 (512 MB)
 #
 
-Appender.Console=1,5,0,"1 9 3 6 5 8"
-Appender.DBImport=2,5,0,DBImport.log,w
+[[Appender]]
+type = "Console"
+name = "Console"
+min_level = "Info"
+max_level = "Error"
+flags = 6
+
+[[Appender]]
+type = "File"
+name = "DBImport"
+min_level = "Debug"
+max_level = "Error"
+flags = 7
+file = "DBImport.log"
 
 #  Logger config values: Given a logger "name"
 #    Logger.name
@@ -223,5 +250,10 @@ Appender.DBImport=2,5,0,DBImport.log,w
 #                     (Using spaces as separator).
 #
 
-Logger.root=4,Console DBImport
+[[Logger]]
+name="root"
+min_level="Debug"
+max_level="Error"
+appenders=["Console", "DBImport"]
+
 ###################################################################################################

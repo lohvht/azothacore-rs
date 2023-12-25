@@ -7,7 +7,7 @@ use std::{
     },
 };
 
-use azothacore_common::{configuration::DatabaseTypeFlags, AzResult};
+use azothacore_common::{configuration::DatabaseType, AzResult};
 use flagset::FlagSet;
 
 use crate::game::globals::object_mgr::OBJECT_MGR;
@@ -99,7 +99,7 @@ pub trait WorldScript: ScriptObject {
 }
 
 pub trait DatabaseScript: ScriptObject {
-    fn on_after_databases_loaded(&self, _update_flags: FlagSet<DatabaseTypeFlags>) {}
+    fn on_after_databases_loaded(&self, _update_flags: FlagSet<DatabaseType>) {}
 }
 
 pub struct ScriptMgr {
@@ -224,7 +224,7 @@ impl ScriptMgr {
         self.database.add_script(script);
     }
 
-    pub fn on_after_databases_loaded(&self, update_flags: FlagSet<DatabaseTypeFlags>) {
+    pub fn on_after_databases_loaded(&self, update_flags: FlagSet<DatabaseType>) {
         for script in self.database.script_pointer_list.values() {
             script.on_after_databases_loaded(update_flags);
         }

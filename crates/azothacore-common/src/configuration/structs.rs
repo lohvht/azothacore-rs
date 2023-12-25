@@ -199,10 +199,6 @@ pub struct DatabaseInfo {
     pub Password:     String,
     #[serde_inline_default("".to_string())]
     pub DatabaseName: String,
-    #[serde_inline_default("".to_string())]
-    pub BaseFilePath: String,
-    #[serde_inline_default("".to_string())]
-    pub DBModuleName: String,
 }
 
 impl Debug for DatabaseInfo {
@@ -232,11 +228,9 @@ pub struct WrongPass {
 }
 
 impl DatabaseInfo {
-    pub fn default_with_info(database: &str, base_file_path: &str, db_module_name: &str) -> Self {
+    pub fn default_with_info(database: &str) -> Self {
         Self {
             DatabaseName: database.to_string(),
-            BaseFilePath: base_file_path.to_string(),
-            DBModuleName: db_module_name.to_string(),
             ..Self::default()
         }
     }
@@ -251,22 +245,37 @@ impl DatabaseInfo {
 }
 
 flags! {
-  pub enum DatabaseTypeFlags: u8 {
-    None        = 0,
+  pub enum DatabaseType: u8 {
     #[allow(clippy::identity_op)]
     Login       = 0b0001,
     Character   = 0b0010,
     World       = 0b0100,
     Hotfix      = 0b1000,
-    All = (DatabaseTypeFlags::Login | DatabaseTypeFlags::Character | DatabaseTypeFlags::World | DatabaseTypeFlags::Hotfix).bits(),
+    All = (DatabaseType::Login | DatabaseType::Character | DatabaseType::World | DatabaseType::Hotfix).bits(),
   }
+}
+
+impl DatabaseType {
+    pub fn db_module_name(&self) -> Option<&'static str> {
+        match *self {
+            Self::All => None,
+            Self::Character => Some("db-characters"),
+            Self::Hotfix => Some("db-hotfixes"),
+            Self::Login => Some("db-auth"),
+            Self::World => Some("db-world"),
+        }
+    }
+
+    pub fn base_files_directory(&self) -> Option<PathBuf> {
+        self.db_module_name().map(|db_module_name| format!("data/sql/base/{db_module_name}").into())
+    }
 }
 
 #[serde_inline_default]
 #[derive(Deserialize, DefaultFromSerde, Serialize, Clone, Debug, PartialEq)]
 pub struct DbUpdates {
-    #[serde_inline_default(DatabaseTypeFlags::All.into())]
-    pub EnableDatabases:      FlagSet<DatabaseTypeFlags>,
+    #[serde_inline_default(DatabaseType::All.into())]
+    pub EnableDatabases:      FlagSet<DatabaseType>,
     #[serde_inline_default(true)]
     pub AutoSetup:            bool,
     #[serde_inline_default(true)]
@@ -276,12 +285,17 @@ pub struct DbUpdates {
     #[serde_inline_default(true)]
     pub AllowRehash:          bool,
     #[serde_inline_default(Some(3))]
-    pub CleanDeadRefMaxCount: Option<usize>,
+    pub CleanDeadRefMaxCount: Option<isize>,
 }
 
 impl DbUpdates {
-    pub fn update_enabled(&self, update_flags: impl Into<FlagSet<DatabaseTypeFlags>>) -> bool {
+    pub fn update_enabled(&self, update_flags: impl Into<FlagSet<DatabaseType>>) -> bool {
         (self.EnableDatabases & update_flags).bits() > 0
+    }
+
+    pub fn should_cleanup(&self, applied_count: usize) -> bool {
+        let Some(c) = &self.CleanDeadRefMaxCount else { return false };
+        *c < 0 || applied_count <= usize::try_from(*c).unwrap()
     }
 }
 
@@ -524,8 +538,6 @@ mod tests {
         User="azcore"
         Password="azcore"
         DatabaseName="azcore_world"
-        BaseFilePath="data/sql/base/db_world"
-        DBModuleName="db-world"
 
         [[Appender]]
         type = "Console"
@@ -631,7 +643,7 @@ mod tests {
         assert_eq!(
             t.get::<DbUpdates>("Updates").unwrap(),
             DbUpdates {
-                EnableDatabases:      (DatabaseTypeFlags::Login | DatabaseTypeFlags::Character | DatabaseTypeFlags::World),
+                EnableDatabases:      (DatabaseType::Login | DatabaseType::Character | DatabaseType::World),
                 AutoSetup:            true,
                 Redundancy:           true,
                 ArchivedRedundancy:   false,
@@ -672,42 +684,44 @@ mod tests {
 
     #[test]
     fn it_sanity_checks_database_type_flags() {
-        assert_eq!(FlagSet::from(DatabaseTypeFlags::None).bits(), 0);
-        assert_eq!(FlagSet::from(DatabaseTypeFlags::Login).bits(), 1);
-        assert_eq!(FlagSet::from(DatabaseTypeFlags::Character).bits(), 2);
-        assert_eq!(FlagSet::from(DatabaseTypeFlags::World).bits(), 4);
-        assert_eq!(FlagSet::from(DatabaseTypeFlags::All).bits(), 7);
+        use DatabaseType::*;
+        assert_eq!(FlagSet::from(Login).bits(), 1);
+        assert_eq!(FlagSet::from(Character).bits(), 2);
+        assert_eq!(FlagSet::from(World).bits(), 4);
+        assert_eq!(FlagSet::from(Hotfix).bits(), 8);
+        assert_eq!(FlagSet::from(All).bits(), 15);
     }
 
     #[test]
     fn it_checks_updates_enabled() {
+        use DatabaseType::*;
         let mut u = DbUpdates {
-            EnableDatabases: FlagSet::from(DatabaseTypeFlags::None),
+            EnableDatabases: FlagSet::from(None),
             ..Default::default()
         };
-        assert!(!u.update_enabled(DatabaseTypeFlags::Login));
-        assert!(!u.update_enabled(DatabaseTypeFlags::Character));
-        assert!(!u.update_enabled(DatabaseTypeFlags::World));
-        assert!(!u.update_enabled(DatabaseTypeFlags::All));
-        u.EnableDatabases = FlagSet::from(DatabaseTypeFlags::Login);
-        assert!(u.update_enabled(DatabaseTypeFlags::Login));
-        assert!(!u.update_enabled(DatabaseTypeFlags::Character));
-        assert!(!u.update_enabled(DatabaseTypeFlags::World));
-        assert!(u.update_enabled(DatabaseTypeFlags::All));
-        u.EnableDatabases = FlagSet::from(DatabaseTypeFlags::Character);
-        assert!(!u.update_enabled(DatabaseTypeFlags::Login));
-        assert!(u.update_enabled(DatabaseTypeFlags::Character));
-        assert!(!u.update_enabled(DatabaseTypeFlags::World));
-        assert!(u.update_enabled(DatabaseTypeFlags::All));
-        u.EnableDatabases = FlagSet::from(DatabaseTypeFlags::World);
-        assert!(!u.update_enabled(DatabaseTypeFlags::Login));
-        assert!(!u.update_enabled(DatabaseTypeFlags::Character));
-        assert!(u.update_enabled(DatabaseTypeFlags::World));
-        assert!(u.update_enabled(DatabaseTypeFlags::All));
-        u.EnableDatabases = FlagSet::from(DatabaseTypeFlags::All);
-        assert!(u.update_enabled(DatabaseTypeFlags::Login));
-        assert!(u.update_enabled(DatabaseTypeFlags::Character));
-        assert!(u.update_enabled(DatabaseTypeFlags::World));
-        assert!(u.update_enabled(DatabaseTypeFlags::All));
+        assert!(!u.update_enabled(Login));
+        assert!(!u.update_enabled(Character));
+        assert!(!u.update_enabled(World));
+        assert!(!u.update_enabled(All));
+        u.EnableDatabases = FlagSet::from(Login);
+        assert!(u.update_enabled(Login));
+        assert!(!u.update_enabled(Character));
+        assert!(!u.update_enabled(World));
+        assert!(u.update_enabled(All));
+        u.EnableDatabases = FlagSet::from(Character);
+        assert!(!u.update_enabled(Login));
+        assert!(u.update_enabled(Character));
+        assert!(!u.update_enabled(World));
+        assert!(u.update_enabled(All));
+        u.EnableDatabases = FlagSet::from(World);
+        assert!(!u.update_enabled(Login));
+        assert!(!u.update_enabled(Character));
+        assert!(u.update_enabled(World));
+        assert!(u.update_enabled(All));
+        u.EnableDatabases = FlagSet::from(All);
+        assert!(u.update_enabled(Login));
+        assert!(u.update_enabled(Character));
+        assert!(u.update_enabled(World));
+        assert!(u.update_enabled(All));
     }
 }
