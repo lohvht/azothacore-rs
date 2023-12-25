@@ -1,6 +1,11 @@
-use std::{fs, io, path::Path};
+use std::{
+    fs,
+    io::{self, Read},
+    path::Path,
+};
 
-use sqlx::{Connection, Executor};
+use azothacore_common::utils::buffered_file_open;
+use flate2::bufread::GzDecoder;
 use thiserror::Error;
 use tracing::{error, info};
 
@@ -24,17 +29,26 @@ pub enum DatabaseLoaderError {
     Generic { msg: String },
 }
 
+fn map_open_err(file_path: &str) -> impl FnOnce(io::Error) -> DatabaseLoaderError {
+    let file = file_path.to_string();
+    move |e| DatabaseLoaderError::OpenApplyFile { file, inner: e }
+}
+
 /// Applies the file's content to the given pool.
-pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(conn: E, f: P) -> Result<(), DatabaseLoaderError> {
-    let file_path = f.as_ref().display();
-    info!(">> Applying \'{}\'...", f.as_ref().display());
+pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(conn: E, f: P, is_gz: bool) -> Result<(), DatabaseLoaderError> {
+    let file_path = f.as_ref().display().to_string();
+    info!(">> Applying \'{file_path}\'...");
 
-    let file_data = fs::read_to_string(f.as_ref()).map_err(|e| DatabaseLoaderError::OpenApplyFile {
-        file:  file_path.to_string(),
-        inner: e,
-    })?;
+    let file_data = if is_gz {
+        let r = buffered_file_open(f.as_ref()).map_err(map_open_err(&file_path))?;
+        let mut gz = GzDecoder::new(r);
+        let mut d = String::new();
+        gz.read_to_string(&mut d).map_err(map_open_err(&file_path))?;
+        d
+    } else {
+        fs::read_to_string(f.as_ref()).map_err(map_open_err(&file_path))?
+    };
 
-    let file_path = file_path.to_string();
     // NOTE: hirogoro@21dec2023: Raw unprepared execution, by not enclosing with sqlx::query function
     // => See: https://github.com/launchbadge/sqlx/issues/2557
     // enclosing in sqlx::query tells sqlx to treat the statement as a prepared stmt.

@@ -365,8 +365,12 @@ async fn apply_update_file<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
 ) -> Result<usize, DatabaseLoaderError> {
     let mut conn = conn.acquire().await?;
 
-    let filename = file_path.file_name().and_then(|f| f.to_str()).unwrap();
-    info!("Checking update \"{}\"...", file_path.to_string_lossy());
+    let is_gz = file_path.extension().filter(|ext| *ext == "gz").is_some();
+    let filename = if is_gz { file_path.file_stem() } else { file_path.file_name() }
+        .and_then(|f| f.to_str())
+        .unwrap();
+
+    info!("Checking update \"{}\"...", filename);
 
     if let Some(iter) = applied.get(&PathBuf::from(filename)) {
         // If redundancy is disabled, skip it, because the update is already applied.
@@ -449,7 +453,7 @@ async fn apply_update_file<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
     let now = Instant::now();
     match mode {
         UpdateMode::Apply => {
-            apply_file(&mut *tx, file_path).await?;
+            apply_file(&mut *tx, file_path, is_gz).await?;
             let speed = now.elapsed();
             update_entry(&mut *tx, filename, &hash, file_state, speed).await?;
         },

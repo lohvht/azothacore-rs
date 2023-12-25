@@ -99,11 +99,11 @@ where
     let mut json = prefix.to_vec();
     json.append(&mut data);
     match bnetrpc_zcompress(json) {
-        None => {
-            error!(target:"session", "unable to compress {}", String::from_utf8_lossy(prefix));
+        Err(e) => {
+            error!(target:"session", cause=%e, "unable to compress {}", String::from_utf8_lossy(prefix));
             Err(BattlenetRpcErrorCode::UtilServerFailedToSerializeResponse)
         },
-        Some(c) => Ok(c),
+        Ok(c) => Ok(c),
     }
 }
 

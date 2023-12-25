@@ -16,9 +16,9 @@ wow-db2.workspace = true
 async-trait = "0"
 bytes.workspace = true
 flagset.workspace = true
-hugsqlx = { version = "0", features = [ "mysql" ] }
+hugsqlx.workspace = true
 ipnet.workspace = true
-libz-sys.workspace = true
+flate2.workspace = true
 nalgebra.workspace = true
 num-derive.workspace = true
 num-traits.workspace = true

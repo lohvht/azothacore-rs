@@ -410,9 +410,9 @@ dependencies = [
  "bnet-rpc",
  "bytes",
  "flagset",
+ "flate2",
  "hugsqlx",
  "ipnet",
- "libz-sys",
  "nalgebra",
  "num",
  "num-derive 0.4.1",
@@ -486,6 +486,16 @@ dependencies = [
  "libc",
  "tracing",
  "walkdir",
+]
+
+[[package]]
+name = "azothacore-tools-sqltable-dump"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "hugsqlx",
+ "sqlx",
+ "tokio",
 ]
 
 [[package]]
@@ -1176,6 +1186,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "46303f565772937ffe1d394a4fac6f411c6013172fadde9dcdb1e147a086940e"
 dependencies = [
  "crc32fast",
+ "libz-sys",
  "miniz_oxide",
 ]
 
@@ -1865,6 +1876,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d97137b25e321a73eef1418d1d5d2eda4d77e12813f8e6dead84bc52c5870a7b"
 dependencies = [
  "cc",
+ "cmake",
  "libc",
  "pkg-config",
  "vcpkg",

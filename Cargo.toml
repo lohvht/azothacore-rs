@@ -23,8 +23,9 @@ bytes = { version = "1" }
 clap =  { version = "4", features = ["derive"] }
 flagset = { version = "0", features = ["serde"] }
 futures = "0"
+hugsqlx = { version = "0", features = [ "mysql" ] }
 ipnet = { version = "2" }
-libz-sys = { version = "1.1.12", default-features = false, features = ["libc", "static"] }
+flate2 = { version = "1.0.17", features = ["zlib-ng-compat"], default-features = false }
 nalgebra = { version = "0", features = [ "serde-serialize" ] }
 num = { version = "0" }
 num-derive = { version = "0" }

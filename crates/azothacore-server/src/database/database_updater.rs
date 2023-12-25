@@ -1,6 +1,6 @@
 use sqlx::Connection;
 use tracing::{error, info, instrument, warn};
-use walkdir::{DirEntry, WalkDir};
+use walkdir::WalkDir;
 
 use crate::database::{
     database_loader_utils::{apply_file, DatabaseLoaderError},
@@ -41,18 +41,20 @@ pub async fn db_updater_populate<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
         error!(">> Directory '{path}' not exist");
         return Err(DatabaseLoaderError::NoBaseDirToPopulate { path });
     }
-    let files: Vec<DirEntry> = WalkDir::new(&dir_path)
+    let files = WalkDir::new(&dir_path)
         .sort_by(|a, b| a.path().cmp(b.path()))
         .into_iter()
         .filter_map(|e| {
             let e = e.ok()?;
-            if "sql" == e.path().extension()? {
+            let p = e.path();
+            let file_name = p.file_name()?;
+            if file_name.as_encoded_bytes().ends_with(b"sql") || file_name.as_encoded_bytes().ends_with(b"sql.gz") {
                 Some(e)
             } else {
                 None
             }
         })
-        .collect();
+        .collect::<Vec<_>>();
 
     if files.is_empty() {
         let path = format!("{}", dir_path.display());
@@ -63,7 +65,8 @@ pub async fn db_updater_populate<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
     for f in files {
         conn.transaction(|tx| {
             Box::pin(async move {
-                apply_file(&mut **tx, f.path()).await?;
+                let is_gz = f.path().extension().filter(|ext| *ext == "gz").is_some();
+                apply_file(&mut **tx, f.path(), is_gz).await?;
                 Ok::<_, DatabaseLoaderError>(())
             })
         })
@@ -111,14 +114,18 @@ async fn check_update_table<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
     if res.is_some() {
         return Ok(());
     }
-    warn!("> Table '{}' not exist! Try add based table", table_name);
+    warn!("> Table '{}' not exist! Trying adding base table", table_name);
 
     let mut f = cfg.base_files_dir();
     f.push(format!("{table_name}.sql"));
+    if !f.exists() {
+        f.push(format!("{table_name}.sql.gz"));
+    }
+    let is_gz = true;
 
     let db_name = cfg.DatabaseName.clone();
     conn.transaction(|tx| Box::pin(async move {
-        apply_file(&mut **tx, f).await.map_err(|e| {
+        apply_file(&mut **tx, f, is_gz).await.map_err(|e| {
             error!(
                 "Failed apply file to database {db_name} due to error: {e}! Does the user (named in *.conf) have `INSERT` and `DELETE` privileges on the MySQL server?",
             );
