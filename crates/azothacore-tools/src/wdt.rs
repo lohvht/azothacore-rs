@@ -29,8 +29,8 @@ impl From<(&[u8; 4], &[u8])> for WdtChunkMain {
         let d = WdtChunkMainSMAreaInfo::default();
         let mut cursor = io::Cursor::new(data);
         let mut adt_list = [[d; WDT_MAP_SIZE]; WDT_MAP_SIZE];
-        for (_y, row) in adt_list.iter_mut().enumerate() {
-            for (_x, col_val) in row.iter_mut().enumerate() {
+        for row in adt_list.iter_mut() {
+            for col_val in row.iter_mut() {
                 col_val.flag = cursor.read_u32::<LittleEndian>().unwrap();
                 col_val.data1 = cursor.read_u32::<LittleEndian>().unwrap();
             }

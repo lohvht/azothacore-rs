@@ -18,7 +18,7 @@ use tokio::time::Instant;
 use tracing::{debug, error, info, instrument, trace, warn};
 use walkdir::WalkDir;
 
-use crate::database::{
+use crate::{
     database_loader_utils::{apply_file, DatabaseLoaderError},
     params,
     query,

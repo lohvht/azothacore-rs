@@ -26,13 +26,11 @@ use azothacore_common::{
     utils::{net_resolve, unix_now},
     AzResult,
 };
-use azothacore_server::{
-    database::{
-        database_env::{LoginDatabase, LoginPreparedStmts},
-        params,
-    },
-    shared::networking::socket::AddressOrName,
+use azothacore_database::{
+    database_env::{LoginDatabase, LoginPreparedStmts},
+    params,
 };
+use azothacore_server::shared::networking::socket::AddressOrName;
 use hyper::{body::Incoming, service::service_fn, StatusCode};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},

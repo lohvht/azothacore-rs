@@ -553,9 +553,9 @@ impl WmoGroup {
 
             // translate triangle indices to new numbers
             for movi in movi_ex.iter_mut() {
-                movi.x = index_renum[usize::try_from(movi.x).unwrap()] as u16;
-                movi.y = index_renum[usize::try_from(movi.y).unwrap()] as u16;
-                movi.z = index_renum[usize::try_from(movi.z).unwrap()] as u16;
+                movi.x = index_renum[usize::from(movi.x)] as u16;
+                movi.y = index_renum[usize::from(movi.y)] as u16;
+                movi.z = index_renum[usize::from(movi.z)] as u16;
             }
             let mut check = n_col_vertices;
             let mut vertices_to_use = Vec::with_capacity(self.movt.len());

@@ -533,9 +533,9 @@ impl TerrainBuilder<'_> {
                         mesh_data.liquid_verts.push(liq_vert.x);
                     }
                     for i in 0..(liq_tris.len() / 3) {
-                        mesh_data.liquid_tris.push(i32::try_from(liq_tris[i * 3 + 1]).unwrap() + liq_offset);
-                        mesh_data.liquid_tris.push(i32::try_from(liq_tris[i * 3 + 2]).unwrap() + liq_offset);
-                        mesh_data.liquid_tris.push(i32::try_from(liq_tris[i * 3]).unwrap() + liq_offset);
+                        mesh_data.liquid_tris.push(i32::from(liq_tris[i * 3 + 1]) + liq_offset);
+                        mesh_data.liquid_tris.push(i32::from(liq_tris[i * 3 + 2]) + liq_offset);
+                        mesh_data.liquid_tris.push(i32::from(liq_tris[i * 3]) + liq_offset);
                         mesh_data.liquid_types.push(typ);
                     }
                 }

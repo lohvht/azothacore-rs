@@ -9,7 +9,7 @@ use flate2::bufread::GzDecoder;
 use thiserror::Error;
 use tracing::{error, info};
 
-use crate::database::DbExecutor;
+use crate::DbExecutor;
 
 #[derive(Error, Debug)]
 pub enum DatabaseLoaderError {

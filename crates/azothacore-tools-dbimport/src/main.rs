@@ -12,14 +12,12 @@ use azothacore_common::{
     AZOTHA_DB_IMPORT_CONFIG,
     CONF_DIR,
 };
-use azothacore_modules::SCRIPTS as MODULES_LIST;
-use azothacore_server::{
-    database::{
-        database_env::{CharacterDatabase, HotfixDatabase, LoginDatabase, WorldDatabase},
-        database_loader::DatabaseLoader,
-    },
-    shared::dropper_wrapper_fn,
+use azothacore_database::{
+    database_env::{CharacterDatabase, HotfixDatabase, LoginDatabase, WorldDatabase},
+    database_loader::DatabaseLoader,
 };
+use azothacore_modules::SCRIPTS as MODULES_LIST;
+use azothacore_server::shared::dropper_wrapper_fn;
 use clap::Parser;
 use tracing::info;
 

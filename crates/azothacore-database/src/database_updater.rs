@@ -2,7 +2,7 @@ use sqlx::Connection;
 use tracing::{error, info, instrument, warn};
 use walkdir::WalkDir;
 
-use crate::database::{
+use crate::{
     database_loader_utils::{apply_file, DatabaseLoaderError},
     database_update_fetcher::UpdateFetcher,
     query,

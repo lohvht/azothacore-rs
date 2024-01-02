@@ -1,11 +1,9 @@
+use azothacore_database::{database_env::WorldDatabase, query_as};
 use tokio::runtime::Runtime;
 // use divert::dt_set_custom_alloc;
 use tracing::info;
 
-use crate::{
-    database::{database_env::WorldDatabase, query_as},
-    game::world::{world_trait::WorldTrait, WorldError},
-};
+use crate::game::world::{world_trait::WorldTrait, WorldError};
 
 pub struct World {
     async_runtime:              Option<Runtime>,

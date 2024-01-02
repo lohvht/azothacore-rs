@@ -1,0 +1,20 @@
+[package]
+name = "azothacore-database"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+# Local crates
+azothacore-common.workspace = true
+# External crates
+async-trait = "0"
+hugsqlx.workspace = true
+sqlx.workspace = true
+flate2.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+sha2.workspace = true
+tokio.workspace = true
+walkdir.workspace = true

@@ -39,7 +39,7 @@ pub use hotfix_db::{HotfixDatabase, HugSql as HotfixPreparedStmts};
 pub use login_db::{HugSql as LoginPreparedStmts, LoginDatabase};
 pub use world_db::{HugSql as WorldPreparedStmts, WorldDatabase};
 
-use crate::database::DbDriver;
+use crate::DbDriver;
 
 impl WorldDatabase {
     pub fn get() -> &'static Pool<DbDriver> {

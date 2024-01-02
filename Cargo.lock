@@ -326,6 +326,7 @@ dependencies = [
  "axum 0.7.2",
  "axum-extra",
  "azothacore-common",
+ "azothacore-database",
  "azothacore-server",
  "bnet-rpc",
  "bytes",
@@ -353,6 +354,7 @@ name = "azothacore-app-worldserver"
 version = "0.0.0"
 dependencies = [
  "azothacore-common",
+ "azothacore-database",
  "azothacore-modules",
  "azothacore-server",
  "clap",
@@ -394,6 +396,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "azothacore-database"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "azothacore-common",
+ "flate2",
+ "hugsqlx",
+ "sha2",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tracing",
+ "walkdir",
+]
+
+[[package]]
 name = "azothacore-modules"
 version = "0.0.0"
 dependencies = [
@@ -405,13 +423,11 @@ dependencies = [
 name = "azothacore-server"
 version = "0.0.0"
 dependencies = [
- "async-trait",
  "azothacore-common",
- "bnet-rpc",
+ "azothacore-database",
  "bytes",
  "flagset",
  "flate2",
- "hugsqlx",
  "ipnet",
  "nalgebra",
  "num",
@@ -420,13 +436,11 @@ dependencies = [
  "rand",
  "serde",
  "serde_json",
- "sha2",
  "sqlx",
  "thiserror",
  "tokio",
  "tokio-util",
  "tracing",
- "walkdir",
  "wow-db2",
  "wow-db2-proc-macros",
 ]
@@ -470,6 +484,7 @@ name = "azothacore-tools-dbimport"
 version = "0.0.0"
 dependencies = [
  "azothacore-common",
+ "azothacore-database",
  "azothacore-modules",
  "azothacore-server",
  "clap",
@@ -493,7 +508,6 @@ name = "azothacore-tools-sqltable-dump"
 version = "0.1.0"
 dependencies = [
  "flate2",
- "hugsqlx",
  "sqlx",
  "tokio",
 ]

@@ -18,14 +18,14 @@ use azothacore_common::{
     GIT_HASH,
     GIT_VERSION,
 };
+use azothacore_database::{
+    database_env::{CharacterDatabase, HotfixDatabase, LoginDatabase, WorldDatabase},
+    database_loader::DatabaseLoader,
+    params,
+    query_with,
+};
 use azothacore_modules::SCRIPTS as MODULES_LIST;
 use azothacore_server::{
-    database::{
-        database_env::{CharacterDatabase, HotfixDatabase, LoginDatabase, WorldDatabase},
-        database_loader::DatabaseLoader,
-        params,
-        query_with,
-    },
     game::{
         scripting::script_mgr::SCRIPT_MGR,
         scripts,

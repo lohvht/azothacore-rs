@@ -9,14 +9,12 @@ opt-level = 3
 [dependencies]
 # Local crates
 azothacore-common.workspace = true
-bnet-rpc.workspace = true
+azothacore-database.workspace = true
 wow-db2-proc-macros.workspace = true
 wow-db2.workspace = true
 # External crates
-async-trait = "0"
 bytes.workspace = true
 flagset.workspace = true
-hugsqlx.workspace = true
 ipnet.workspace = true
 flate2.workspace = true
 nalgebra.workspace = true
@@ -26,10 +24,8 @@ num.workspace = true
 rand.workspace = true
 serde_json.workspace = true
 serde.workspace = true
-sha2.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-walkdir.workspace = true

@@ -5,6 +5,10 @@ use std::{
 };
 
 use azothacore_common::{get_g, hex_str, mut_g, utils::net_resolve, AccountTypes, Locale};
+use azothacore_database::{
+    database_env::{LoginDatabase, LoginPreparedStmts},
+    params,
+};
 use flagset::FlagSet;
 use ipnet::IpNet;
 use rand::{rngs::OsRng, RngCore};
@@ -12,15 +16,9 @@ use sqlx::Row;
 use tokio::runtime::Handle as TokioRtHandle;
 use tracing::{error, info};
 
-use crate::{
-    database::{
-        database_env::{LoginDatabase, LoginPreparedStmts},
-        params,
-    },
-    shared::{
-        networking::socket::AddressOrName,
-        realms::{BnetRealmHandle, Realm, RealmFlags, RealmType},
-    },
+use crate::shared::{
+    networking::socket::AddressOrName,
+    realms::{BnetRealmHandle, Realm, RealmFlags, RealmType},
 };
 
 #[derive(serde::Serialize)]

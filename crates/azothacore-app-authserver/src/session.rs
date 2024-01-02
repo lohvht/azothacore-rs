@@ -17,18 +17,16 @@ use azothacore_common::{
     AzResult,
     Locale,
 };
-use azothacore_server::{
-    database::{
-        database_env::{LoginDatabase, LoginPreparedStmts},
-        params,
-    },
-    shared::{
-        bnetrpc_zcompress,
-        networking::socket::{AddressOrName, Socket, SocketWrappper},
-        realms::{
-            realm_list::{JoinRealmError, RealmList},
-            BnetRealmHandle,
-        },
+use azothacore_database::{
+    database_env::{LoginDatabase, LoginPreparedStmts},
+    params,
+};
+use azothacore_server::shared::{
+    bnetrpc_zcompress,
+    networking::socket::{AddressOrName, Socket, SocketWrappper},
+    realms::{
+        realm_list::{JoinRealmError, RealmList},
+        BnetRealmHandle,
     },
 };
 use bnet_rpc::{

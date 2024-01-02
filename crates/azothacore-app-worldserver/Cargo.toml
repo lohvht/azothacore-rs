@@ -6,6 +6,7 @@ edition = "2021"
 [dependencies]
 # Local crates
 azothacore-common.workspace=true
+azothacore-database.workspace=true
 azothacore-modules.workspace=true
 azothacore-server.workspace=true
 # External crates

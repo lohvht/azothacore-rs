@@ -9,6 +9,7 @@ lto = true
 [workspace.dependencies]
 # Local crates
 azothacore-common = { path = "crates/azothacore-common" }
+azothacore-database ={ path = "crates/azothacore-database" }
 azothacore-modules = { path = "azothacore-script-modules/modules" }
 azothacore-server = { path = "crates/azothacore-server" }
 azothacore-tools = { path = "crates/azothacore-tools" }

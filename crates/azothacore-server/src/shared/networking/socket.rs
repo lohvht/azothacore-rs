@@ -132,7 +132,7 @@ impl SocketWrappper {
             r = read_stream.read_exact(&mut buf) => r,
         };
 
-        if let Err(e) = &res {
+        if let Err(_e) = &res {
             _ = self.close_socket().await;
         }
 
@@ -147,7 +147,7 @@ impl SocketWrappper {
             }),
         };
 
-        if let Err(e) = &res {
+        if let Err(_e) = &res {
             _ = self.close_socket().await;
         }
         res

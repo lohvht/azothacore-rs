@@ -10,17 +10,15 @@ use azothacore_common::{
     AZOTHA_REALM_CONFIG,
     CONF_DIR,
 };
-use azothacore_server::{
-    database::{
-        database_env::{LoginDatabase, LoginPreparedStmts},
-        database_loader::DatabaseLoader,
-        params,
-    },
-    shared::{
-        dropper_wrapper_fn,
-        realms::realm_list::RealmList,
-        shared_defines::{ServerProcessType, ThisServerProcess},
-    },
+use azothacore_database::{
+    database_env::{LoginDatabase, LoginPreparedStmts},
+    database_loader::DatabaseLoader,
+    params,
+};
+use azothacore_server::shared::{
+    dropper_wrapper_fn,
+    realms::realm_list::RealmList,
+    shared_defines::{ServerProcessType, ThisServerProcess},
 };
 use clap::Parser;
 use rand::{rngs::OsRng, Rng};

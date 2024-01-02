@@ -8,5 +8,4 @@ edition = "2021"
 [dependencies]
 sqlx.workspace = true
 tokio.workspace = true
-hugsqlx.workspace = true
 flate2.workspace = true

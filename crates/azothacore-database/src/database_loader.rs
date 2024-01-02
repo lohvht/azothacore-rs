@@ -4,7 +4,7 @@ use azothacore_common::configuration::{DatabaseInfo, DatabaseType, DbUpdates};
 use sqlx::{mysql::MySqlDatabaseError, pool::PoolOptions};
 use tracing::{error, info, instrument};
 
-use crate::database::{
+use crate::{
     database_loader_utils::DatabaseLoaderError,
     database_updater::{db_updater_create, db_updater_populate, db_updater_update},
     DbDriver,
