@@ -1,0 +1,132 @@
+/*!40103 SET @OLD_TIME_ZONE=@@TIME_ZONE */;
+/*!40103 SET TIME_ZONE='+00:00' */;
+/*!40014 SET @OLD_UNIQUE_CHECKS=@@UNIQUE_CHECKS, UNIQUE_CHECKS=0 */;
+/*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
+/*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
+/*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
+DROP TABLE IF EXISTS `item_sparse`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!40101 SET character_set_client = utf8 */;
+CREATE TABLE `item_sparse` (
+  `ID` int(10) unsigned NOT NULL DEFAULT 0,
+  `AllowableRace` bigint(20) NOT NULL DEFAULT 0,
+  `Display` text DEFAULT NULL,
+  `Display1` text DEFAULT NULL,
+  `Display2` text DEFAULT NULL,
+  `Display3` text DEFAULT NULL,
+  `Description` text DEFAULT NULL,
+  `Flags1` int(11) NOT NULL DEFAULT 0,
+  `Flags2` int(11) NOT NULL DEFAULT 0,
+  `Flags3` int(11) NOT NULL DEFAULT 0,
+  `Flags4` int(11) NOT NULL DEFAULT 0,
+  `PriceRandomValue` float NOT NULL DEFAULT 0,
+  `PriceVariance` float NOT NULL DEFAULT 0,
+  `VendorStackCount` int(10) unsigned NOT NULL DEFAULT 0,
+  `BuyPrice` int(10) unsigned NOT NULL DEFAULT 0,
+  `SellPrice` int(10) unsigned NOT NULL DEFAULT 0,
+  `RequiredAbility` int(10) unsigned NOT NULL DEFAULT 0,
+  `MaxCount` int(11) NOT NULL DEFAULT 0,
+  `Stackable` int(11) NOT NULL DEFAULT 0,
+  `StatPercentEditor1` int(11) NOT NULL DEFAULT 0,
+  `StatPercentEditor2` int(11) NOT NULL DEFAULT 0,
+  `StatPercentEditor3` int(11) NOT NULL DEFAULT 0,
+  `StatPercentEditor4` int(11) NOT NULL DEFAULT 0,
+  `StatPercentEditor5` int(11) NOT NULL DEFAULT 0,
+  `StatPercentEditor6` int(11) NOT NULL DEFAULT 0,
+  `StatPercentEditor7` int(11) NOT NULL DEFAULT 0,
+  `StatPercentEditor8` int(11) NOT NULL DEFAULT 0,
+  `StatPercentEditor9` int(11) NOT NULL DEFAULT 0,
+  `StatPercentEditor10` int(11) NOT NULL DEFAULT 0,
+  `StatPercentageOfSocket1` float NOT NULL DEFAULT 0,
+  `StatPercentageOfSocket2` float NOT NULL DEFAULT 0,
+  `StatPercentageOfSocket3` float NOT NULL DEFAULT 0,
+  `StatPercentageOfSocket4` float NOT NULL DEFAULT 0,
+  `StatPercentageOfSocket5` float NOT NULL DEFAULT 0,
+  `StatPercentageOfSocket6` float NOT NULL DEFAULT 0,
+  `StatPercentageOfSocket7` float NOT NULL DEFAULT 0,
+  `StatPercentageOfSocket8` float NOT NULL DEFAULT 0,
+  `StatPercentageOfSocket9` float NOT NULL DEFAULT 0,
+  `StatPercentageOfSocket10` float NOT NULL DEFAULT 0,
+  `ItemRange` float NOT NULL DEFAULT 0,
+  `BagFamily` int(10) unsigned NOT NULL DEFAULT 0,
+  `QualityModifier` float NOT NULL DEFAULT 0,
+  `DurationInInventory` int(10) unsigned NOT NULL DEFAULT 0,
+  `DmgVariance` float NOT NULL DEFAULT 0,
+  `AllowableClass` smallint(6) NOT NULL DEFAULT 0,
+  `ItemLevel` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `RequiredSkill` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `RequiredSkillRank` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `MinFactionID` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `ItemStatValue1` smallint(6) NOT NULL DEFAULT 0,
+  `ItemStatValue2` smallint(6) NOT NULL DEFAULT 0,
+  `ItemStatValue3` smallint(6) NOT NULL DEFAULT 0,
+  `ItemStatValue4` smallint(6) NOT NULL DEFAULT 0,
+  `ItemStatValue5` smallint(6) NOT NULL DEFAULT 0,
+  `ItemStatValue6` smallint(6) NOT NULL DEFAULT 0,
+  `ItemStatValue7` smallint(6) NOT NULL DEFAULT 0,
+  `ItemStatValue8` smallint(6) NOT NULL DEFAULT 0,
+  `ItemStatValue9` smallint(6) NOT NULL DEFAULT 0,
+  `ItemStatValue10` smallint(6) NOT NULL DEFAULT 0,
+  `ScalingStatDistributionID` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `ItemDelay` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `PageID` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `StartQuestID` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `LockID` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `RandomSelect` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `ItemRandomSuffixGroupID` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `ItemSet` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `ZoneBound` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `InstanceBound` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `TotemCategoryID` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `SocketMatchEnchantmentId` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `GemProperties` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `LimitCategory` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `RequiredHoliday` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `RequiredTransmogHoliday` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `ItemNameDescriptionID` smallint(5) unsigned NOT NULL DEFAULT 0,
+  `OverallQualityID` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `InventoryType` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `RequiredLevel` tinyint(4) NOT NULL DEFAULT 0,
+  `RequiredPVPRank` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `RequiredPVPMedal` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `MinReputation` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `ContainerSlots` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `StatModifierBonusStat1` tinyint(4) NOT NULL DEFAULT 0,
+  `StatModifierBonusStat2` tinyint(4) NOT NULL DEFAULT 0,
+  `StatModifierBonusStat3` tinyint(4) NOT NULL DEFAULT 0,
+  `StatModifierBonusStat4` tinyint(4) NOT NULL DEFAULT 0,
+  `StatModifierBonusStat5` tinyint(4) NOT NULL DEFAULT 0,
+  `StatModifierBonusStat6` tinyint(4) NOT NULL DEFAULT 0,
+  `StatModifierBonusStat7` tinyint(4) NOT NULL DEFAULT 0,
+  `StatModifierBonusStat8` tinyint(4) NOT NULL DEFAULT 0,
+  `StatModifierBonusStat9` tinyint(4) NOT NULL DEFAULT 0,
+  `StatModifierBonusStat10` tinyint(4) NOT NULL DEFAULT 0,
+  `DamageDamageType` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `Bonding` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `LanguageID` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `PageMaterialID` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `Material` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `SheatheType` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `SocketType1` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `SocketType2` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `SocketType3` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `SpellWeightCategory` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `SpellWeight` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `ArtifactID` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `ExpansionID` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `VerifiedBuild` smallint(6) NOT NULL DEFAULT 0,
+  PRIMARY KEY (`ID`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+LOCK TABLES `item_sparse` WRITE;
+/*!40000 ALTER TABLE `item_sparse` DISABLE KEYS */;
+/*!40000 ALTER TABLE `item_sparse` ENABLE KEYS */;
+UNLOCK TABLES;
+/*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
+
+/*!40101 SET SQL_MODE=@OLD_SQL_MODE */;
+/*!40014 SET FOREIGN_KEY_CHECKS=@OLD_FOREIGN_KEY_CHECKS */;
+/*!40014 SET UNIQUE_CHECKS=@OLD_UNIQUE_CHECKS */;
+/*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
+
