@@ -1,5 +1,5 @@
 [package]
-name = "azothacore-tools-dbimport"
+name = "worldserver"
 version = "0.0.0"
 edition = "2021"
 
@@ -11,5 +11,9 @@ azothacore-modules.workspace=true
 azothacore-server.workspace=true
 # External crates
 clap.workspace = true
+flagset.workspace =true
+rand.workspace = true
+sqlx.workspace = true
+tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true

@@ -185,6 +185,36 @@ dependencies = [
 ]
 
 [[package]]
+name = "authserver"
+version = "0.0.0"
+dependencies = [
+ "axum 0.7.2",
+ "axum-extra",
+ "azothacore-common",
+ "azothacore-database",
+ "azothacore-server",
+ "bnet-rpc",
+ "bytes",
+ "clap",
+ "hyper 1.0.1",
+ "hyper-util",
+ "ipnet",
+ "prost",
+ "rand",
+ "rustls-pemfile 2.0.0",
+ "serde",
+ "serde_json",
+ "sha2",
+ "sqlx",
+ "thiserror",
+ "tokio",
+ "tokio-rustls",
+ "tokio-util",
+ "tower-service",
+ "tracing",
+]
+
+[[package]]
 name = "autocfg"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -320,53 +350,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "azothacore-app-authserver"
-version = "0.0.0"
-dependencies = [
- "axum 0.7.2",
- "axum-extra",
- "azothacore-common",
- "azothacore-database",
- "azothacore-server",
- "bnet-rpc",
- "bytes",
- "clap",
- "hyper 1.0.1",
- "hyper-util",
- "ipnet",
- "prost",
- "rand",
- "rustls-pemfile 2.0.0",
- "serde",
- "serde_json",
- "sha2",
- "sqlx",
- "thiserror",
- "tokio",
- "tokio-rustls",
- "tokio-util",
- "tower-service",
- "tracing",
-]
-
-[[package]]
-name = "azothacore-app-worldserver"
-version = "0.0.0"
-dependencies = [
- "azothacore-common",
- "azothacore-database",
- "azothacore-modules",
- "azothacore-server",
- "clap",
- "flagset",
- "rand",
- "sqlx",
- "tokio",
- "tokio-util",
- "tracing",
-]
-
-[[package]]
 name = "azothacore-common"
 version = "0.0.0"
 dependencies = [
@@ -476,39 +459,6 @@ dependencies = [
  "wow-db2",
  "zerocopy",
  "zerocopy-derive",
-]
-
-[[package]]
-name = "azothacore-tools-dbimport"
-version = "0.0.0"
-dependencies = [
- "azothacore-common",
- "azothacore-database",
- "azothacore-modules",
- "azothacore-server",
- "clap",
- "tokio",
- "tracing",
-]
-
-[[package]]
-name = "azothacore-tools-fullextractor"
-version = "0.0.0"
-dependencies = [
- "azothacore-common",
- "azothacore-tools",
- "libc",
- "tracing",
- "walkdir",
-]
-
-[[package]]
-name = "azothacore-tools-sqltable-dump"
-version = "0.1.0"
-dependencies = [
- "flate2",
- "sqlx",
- "tokio",
 ]
 
 [[package]]
@@ -1080,6 +1030,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "dbimport"
+version = "0.0.0"
+dependencies = [
+ "azothacore-common",
+ "azothacore-database",
+ "azothacore-modules",
+ "azothacore-server",
+ "clap",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "der"
 version = "0.7.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1227,6 +1190,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e13624c2627564efccf4934284bdd98cbaa14e79b0b5a141218e507b3a823456"
 dependencies = [
  "percent-encoding",
+]
+
+[[package]]
+name = "fullextractor"
+version = "0.0.0"
+dependencies = [
+ "azothacore-common",
+ "azothacore-tools",
+ "libc",
+ "tracing",
+ "walkdir",
 ]
 
 [[package]]
@@ -3009,6 +2983,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "sqltable-dump"
+version = "0.1.0"
+dependencies = [
+ "flate2",
+ "sqlx",
+ "tokio",
+]
+
+[[package]]
 name = "sqlx"
 version = "0.7.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4055,6 +4038,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6c830786f7720c2fd27a1a0e27a709dbd3c4d009b56d098fc742d4f4eab91fe2"
 dependencies = [
  "memchr",
+]
+
+[[package]]
+name = "worldserver"
+version = "0.0.0"
+dependencies = [
+ "azothacore-common",
+ "azothacore-database",
+ "azothacore-modules",
+ "azothacore-server",
+ "clap",
+ "flagset",
+ "rand",
+ "sqlx",
+ "tokio",
+ "tokio-util",
+ "tracing",
 ]
 
 [[package]]

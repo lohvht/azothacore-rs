@@ -1,6 +1,6 @@
 use std::{path::Path, time::Duration};
 
-use azothacore_app_authserver::{rest::LoginRESTService, ssl_context::SslContext, BnetSessionManager};
+use authserver::{rest::LoginRESTService, ssl_context::SslContext, BnetSessionManager};
 use azothacore_common::{
     banner,
     configuration::{ConfigMgr, DatabaseType, DbUpdates},

@@ -1,5 +1,5 @@
 [package]
-name = "azothacore-app-authserver"
+name = "authserver"
 version = "0.0.0"
 edition = "2021"
 
