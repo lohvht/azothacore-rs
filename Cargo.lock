@@ -399,7 +399,6 @@ dependencies = [
 name = "azothacore-database"
 version = "0.1.0"
 dependencies = [
- "async-trait",
  "azothacore-common",
  "flate2",
  "hugsqlx",
@@ -1607,26 +1606,12 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 
 [[package]]
 name = "hugsqlx"
-version = "0.2.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "14375eb743133a44c6ac783398bfa0f754c25ac93f899a75d9a068fde9651310"
+checksum = "0b37b5f84bddd4e8d34fea5b0e0dd36ad9682a0c30f79986eb031ab9654c8797"
 dependencies = [
- "hugsqlx-core 0.2.0",
+ "hugsqlx-core",
  "hugsqlx-derive",
-]
-
-[[package]]
-name = "hugsqlx-core"
-version = "0.1.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f912de9432448a861f6f313b58d3ee995f6afbe37683c2d556bd9003dc710995"
-dependencies = [
- "cfg-if",
- "chumsky",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
- "walkdir",
 ]
 
 [[package]]
@@ -1645,11 +1630,11 @@ dependencies = [
 
 [[package]]
 name = "hugsqlx-derive"
-version = "0.1.1"
+version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f312e4a24ef8a8b85984d6797f17cea39ab980d129b811c4271f3f2a274bf66"
+checksum = "f3f051b24640d4c41563c0e7b1356fcb8e566c4dd69c822ee3e763cdfe8ae734"
 dependencies = [
- "hugsqlx-core 0.1.5",
+ "hugsqlx-core",
  "proc-macro2",
  "quote",
  "syn 1.0.109",
