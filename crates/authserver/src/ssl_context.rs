@@ -20,8 +20,8 @@ impl SslContext {
         fn helper() -> AzResult<TlsAcceptor> {
             let builder = ServerConfig::builder_with_protocol_versions(&[&TLS12]).with_no_client_auth();
 
-            let certificate_chain_file = Path::new(CONF_DIR).join(ConfigMgr::r().get_option("CertificatesFile").unwrap_or("./bnetserver.cert.pem".to_string()));
-            let private_key_file = Path::new(CONF_DIR).join(ConfigMgr::r().get_option("PrivateKeyFile").unwrap_or("bnetserver.key.pem".to_string()));
+            let certificate_chain_file = Path::new(CONF_DIR).join(ConfigMgr::r().get("CertificatesFile", || "./bnetserver.cert.pem".to_string()));
+            let private_key_file = Path::new(CONF_DIR).join(ConfigMgr::r().get("PrivateKeyFile", || "bnetserver.key.pem".to_string()));
 
             let cert_chain = certs(&mut BufReader::new(File::open(certificate_chain_file)?)).filter_map(|v| v.ok()).collect();
 

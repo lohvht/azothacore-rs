@@ -386,12 +386,12 @@ impl RealmList {
             };
 
             for fields in result {
-                let realm_id = fields.get("id");
-                let name = fields.get("name");
-                let external_address: String = fields.get("address");
-                let local_address: String = fields.get("localAddress");
-                let local_subnet_mask: String = fields.get("localSubnetMask");
-                let port = fields.get("port");
+                let realm_id = fields.get(0);
+                let name = fields.get(1);
+                let external_address: String = fields.get(2);
+                let local_address: String = fields.get(3);
+                let local_subnet_mask: String = fields.get(4);
+                let port = fields.get(5);
 
                 let external_address = match net_resolve((external_address.as_str(), port)) {
                     Err(e) => {
@@ -414,20 +414,20 @@ impl RealmList {
                     },
                     Ok(a) => a,
                 };
-                let mut icon = RealmType::try_from(fields.get::<u8, _>("icon")).unwrap_or(RealmType::Normal);
+                let mut icon = RealmType::try_from(fields.get::<u8, _>(6)).unwrap_or(RealmType::Normal);
                 if matches!(icon, RealmType::FfaPvp) {
                     icon = RealmType::Pvp;
                 }
-                let flag = fields.get("flag");
-                let timezone = fields.get("timezone");
-                let mut allowed_security_level = AccountTypes::try_from(fields.get::<u8, _>("allowedSecurityLevel")).unwrap_or(AccountTypes::SecPlayer);
+                let flag = fields.get(7);
+                let timezone = fields.get(8);
+                let mut allowed_security_level = AccountTypes::try_from(fields.get::<u8, _>(9)).unwrap_or(AccountTypes::SecPlayer);
                 if allowed_security_level as u8 > AccountTypes::SecAdministrator as u8 {
                     allowed_security_level = AccountTypes::SecAdministrator
                 }
-                let pop = fields.get("population");
-                let build = fields.get("gamebuild");
-                let region = fields.get("Region");
-                let battlegroup = fields.get("Battlegroup");
+                let pop = fields.get(10);
+                let build = fields.get(11);
+                let region = fields.get(12);
+                let battlegroup = fields.get(13);
 
                 let id = BnetRealmHandle::new(region, battlegroup, realm_id);
                 let local_network = match IpNet::with_netmask(local_address.ip(), local_subnet_mask.ip()) {
@@ -468,6 +468,7 @@ impl RealmList {
             *mut_g!(Self::get().sub_regions) = new_sub_regions;
             *mut_g!(Self::get().realms) = new_realms;
         }
+        info!(target:"realmlist", "Terminating realmlist updater");
     }
 }
 

@@ -139,7 +139,7 @@ RealmsStateUpdateDelay = 10
 #        Description: Subnet mask for local network address
 #                     Set it to your local IP address netmask or leave it as its default at 255.255.255.0
 #
-LoginREST.Port = "8081"
+LoginREST.Port = 8081
 LoginREST.ExternalAddress="127.0.0.1"
 LoginREST.LocalAddress="127.0.0.1"
 LoginREST.TicketDuration=3600

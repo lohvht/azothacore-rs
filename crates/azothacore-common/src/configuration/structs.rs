@@ -1,10 +1,10 @@
 use std::{
+    env::VarError,
     fmt::Debug,
     fs,
     hash::Hash,
     io,
     path::{Path, PathBuf},
-    time::Duration,
 };
 
 use flagset::{flags, FlagSet};
@@ -38,6 +38,8 @@ pub enum ConfigGetError {
     TomlDeserialisation(#[from] toml::de::Error),
     #[error("error retrieving from deserialised json: {0}")]
     JsonDeserialisation(#[from] serde_json::Error),
+    #[error("error retrieving from environment variable: {0}")]
+    EnvVar(#[from] VarError),
 }
 
 fn merge(first: &mut toml::Value, second: &mut toml::Value) {
@@ -118,7 +120,9 @@ impl ConfigTable {
             }
         };
         if let Err(e) = &res {
-            error!(target:"server::loading", "Missing or bad value some kind of other error when retrieving config from this table: {e}");
+            if !matches!(e, ConfigGetError::KeyNotFound { .. }) {
+                error!(target:"server::loading", "bad value some kind of other error when retrieving config from this table: {e}");
+            }
         }
         res
     }
@@ -219,8 +223,8 @@ pub enum WrongPassBanType {
 pub struct WrongPass {
     #[serde_inline_default(5)]
     pub MaxCount: u64,
-    #[serde_inline_default(Duration::from_secs(600))]
-    pub BanTime:  Duration,
+    #[serde_inline_default(600)]
+    pub BanTime:  u64,
     #[serde_inline_default(WrongPassBanType::BanIP)]
     pub BanType:  WrongPassBanType,
     #[serde_inline_default(false)]

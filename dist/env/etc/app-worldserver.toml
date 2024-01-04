@@ -126,7 +126,7 @@ MaxPingTime = 30
 #        Description: TCP port to reach the world server.
 #        Default:     8085
 
-WorldServerPort = "8085"
+WorldServerPort = 8085
 
 #
 #    BindIP
@@ -3139,7 +3139,7 @@ Ra.IP = "0.0.0.0"
 #        Description: TCP port to reach the remote console.
 #        Default:     3443
 
-Ra.Port = "3443"
+Ra.Port = 3443
 
 #
 #    Ra.MinLevel
@@ -3168,7 +3168,7 @@ SOAP.IP = "127.0.0.1"
 #        Description: TCP port to reach the SOAP service.
 #        Default:     7878
 
-SOAP.Port = "7878"
+SOAP.Port = 7878
 
 #
 ###################################################################################################

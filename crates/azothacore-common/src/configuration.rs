@@ -37,10 +37,23 @@ impl ConfigMgr {
         }
     }
 
-    pub fn get_option<T>(&self, key: &str) -> ConfigGetResult<T>
+    fn _get_option<T, F>(&self, key: &str, fallback: F) -> ConfigGetResult<T>
     where
         T: serde::de::DeserializeOwned,
+        F: FnOnce() -> Option<T>,
     {
+        let env_var_name = format!("AZ_{}", key.replace(|c: char| !c.is_alphanumeric(), "_")).to_case(Case::UpperSnake);
+        let env_var_err: ConfigGetError = match env::var(&env_var_name) {
+            Ok(env_value) => {
+                debug!(target:"server::loading", "> Config: Found config value '{key}' from environment variable '{env_var_name}'.");
+                match serde_json::from_str(&env_value) {
+                    Ok(v) => return Ok(v),
+                    Err(e) => e.into(),
+                }
+            },
+            Err(e) => e.into(),
+        };
+
         let original_err = match self
             .config
             .as_ref()
@@ -50,15 +63,27 @@ impl ConfigMgr {
             Err(e) => e,
             Ok(v) => return Ok(v),
         };
-
-        let env_var_name = format!("AZ_{}", key.replace(|c: char| !c.is_alphanumeric(), "_")).to_case(Case::UpperSnake);
-        if let Ok(env_value) = env::var(&env_var_name) {
-            debug!(target:"server::loading", "> Config: Found config value '{key}' from environment variable '{env_var_name}'.");
-            Ok(serde_json::from_str(&env_value)?)
-        } else {
-            error!(target:"server::loading", "> Config: Missing property {key} in config file {}, add \"{key} = XXX\" to this file or define '{env_var_name}' as an environment variable.", self.filename);
-            Err(original_err)
+        if let Some(v) = fallback() {
+            error!(target:"server::loading", env_err=%env_var_err, cfg_err=%original_err, "> Config: Missing property or err {key} in config file {}, add \"{key} = XXX\" to this file or define '{env_var_name}' as an environment variable.", self.filename);
+            return Ok(v);
         }
+
+        Err(original_err)
+    }
+
+    pub fn get<T, F>(&self, key: &str, fallback: F) -> T
+    where
+        T: serde::de::DeserializeOwned,
+        F: FnOnce() -> T,
+    {
+        self._get_option(key, || Some(fallback())).unwrap()
+    }
+
+    pub fn get_option<T>(&self, key: &str) -> ConfigGetResult<T>
+    where
+        T: serde::de::DeserializeOwned,
+    {
+        self._get_option(key, || None)
     }
 
     pub fn is_dry_run(&self) -> bool {

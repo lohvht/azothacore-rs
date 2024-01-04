@@ -119,34 +119,34 @@ impl LoginRESTService {
 
     pub fn start(rt_handler: &runtime::Handle, cancel_token: CancellationToken) -> AzResult<()> {
         let cfg_mgr_r = ConfigMgr::r();
-        let bind_addr = cfg_mgr_r.get_option("BindIP").unwrap_or("0.0.0.0".to_string());
-        let port = cfg_mgr_r.get_option("LoginREST.Port").unwrap_or(8081);
-        let external_address = cfg_mgr_r.get_option("LoginREST.ExternalAddress").unwrap_or("127.0.0.1".to_string());
-        let local_address = cfg_mgr_r.get_option("LoginREST.LocalAddress").unwrap_or("127.0.0.1".to_string());
-        let local_network_mask = cfg_mgr_r.get_option("LoginREST.SubnetMask").unwrap_or("255.255.255.0".to_string());
-        let login_ticket_duration = Duration::from_secs(ConfigMgr::r().get_option("LoginREST.TicketDuration").unwrap_or(3600));
+        let bind_addr = cfg_mgr_r.get("BindIP", || "0.0.0.0".to_string());
+        let port = cfg_mgr_r.get("LoginREST.Port", || 8081);
+        let external_address = cfg_mgr_r.get("LoginREST.ExternalAddress", || "127.0.0.1".to_string());
+        let local_address = cfg_mgr_r.get("LoginREST.LocalAddress", || "127.0.0.1".to_string());
+        let local_network_mask = cfg_mgr_r.get("LoginREST.SubnetMask", || "255.255.255.0".to_string());
+        let login_ticket_duration = Duration::from_secs(ConfigMgr::r().get("LoginREST.TicketDuration", || 3600));
         let wrong_pass = ConfigMgr::r()
             .get_option("WrongPass")
             .map_err(|e| {
-                error!(target:"server::rest", "WrongPass is configured wrongly, assuming its not set. {e}");
+                error!(target:"server::rest", cause=%e, "WrongPass is configured wrongly, assuming its not set. {e}");
                 e
             })
             .ok();
 
         let external_address = net_resolve((external_address.as_str(), port)).map_err(|e| {
-            error!(target:"server::rest", "Could not resolve LoginREST.ExternalAddress {external_address}");
+            error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.ExternalAddress {external_address}");
             e
         })?;
         let local_address = net_resolve((local_address.as_str(), port)).map_err(|e| {
-            error!(target:"server::rest", "Could not resolve LoginREST.LocalAddress {local_address}");
+            error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.LocalAddress {local_address}");
             e
         })?;
-        let bind_addr = net_resolve(bind_addr.as_str()).map_err(|e| {
-            error!(target:"server::rest", "Could not resolve LoginREST.BindAddr {bind_addr}");
+        let bind_addr = net_resolve((bind_addr.as_str(), port)).map_err(|e| {
+            error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.BindAddr {bind_addr}");
             e
         })?;
         let local_subnet_mask = net_resolve((local_network_mask.as_str(), port)).map_err(|e| {
-            error!(target:"server::rest", "Could not resolve LoginREST.SubnetMask {local_network_mask}");
+            error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.SubnetMask {local_network_mask}");
             e
         })?;
 
@@ -451,7 +451,7 @@ impl LoginRESTService {
             if failed_logins < wrong_pass.MaxCount {
                 return (StatusCode::OK, Json(error_response));
             }
-            let ban_time = wrong_pass.BanTime.as_secs();
+            let ban_time = wrong_pass.BanTime;
             if matches!(wrong_pass.BanType, WrongPassBanType::BanAccount) {
                 handle_login_err!(
                     LoginDatabase::ins_bnet_account_auto_banned(&mut *trans, params!(account_id, ban_time)).await,

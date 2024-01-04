@@ -123,7 +123,7 @@ fn main() -> AzResult<()> {
     let _login_service_handle = dropper_wrapper_fn(rt.handle(), LoginRESTService::stop);
 
     // Get the list of realms for the server
-    RealmList::init(rt.handle(), token.clone(), ConfigMgr::r().get_option("RealmsStateUpdateDelay").unwrap_or(10));
+    RealmList::init(rt.handle(), token.clone(), ConfigMgr::r().get("RealmsStateUpdateDelay", || 10));
     // let _realm_list_handle = dropper_wrapper_fn(rt.handle(), || async { RealmList::close().await });
 
     // Stop auth server if dry run
@@ -132,8 +132,8 @@ fn main() -> AzResult<()> {
         return Ok(());
     }
 
-    let bind_ip = ConfigMgr::r().get_option("BindIP").unwrap_or("0.0.0.0".to_string());
-    let bnport = ConfigMgr::r().get_option("BattlenetPort").unwrap_or(1119u16);
+    let bind_ip = ConfigMgr::r().get("BindIP", || "0.0.0.0".to_string());
+    let bnport = ConfigMgr::r().get("BattlenetPort", || 1119u16);
 
     BnetSessionManager::start_network(rt.handle(), token.clone(), (bind_ip, bnport))?;
     let _session_mgr_handle = dropper_wrapper_fn(rt.handle(), || async { BnetSessionManager::stop_network().await.map_err(|e| e.into()) });
@@ -146,7 +146,7 @@ fn main() -> AzResult<()> {
     // // Set process priority according to configuration settings
     // SetProcessPriority("server.bnetserver", sConfigMgr->GetIntDefault(CONFIG_PROCESSOR_AFFINITY, 0), sConfigMgr->GetBoolDefault(CONFIG_HIGH_PRIORITY, false));
 
-    let ban_expiry_check_interval = Duration::from_secs(ConfigMgr::r().get_option("BanExpiryCheckInterval").unwrap_or(60));
+    let ban_expiry_check_interval = Duration::from_secs(ConfigMgr::r().get("BanExpiryCheckInterval", || 60));
     let _ban_expiry_handler = rt.spawn(ban_expiry_task(token.clone(), ban_expiry_check_interval));
 
     // TODO: Impl me? Windows service status watcher
