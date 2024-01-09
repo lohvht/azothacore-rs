@@ -4,10 +4,10 @@
 /*!40014 SET @OLD_FOREIGN_KEY_CHECKS=@@FOREIGN_KEY_CHECKS, FOREIGN_KEY_CHECKS=0 */;
 /*!40101 SET @OLD_SQL_MODE=@@SQL_MODE, SQL_MODE='NO_AUTO_VALUE_ON_ZERO' */;
 /*!40111 SET @OLD_SQL_NOTES=@@SQL_NOTES, SQL_NOTES=0 */;
-DROP TABLE IF EXISTS `trinity_string`;
+DROP TABLE IF EXISTS `internal_server_strings`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `trinity_string` (
+CREATE TABLE `internal_server_strings` (
   `entry` mediumint(8) unsigned NOT NULL DEFAULT 0,
   `content_default` text NOT NULL,
   `content_loc1` text DEFAULT NULL,
@@ -22,9 +22,9 @@ CREATE TABLE `trinity_string` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
-LOCK TABLES `trinity_string` WRITE;
-/*!40000 ALTER TABLE `trinity_string` DISABLE KEYS */;
-INSERT INTO `trinity_string` VALUES
+LOCK TABLES `internal_server_strings` WRITE;
+/*!40000 ALTER TABLE `internal_server_strings` DISABLE KEYS */;
+INSERT INTO `internal_server_strings` VALUES
 (1,'You should select a character or a creature.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
 (2,'You should select a creature.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
 (3,'[SERVER] %s',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
@@ -991,7 +991,7 @@ INSERT INTO `trinity_string` VALUES
 (20075,'Guide me back to the Horde landing camp.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
 (20076,'Guide me back to the Alliance landing camp.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL),
 (20077,'Queue for Wintergrasp.',NULL,NULL,NULL,NULL,NULL,NULL,NULL,NULL);
-/*!40000 ALTER TABLE `trinity_string` ENABLE KEYS */;
+/*!40000 ALTER TABLE `internal_server_strings` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 

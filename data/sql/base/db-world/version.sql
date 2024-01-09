@@ -20,7 +20,7 @@ CREATE TABLE `version` (
 LOCK TABLES `version` WRITE;
 /*!40000 ALTER TABLE `version` DISABLE KEYS */;
 INSERT INTO `version` VALUES
-('TrinityCore rev. 2f0ccbe1a695 2018-02-19 18:58:59 +0100 (master branch) (Win64, RelWithDebInfo, Static)','2f0ccbe1a695','TDB 735.00',7,0);
+('Azothacore rev. 2f0ccbe1a695 2018-02-19 18:58:59 +0100 (master branch) (Win64, RelWithDebInfo, Static)','2f0ccbe1a695','TDB 735.00',7,0);
 /*!40000 ALTER TABLE `version` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

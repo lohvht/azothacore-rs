@@ -568,7 +568,7 @@ INSERT INTO `rbac_permissions` VALUES
 (701,'Command: reload spell_target_position'),
 (702,'Command: reload spell_threats'),
 (703,'Command: reload spell_group_stack_rules'),
-(704,'Command: reload trinity_string'),
+(704,'Command: reload internal_server_strings'),
 (705,'Command: reload warden_action'),
 (706,'Command: reload waypoint_scripts'),
 (707,'Command: reload waypoint_data'),
