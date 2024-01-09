@@ -42,6 +42,12 @@ pub use world_db::{HugSql as WorldPreparedStmts, WorldDatabase};
 use crate::DbDriver;
 
 impl WorldDatabase {
+    pub async fn close() {
+        if let Some(pool) = WORLD_DB.get() {
+            pool.close().await;
+        }
+    }
+
     pub fn get() -> &'static Pool<DbDriver> {
         WORLD_DB.get().expect("WorldDatabase is not initialised yet")
     }
@@ -52,6 +58,12 @@ impl WorldDatabase {
 }
 
 impl CharacterDatabase {
+    pub async fn close() {
+        if let Some(pool) = CHARACTER_DB.get() {
+            pool.close().await;
+        }
+    }
+
     pub fn get() -> &'static Pool<DbDriver> {
         CHARACTER_DB.get().expect("CharacterDatabase is not initialised yet")
     }
@@ -62,6 +74,12 @@ impl CharacterDatabase {
 }
 
 impl LoginDatabase {
+    pub async fn close() {
+        if let Some(pool) = LOGIN_DB.get() {
+            pool.close().await;
+        }
+    }
+
     pub fn get() -> &'static Pool<DbDriver> {
         LOGIN_DB.get().expect("LoginDatabase is not initialised yet")
     }
@@ -72,6 +90,12 @@ impl LoginDatabase {
 }
 
 impl HotfixDatabase {
+    pub async fn close() {
+        if let Some(pool) = HOTFIX_DB.get() {
+            pool.close().await;
+        }
+    }
+
     pub fn get() -> &'static Pool<DbDriver> {
         HOTFIX_DB.get().expect("HotfixDatabase is not initialised yet")
     }

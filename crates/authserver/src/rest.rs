@@ -645,7 +645,7 @@ async fn serve_https_call(router: Router<()>, cnx: TcpStream, addr: SocketAddr) 
     let stream = match SslContext::get().accept(cnx).await {
         Ok(s) => s,
         Err(e) => {
-            debug!(target:"server::rest", "Failed SSL handshake from Addr {addr}, err: {e}");
+            error!(target:"server::rest", "Failed SSL handshake from Addr {addr}, err: {e}");
             return Err(e);
         },
     };

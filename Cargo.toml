@@ -21,12 +21,14 @@ wow-db2-proc-macros = { path = "crates/wow-db2-proc-macros" }
 axum = { version = "0" }
 axum-extra = { version = "0", features = ["typed-header"] }
 bytes = { version = "1" }
+chrono = { version = "0" }
 clap =  { version = "4", features = ["derive"] }
 flagset = { version = "0", features = ["serde"] }
-futures = "0"
-hugsqlx = { version = "0", features = [ "mysql" ] }
-ipnet = { version = "2" }
 flate2 = { version = "1.0.17", features = ["zlib-ng-compat"], default-features = false }
+futures = "0"
+futures-core = "0"
+hugsqlx = { git="https://github.com/lohvht/hugsqlx.git", branch = "fix/fix-sqlx-lifetime", features = [ "mysql" ] } # version = "0",
+ipnet = { version = "2" }
 nalgebra = { version = "0", features = [ "serde-serialize" ] }
 num = { version = "0" }
 num-derive = { version = "0" }

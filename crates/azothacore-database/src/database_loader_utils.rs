@@ -7,6 +7,7 @@ use std::{
 use azothacore_common::utils::buffered_file_open;
 use flate2::bufread::GzDecoder;
 use thiserror::Error;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::DbExecutor;
@@ -35,7 +36,7 @@ fn map_open_err(file_path: &str) -> impl FnOnce(io::Error) -> DatabaseLoaderErro
 }
 
 /// Applies the file's content to the given pool.
-pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(conn: E, f: P, is_gz: bool) -> Result<(), DatabaseLoaderError> {
+pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(cancel_token: CancellationToken, conn: E, f: P, is_gz: bool) -> Result<(), DatabaseLoaderError> {
     let file_path = f.as_ref().display().to_string();
     info!(">> Applying \'{file_path}\'...");
 
@@ -49,20 +50,28 @@ pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(conn: E, f: P, is
         fs::read_to_string(f.as_ref()).map_err(map_open_err(&file_path))?
     };
 
-    // NOTE: hirogoro@21dec2023: Raw unprepared execution, by not enclosing with sqlx::query function
-    // => See: https://github.com/launchbadge/sqlx/issues/2557
-    // enclosing in sqlx::query tells sqlx to treat the statement as a prepared stmt.
-    _ = conn.execute(file_data.as_str()).await.map_err(|e| {
-        error!(
-            r#"Applying of file '{file_path}' to database failed!
-          If you are a user, please pull the latest revision from the repository.
-          Also make sure you have not applied any of the databases with your sql client.
-          You cannot use auto-update system and import sql files from the repository with your sql client.
-          If you are a developer, please fix your sql query. Err was:
-          
-          {e}"#,
-        );
-        e
-    })?;
+    tokio::select! {
+        _ = cancel_token.cancelled() => {
+            return Err(DatabaseLoaderError::Generic{ msg: "DB apply cancelled".to_string()})
+        },
+        res = conn.execute(file_data.as_str()) => {
+                // NOTE: hirogoro@21dec2023: Raw unprepared execution, by not enclosing with sqlx::query function
+                // => See: https://github.com/launchbadge/sqlx/issues/2557
+                // enclosing in sqlx::query tells sqlx to treat the statement as a prepared stmt.
+            if let Err(e) = &res {
+                error!(
+                    r#"Applying of file '{file_path}' to database failed!
+                  If you are a user, please pull the latest revision from the repository.
+                  Also make sure you have not applied any of the databases with your sql client.
+                  You cannot use auto-update system and import sql files from the repository with your sql client.
+                  If you are a developer, please fix your sql query. Err was:
+                  
+                  {e}"#,
+                );
+                cancel_token.cancel();
+            }
+            res?;
+        }
+    }
     Ok(())
 }

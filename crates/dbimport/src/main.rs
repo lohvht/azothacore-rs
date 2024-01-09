@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use azothacore_common::{
     banner,
@@ -19,7 +19,53 @@ use azothacore_database::{
 use azothacore_modules::SCRIPTS as MODULES_LIST;
 use azothacore_server::shared::dropper_wrapper_fn;
 use clap::Parser;
+use tokio_util::sync::CancellationToken;
 use tracing::info;
+
+#[cfg(target_os = "windows")]
+fn signal_handler(rt: &tokio::runtime::Runtime, expression: impl Future<Output = AzResult<T>>) -> JoinHandle<Result<(), std::io::Error>> {
+    rt.spawn(
+        async {
+            use tokio::signal::windows::ctrl_break;
+            let mut sig_break = ctrl_break()?;
+            receive_signal_and_run_expr!(
+                S_WORLD.write().await.stop_now(1),
+                "SIGBREAK" => sig_break
+            );
+            Ok(())
+        }
+        .instrument(info_span!("signal_handler")),
+    )
+}
+
+#[cfg(target_os = "linux")]
+fn signal_handler(rt: &tokio::runtime::Runtime, cancel_token: CancellationToken) -> tokio::task::JoinHandle<Result<(), std::io::Error>> {
+    use azothacore_server::{receive_signal_and_run_expr, short_curcuit_unix_signal_unwrap};
+    use tokio::signal::unix::SignalKind;
+    use tracing::{info_span, Instrument};
+
+    fn cancel_func(cancel_token: CancellationToken) -> AzResult<()> {
+        cancel_token.cancel();
+        Ok(())
+    }
+
+    rt.spawn(
+        async move {
+            let mut sig_interrupt = short_curcuit_unix_signal_unwrap!(SignalKind::interrupt());
+            let mut sig_terminate = short_curcuit_unix_signal_unwrap!(SignalKind::terminate());
+            let mut sig_quit = short_curcuit_unix_signal_unwrap!(SignalKind::quit());
+            receive_signal_and_run_expr!(
+                cancel_func(cancel_token.clone()),
+                cancel_token,
+                "SIGINT" => sig_interrupt
+                "SIGTERM" => sig_terminate
+                "SIGQUIT" => sig_quit
+            );
+            Ok(())
+        }
+        .instrument(info_span!("signal_handler")),
+    )
+}
 
 fn main() -> AzResult<()> {
     let vm = ConsoleArgs::parse();
@@ -39,7 +85,7 @@ fn main() -> AzResult<()> {
             &cfg_mgr_r.get_option::<Vec<_>>("Logger")?,
         )
     };
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
+    let runtime = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build()?);
     banner::azotha_banner_show("dbimport", || {
         info!(
             target:"dbimport",
@@ -48,8 +94,18 @@ fn main() -> AzResult<()> {
         )
     });
 
-    rt.block_on(start_db())?;
-    let _db_handle = dropper_wrapper_fn(rt.handle(), stop_db);
+    let cancel_token = CancellationToken::new();
+
+    let rt = runtime.clone();
+    let ct = cancel_token.clone();
+    let jh = signal_handler(&rt, ct.clone());
+    let _signal_handle = dropper_wrapper_fn(runtime.handle(), ct, async move {
+        jh.await??;
+        Ok(())
+    });
+
+    runtime.block_on(start_db(cancel_token.clone()))?;
+    let _db_handle = dropper_wrapper_fn(runtime.handle(), cancel_token.clone(), stop_db());
 
     info!(target:"dbimport", "Halting process...");
 
@@ -57,7 +113,7 @@ fn main() -> AzResult<()> {
 }
 
 /// Initialize connection to the database
-async fn start_db() -> AzResult<()> {
+async fn start_db(cancel_token: CancellationToken) -> AzResult<()> {
     let updates;
     let auth_cfg;
     let world_cfg;
@@ -71,10 +127,10 @@ async fn start_db() -> AzResult<()> {
         character_cfg = config_mgr_r.get_option("CharacterDatabaseInfo")?;
         hotfix_cfg = config_mgr_r.get_option("HotfixDatabaseInfo")?;
     }
-    let login_db_loader = DatabaseLoader::new(DBFlagLogin, &auth_cfg, &updates, MODULES_LIST);
-    let world_db_loader = DatabaseLoader::new(DBFlagWorld, &world_cfg, &updates, MODULES_LIST);
-    let chars_db_loader = DatabaseLoader::new(DBFlagCharacter, &character_cfg, &updates, MODULES_LIST);
-    let hotfixes_db_loader = DatabaseLoader::new(DBFlagHotfix, &hotfix_cfg, &updates, MODULES_LIST);
+    let login_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagLogin, &auth_cfg, &updates, MODULES_LIST);
+    let world_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagWorld, &world_cfg, &updates, MODULES_LIST);
+    let chars_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagCharacter, &character_cfg, &updates, MODULES_LIST);
+    let hotfixes_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagHotfix, &hotfix_cfg, &updates, MODULES_LIST);
 
     LoginDatabase::set(login_db_loader.load().await?);
     WorldDatabase::set(world_db_loader.load().await?);
@@ -87,10 +143,10 @@ async fn start_db() -> AzResult<()> {
 
 async fn stop_db() -> AzResult<()> {
     info!(target:"dbimport", "Stopping database connection pool.");
-    LoginDatabase::get().close().await;
-    WorldDatabase::get().close().await;
-    CharacterDatabase::get().close().await;
-    HotfixDatabase::get().close().await;
+    LoginDatabase::close().await;
+    WorldDatabase::close().await;
+    CharacterDatabase::close().await;
+    HotfixDatabase::close().await;
     info!(target:"dbimport", "Stopped database connection pool.");
 
     Ok(())

@@ -11,9 +11,9 @@ use std::{
 };
 
 use azothacore_common::{
+    az_error,
     utils::{unix_now, SharedFromSelf, SharedFromSelfBase},
     AccountTypes,
-    AzError,
     AzResult,
     Locale,
 };
@@ -23,11 +23,13 @@ use azothacore_database::{
 };
 use azothacore_server::shared::{
     bnetrpc_zcompress,
+    dropper_wrapper_fn,
     networking::socket::{AddressOrName, Socket, SocketWrappper},
     realms::{
         realm_list::{JoinRealmError, RealmList},
         BnetRealmHandle,
     },
+    DropperWrapperFn,
 };
 use bnet_rpc::{
     bgs::protocol::{
@@ -76,7 +78,6 @@ use sqlx::Row;
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpStream,
-    task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
@@ -224,9 +225,8 @@ impl GameAccountInfo {
 
 pub struct Session {
     // Lifetime management
-    base:       SharedFromSelfBase<Session>,
-    task:       OnceLock<JoinHandle<AzResult<()>>>,
-    rt_handler: tokio::runtime::Handle,
+    base:             SharedFromSelfBase<Session>,
+    run_read_handler: OnceLock<DropperWrapperFn>,
 
     // Rest of Session info.
     /// Contains a mapping of tokens expecting a return from a previous client
@@ -293,7 +293,7 @@ impl Session {
             c if c == ResourcesService::service_hash(self) => ResourcesService::call_server_method(self, token, method_id, packet_buffer).await?,
             c if c == UserManagerService::service_hash(self) => UserManagerService::call_server_method(self, token, method_id, packet_buffer).await?,
             c => {
-                debug!(target:"session::rpc", caller_info=self.caller_info(), "client tried to call invalid service {:?}", c);
+                warn!(target:"session::rpc", caller_info=self.caller_info(), "client tried to call invalid service {:?}", c);
             },
         }
         Ok(())
@@ -448,48 +448,29 @@ impl SharedFromSelf<Session> for Session {
     }
 }
 
-impl Drop for Session {
-    fn drop(&mut self) {
-        // cancels the socket and unsets the read receiver
-        _ = self.rt_handler.block_on(self.close());
-        // Ensures that the write join handler is properly handled
-        if let Some(jh) = self.task.take() {
-            match self.rt_handler.block_on(jh) {
-                Err(e) => {
-                    error!(target:"session", cause=?e, "error joining on runtime when dropping socket");
-                },
-                Ok(Err(e)) => {
-                    error!(target:"session", cause=?e, "cause of error when dropping session");
-                },
-                Ok(Ok(_)) => {},
-            }
-        }
-    }
-}
-
 impl Socket for Session {
-    async fn new_from_tcp(rt_handler: tokio::runtime::Handle, cancel_token: CancellationToken, addr: AddressOrName, tcp_conn: TcpStream) -> AzResult<Arc<Self>>
+    async fn start_from_tcp(cancel_token: CancellationToken, addr: AddressOrName, tcp_conn: TcpStream) -> AzResult<Arc<Self>>
     where
         Self: std::marker::Sized,
     {
         let conn = SslContext::get().accept(tcp_conn).await?;
         let (rd, wr) = tokio::io::split(conn);
-        Ok(Self::new(rt_handler, cancel_token, addr, Box::new(rd), Box::new(wr)))
+        Self::start(cancel_token, addr, Box::new(rd), Box::new(wr)).await
     }
 
-    fn new<R, W>(rt_handler: tokio::runtime::Handle, cancel_token: CancellationToken, name: AddressOrName, rd: R, wr: W) -> Arc<Self>
+    async fn start<R, W>(cancel_token: CancellationToken, name: AddressOrName, rd: R, wr: W) -> AzResult<Arc<Self>>
     where
         R: AsyncRead + Unpin + Send + Sync + 'static,
         W: AsyncWrite + Unpin + Send + Sync + 'static,
     {
+        let rt_handler = tokio::runtime::Handle::current();
+        let ct = cancel_token.clone();
         let inner = SocketWrappper::new(rt_handler.clone(), cancel_token, name.clone(), rd, wr);
         let s = Arc::new(Self {
             base: SharedFromSelfBase::new(),
-            task: OnceLock::new(),
             response_callbacks: Mutex::new(BTreeMap::new()),
             ip_or_name: name,
             inner,
-            rt_handler,
             account_info: OnceLock::new(),
             game_account_info: OnceLock::new(),
             build: AtomicU32::new(0),
@@ -498,16 +479,14 @@ impl Socket for Session {
             client_secret: OnceLock::new(),
             ip_country: OnceLock::new(),
             request_token: AtomicU32::new(0),
+            run_read_handler: OnceLock::new(),
         });
         // accountinfo
         s.base.initialise(&s);
-        s
-    }
 
-    async fn start(&self) -> AzResult<()> {
         // CheckIpCallback routine
-        let ip_address = self.ip_or_name.ip_str_or_name();
-        trace!(target:"session", caller = self.caller_info(), "Accepted connection");
+        let ip_address = s.ip_or_name.ip_str_or_name();
+        trace!(target:"session", caller = s.caller_info(), "Accepted connection");
 
         // Verify that this IP is not in the ip_banned table
         let login_db = LoginDatabase::get();
@@ -515,42 +494,64 @@ impl Socket for Session {
         for fields in LoginDatabase::sel_ip_info(login_db, params!(ip_address)).await? {
             let banned = fields.get::<u64, _>("banned") != 0;
             if banned {
-                debug!(target:"session", "[CheckIpCallback] Banned ip '{}' tries to login!", self.ip_or_name);
-                return self.close().await;
+                let e = az_error!("[CheckIpCallback] Banned ip '{}' tries to login!", s.ip_or_name);
+                debug!(target:"session", cause=%e);
+                s.close();
+                return Err(e);
             }
         }
 
-        let this = self.shared_from_self();
         // begin AsyncRead => ReadHandler routine
-        self.task.get_or_init(move || {
-            this.clone().rt_handler.spawn(async move {
-                loop {
-                    this.is_running()?;
-
-                    // ReadHeaderLengthHandler
-                    let header_length = u16::from_be_bytes(this.inner.receive(2).await?.to_vec().try_into().unwrap());
-                    // ReadHeaderHandler
-                    let header = Header::decode(this.inner.receive(header_length.into()).await?)?;
-                    // ReadDataHandler
-                    let packet_buffer = this.inner.receive(header.size().try_into().unwrap()).await?;
-                    if header.service_id != 0xFE {
-                        this.dispatch(header.service_hash(), header.token, header.method_id(), packet_buffer).await?;
-                    } else {
-                        this.receive(header.service_hash(), header.token, header.method_id(), packet_buffer).await?;
-                    }
-                }
-            })
+        let this = s.clone();
+        let jh = tokio::spawn(async move {
+            loop {
+                tokio::select! {
+                    _ = this.wait_closed() => {
+                        break;
+                    },
+                    res = this.read_handler() => {
+                        if let Err(e) = res {
+                            error!(target:"session", cause=%e, caller = this.caller_info(), "error handling reads, terminating");
+                            this.close();
+                            this.wait_closed().await;
+                            break;
+                        }
+                    },
+                };
+            }
         });
+        s.run_read_handler.get_or_init(|| dropper_wrapper_fn(&rt_handler, ct, async { Ok(jh.await?) }));
 
+        Ok(s)
+    }
+
+    fn close(&self) {
+        self.inner.close_socket();
+    }
+
+    fn is_closed(&self) -> bool {
+        self.inner.is_closed()
+    }
+
+    async fn wait_closed(&self) {
+        self.inner.wait_closed().await
+    }
+}
+
+impl Session {
+    async fn read_handler(&self) -> AzResult<()> {
+        // ReadHeaderLengthHandler
+        let header_length = u16::from_be_bytes(self.inner.receive(2).await?.to_vec().try_into().unwrap());
+        // ReadHeaderHandler
+        let header = Header::decode(self.inner.receive(header_length.into()).await?)?;
+        // ReadDataHandler
+        let packet_buffer = self.inner.receive(header.size().try_into().unwrap()).await?;
+        if header.service_id != 0xFE {
+            self.dispatch(header.service_hash(), header.token, header.method_id(), packet_buffer).await?;
+        } else {
+            self.receive(header.service_hash(), header.token, header.method_id(), packet_buffer).await?;
+        }
         Ok(())
-    }
-
-    fn is_running(&self) -> AzResult<()> {
-        self.inner.is_running().map_err(AzError::new)
-    }
-
-    async fn close(&self) -> AzResult<()> {
-        self.inner.close_socket().await.map_err(AzError::new)
     }
 }
 
@@ -855,12 +856,8 @@ impl ConnectionService for Session {
             ..Default::default()
         };
         _ = self.force_disconnect(disconnect_notification).await;
-
-        let this = self.shared_from_self();
-        self.rt_handler.spawn(async move {
-            let err = this.close().await;
-            trace!(target:"session", cause=?err, "closed session due to request to be disconnected");
-        });
+        self.close();
+        debug!(target:"session", "closed session due to request to be disconnected");
         Ok(NoResponse {})
     }
 }

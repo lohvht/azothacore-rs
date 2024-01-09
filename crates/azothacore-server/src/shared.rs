@@ -7,37 +7,47 @@ pub mod shared_defines;
 use std::{
     future::Future,
     io::{self, Write},
+    sync::{mpsc, Arc, Mutex},
 };
 
 use azothacore_common::AzResult;
-use tracing::error;
+use tokio_util::sync::CancellationToken;
+use tracing::debug;
 
-pub struct DropperWrapperFn<F, Fut>
-where
-    F: Fn() -> Fut,
-    Fut: Future<Output = AzResult<()>>,
-{
-    f: F,
-    h: tokio::runtime::Handle,
+pub struct DropperWrapperFn {
+    cancel_token:              CancellationToken,
+    has_finished_cancellation: Mutex<mpsc::Receiver<()>>,
 }
 
-pub fn dropper_wrapper_fn<F, Fut>(h: &tokio::runtime::Handle, f: F) -> DropperWrapperFn<F, Fut>
-where
-    F: Fn() -> Fut,
-    Fut: Future<Output = AzResult<()>>,
-{
-    DropperWrapperFn { f, h: h.clone() }
-}
-
-impl<F, Fut> Drop for DropperWrapperFn<F, Fut>
-where
-    F: Fn() -> Fut,
-    Fut: Future<Output = AzResult<()>>,
-{
+impl Drop for DropperWrapperFn {
     fn drop(&mut self) {
-        if let Err(e) = self.h.block_on((self.f)()) {
-            error!("Error when attempting to run the drop callback: err: {e}");
-        };
+        self.cancel_token.cancel();
+        _ = self.has_finished_cancellation.lock().unwrap().recv();
+    }
+}
+
+/// dropper_wrapper_fn provides an easy way to properly handled by awaiting
+/// any futures passed into after cancelling the given token on drop
+pub fn dropper_wrapper_fn<Fut>(handler: &tokio::runtime::Handle, cancel_token: CancellationToken, f: Fut) -> DropperWrapperFn
+where
+    Fut: Future<Output = AzResult<()>> + Send + 'static,
+{
+    let (s, r) = mpsc::channel();
+    let ct = cancel_token.clone();
+
+    handler.spawn(async move {
+        ct.cancelled().await;
+
+        if let Err(e) = f.await {
+            debug!(cause=%e, "error when cleaning up async function");
+        }
+        _ = s.send(());
+    });
+    let has_finished_cancellation = Mutex::new(r);
+
+    DropperWrapperFn {
+        cancel_token,
+        has_finished_cancellation,
     }
 }
 

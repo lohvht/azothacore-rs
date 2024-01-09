@@ -8,6 +8,7 @@ edition = "2021"
 # External crates
 anyhow = { version = "1" }
 bincode = { version = "1" }
+chrono.workspace = true
 console-subscriber = { version = "0" }
 const_format = { version = "0" }
 convert_case = { version = "0" }

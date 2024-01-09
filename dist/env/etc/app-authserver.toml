@@ -75,17 +75,17 @@ BindIP = "0.0.0.0"
 #    CertificatesFile
 #        Description: Certificates file.
 #        Example:     "/etc/ssl/certs/bnetserver.cert.pem"
-#        Default:     "./bnetserver.cert.pem"
+#        Default:     "bnetserver.cert.pem"
 
-CertificatesFile = "./bnetserver.cert.pem"
+CertificatesFile = "bnetserver.cert.pem"
 
 #
 #    PrivateKeyFile
 #        Description: Private key file.
 #        Example:     "/etc/ssl/private/bnetserver.key.pem"
-#        Default:     "./bnetserver.key.pem"
+#        Default:     "bnetserver.key.pem"
 
-PrivateKeyFile = "./bnetserver.key.pem"
+PrivateKeyFile = "bnetserver.key.pem"
 
 #
 #    UseProcessors
@@ -158,8 +158,8 @@ LoginREST.SubnetMask="255.255.255.0"
 #                     0   - (Permanent ban)
 #    WrongPass.BanType
 #        Description: Ban type for invalid login attempts.
-#        Default:     0 - (Ban IP)
-#                     1 - (Ban Account)
+#        Default:     "BanIP"
+#                     "BanAccount"
 #
 #    WrongPass.Logging
 #        Description: Additionally log attempted wrong password logging
@@ -167,8 +167,8 @@ LoginREST.SubnetMask="255.255.255.0"
 #                     1 - (Enabled)
 WrongPass.MaxCount = 0
 WrongPass.BanTime = 600
-WrongPass.BanType = 0
-WrongPass.Logging = 0
+WrongPass.BanType = "BanIP"
+WrongPass.Logging = false
 
 #
 #    BanExpiryCheckInterval
@@ -378,14 +378,14 @@ type = "Console"
 name = "Console"
 min_level = "Debug"
 max_level = "Error"
-flags = 6
+flags = 54
 
 [[Appender]]
 type = "File"
 name = "Auth"
 min_level = "Debug"
 max_level = "Error"
-flags = 7
+flags = 55
 file = "Auth.log"
 
 #  Logger config values: Given a logger "name"

@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use azothacore_common::configuration::{DatabaseInfo, DatabaseType, DbUpdates};
 use sqlx::{mysql::MySqlDatabaseError, pool::PoolOptions};
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument};
 
 use crate::{
@@ -12,26 +13,42 @@ use crate::{
 };
 
 pub struct DatabaseLoader<'l, 'd, 'u> {
+    cancel_token:    CancellationToken,
     modules_list:    &'l [&'l str],
     database_config: ExtendedDBInfo<'d, 'u>,
 }
 
 impl<'l, 'd, 'u> DatabaseLoader<'l, 'd, 'u> {
-    pub fn new(db_type: DatabaseType, database_config: &'d DatabaseInfo, update_config: &'u DbUpdates, modules_list: &'l [&'l str]) -> Self {
+    pub fn new(
+        cancel_token: CancellationToken,
+        db_type: DatabaseType,
+        database_config: &'d DatabaseInfo,
+        update_config: &'u DbUpdates,
+        modules_list: &'l [&'l str],
+    ) -> Self {
         Self {
+            cancel_token,
             modules_list,
             database_config: ExtendedDBInfo::new((database_config, update_config, db_type)),
         }
     }
 
+    /// Loads and prepares the database as required. it first opens the connection to the DB
+    /// Then populates the DB if needed and keeps it up to date.
     #[instrument(skip(self))]
     pub async fn load(&self) -> Result<sqlx::Pool<DbDriver>, DatabaseLoaderError> {
         if !self.database_config.updates_enabled() {
             info!("Automatic database updates are disabled for {}", self.database_config.DatabaseName);
         }
         let pool = self.open_database().await?;
-        self.populate_database(&pool).await?;
-        self.update_database(&pool).await?;
+        if let Err(e) = self.populate_database(&pool).await {
+            pool.close().await;
+            return Err(e);
+        }
+        if let Err(e) = self.update_database(&pool).await {
+            pool.close().await;
+            return Err(e);
+        }
         Ok(pool)
     }
 
@@ -67,8 +84,8 @@ impl<'l, 'd, 'u> DatabaseLoader<'l, 'd, 'u> {
         if !self.database_config.updates_enabled() {
             return Ok(());
         }
-        if let Err(e) = db_updater_populate(pool, &self.database_config).await {
-            error!("Could not populate the {} database, see log for details.", self.database_config.DatabaseName,);
+        if let Err(e) = db_updater_populate(self.cancel_token.clone(), pool, &self.database_config).await {
+            error!(cause=%e, "Could not populate the {} database, see log for details.", self.database_config.DatabaseName,);
             return Err(e);
         };
         Ok(())
@@ -78,7 +95,7 @@ impl<'l, 'd, 'u> DatabaseLoader<'l, 'd, 'u> {
         if !self.database_config.updates_enabled() {
             return Ok(());
         }
-        if let Err(e) = db_updater_update(pool, &self.database_config, self.modules_list).await {
+        if let Err(e) = db_updater_update(self.cancel_token.clone(), pool, &self.database_config, self.modules_list).await {
             error!("Could not update the {} database, see log for details.", self.database_config.DatabaseName);
             return Err(e);
         };

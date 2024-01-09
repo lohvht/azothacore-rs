@@ -11,5 +11,6 @@ azothacore-modules.workspace=true
 azothacore-server.workspace=true
 # External crates
 clap.workspace = true
+tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true

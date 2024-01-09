@@ -11,7 +11,7 @@ use tokio_rustls::{
     rustls::{pki_types::PrivateKeyDer, version::TLS12, ServerConfig},
     TlsAcceptor,
 };
-use tracing::error;
+use tracing::{debug, error};
 
 pub struct SslContext;
 
@@ -20,9 +20,10 @@ impl SslContext {
         fn helper() -> AzResult<TlsAcceptor> {
             let builder = ServerConfig::builder_with_protocol_versions(&[&TLS12]).with_no_client_auth();
 
-            let certificate_chain_file = Path::new(CONF_DIR).join(ConfigMgr::r().get("CertificatesFile", || "./bnetserver.cert.pem".to_string()));
+            let certificate_chain_file = Path::new(CONF_DIR).join(ConfigMgr::r().get("CertificatesFile", || "bnetserver.cert.pem".to_string()));
             let private_key_file = Path::new(CONF_DIR).join(ConfigMgr::r().get("PrivateKeyFile", || "bnetserver.key.pem".to_string()));
 
+            debug!(target:"server::authserver", cert=%certificate_chain_file.display(), privkey=%private_key_file.display(), "Attempting to open cert and private key files");
             let cert_chain = certs(&mut BufReader::new(File::open(certificate_chain_file)?)).filter_map(|v| v.ok()).collect();
 
             let key_der = rsa_private_keys(&mut BufReader::new(File::open(private_key_file)?))
@@ -35,7 +36,7 @@ impl SslContext {
         }
 
         let acceptor = helper().map_err(|e| {
-            error!(target:"server::bnetserver", "Failed to initialise SSL context");
+            error!(target:"server::authserver", cause=%e, "Failed to initialise SSL context");
             e
         })?;
 

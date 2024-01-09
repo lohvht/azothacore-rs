@@ -4,16 +4,16 @@ use std::{
     time::Duration,
 };
 
-use azothacore_common::{get_g, hex_str, mut_g, utils::net_resolve, AccountTypes, Locale};
+use azothacore_common::{az_error, get_g, hex_str, mut_g, utils::net_resolve, AccountTypes, AzError, Locale};
 use azothacore_database::{
     database_env::{LoginDatabase, LoginPreparedStmts},
     params,
 };
 use flagset::FlagSet;
+use futures::StreamExt;
 use ipnet::IpNet;
 use rand::{rngs::OsRng, RngCore};
-use sqlx::Row;
-use tokio::runtime::Handle as TokioRtHandle;
+use tokio::{runtime::Handle as TokioRtHandle, task::JoinHandle};
 use tracing::{error, info};
 
 use crate::shared::{
@@ -246,6 +246,86 @@ pub enum JoinRealmError {
     General,
 }
 
+#[derive(sqlx::FromRow)]
+pub struct LoginDbRealm {
+    id:                     u32,
+    name:                   String,
+    address:                String,
+    #[sqlx(rename = "localAddress")]
+    local_address:          String,
+    #[sqlx(rename = "localSubnetMask")]
+    local_subnet_mask:      String,
+    port:                   u16,
+    icon:                   u8,
+    flag:                   u16,
+    timezone:               u8,
+    #[sqlx(rename = "allowedSecurityLevel")]
+    allowed_security_level: u8,
+    population:             f32,
+    gamebuild:              u32,
+    #[sqlx(rename = "Region")]
+    region:                 u8,
+    #[sqlx(rename = "Battlegroup")]
+    battlegroup:            u8,
+}
+
+impl TryFrom<LoginDbRealm> for Realm {
+    type Error = AzError;
+
+    fn try_from(value: LoginDbRealm) -> Result<Self, Self::Error> {
+        let LoginDbRealm {
+            id,
+            name,
+            address,
+            local_address,
+            local_subnet_mask,
+            port,
+            icon,
+            flag,
+            timezone,
+            allowed_security_level,
+            population,
+            gamebuild,
+            region,
+            battlegroup,
+        } = value;
+
+        let external_address =
+            net_resolve((address.as_str(), port)).map_err(|e| az_error!("Could not resolve address {address} for realm \"{name}\", err={e}"))?;
+        let local_address = net_resolve((local_address.as_str(), port))
+            .map_err(|e| az_error!("Could not resolve localAddress {local_address} for realm \"{name}\", err={e}"))?;
+
+        let local_subnet_mask = net_resolve((local_subnet_mask.as_str(), port))
+            .map_err(|e| az_error!("Could not resolve localSubnetMask {local_subnet_mask} for realm \"{name}\", err={e}"))?;
+
+        let mut icon = RealmType::try_from(icon).unwrap_or(RealmType::Normal);
+        if matches!(icon, RealmType::FfaPvp) {
+            icon = RealmType::Pvp;
+        }
+        let mut allowed_security_level = AccountTypes::try_from(allowed_security_level).unwrap_or(AccountTypes::SecPlayer);
+        if allowed_security_level as u8 > AccountTypes::SecAdministrator as u8 {
+            allowed_security_level = AccountTypes::SecAdministrator
+        }
+        let local_network = IpNet::with_netmask(local_address.ip(), local_subnet_mask.ip())
+            .map_err(|e| az_error!("localSubnetMask {local_subnet_mask} for realm \"{name}\" is wrong: err={e}"))?;
+
+        Ok(Self {
+            id: BnetRealmHandle::new(region, battlegroup, id),
+            build: gamebuild,
+            external_address,
+            local_address,
+            local_network,
+            port,
+            realm_type: icon,
+            name,
+            flag: FlagSet::new_truncated(flag),
+            timezone,
+            allowed_security_level,
+            population_level: population,
+        })
+    }
+}
+
 pub struct RealmList {
     realms:      RwLock<BTreeMap<BnetRealmHandle, Realm>>,
     sub_regions: RwLock<BTreeSet<String>>,
@@ -268,9 +348,7 @@ impl RealmList {
 
     pub fn get_realm_entry_json(&self, id: &BnetRealmHandle, build: u32) -> Option<RealmEntry> {
         let realms_r = get_g!(self.realms);
-        let Some(realm) = realms_r.get(id) else {
-            return None;
-        };
+        let realm = realms_r.get(id)?;
         if realm.flag.contains(RealmFlags::Offline) && realm.build == build {
             return None;
         }
@@ -353,9 +431,9 @@ impl RealmList {
         Ok(server_secret)
     }
 
-    pub fn init(async_handler: &TokioRtHandle, cancel_token: tokio_util::sync::CancellationToken, update_interval_in_seconds: u64) {
+    pub fn init(async_handler: &TokioRtHandle, cancel_token: tokio_util::sync::CancellationToken, update_interval_in_seconds: u64) -> JoinHandle<()> {
         // Get the content of the realmlist table in the database
-        async_handler.spawn(Self::update_realms(cancel_token, Duration::from_secs(update_interval_in_seconds)));
+        async_handler.spawn(Self::update_realms(cancel_token, Duration::from_secs(update_interval_in_seconds)))
     }
 
     async fn update_realms(cancel_token: tokio_util::sync::CancellationToken, update_interval_duration: Duration) {
@@ -377,91 +455,35 @@ impl RealmList {
             let mut new_sub_regions = BTreeSet::new();
             let mut new_realms = BTreeMap::new();
 
-            let result = match LoginDatabase::sel_realmlist(LoginDatabase::get(), params!()).await {
-                Err(e) => {
-                    error!(target:"realmlist", err=e.to_string(), "error getting the new list of realms from login database");
-                    continue;
-                },
-                Ok(r) => r,
-            };
+            let mut result = LoginDatabase::sel_realmlist::<_, LoginDbRealm>(LoginDatabase::get(), params!()).await;
 
-            for fields in result {
-                let realm_id = fields.get(0);
-                let name = fields.get(1);
-                let external_address: String = fields.get(2);
-                let local_address: String = fields.get(3);
-                let local_subnet_mask: String = fields.get(4);
-                let port = fields.get(5);
+            while let Some(res) = result.next().await {
+                let realm = match res {
+                    Err(e) => {
+                        cancel_token.cancel();
 
-                let external_address = match net_resolve((external_address.as_str(), port)) {
-                    Err(e) => {
-                        error!(target:"realmlist", err=e.to_string(), "Could not resolve address {external_address} for realm \"{}\" id {}", name, realm_id);
-                        continue;
+                        error!(target: "realmlist", cause=%e, "DB error when getting realm list, aborting program");
+                        break;
                     },
-                    Ok(a) => a,
+                    Ok(r) => r,
                 };
-                let local_address = match net_resolve((local_address.as_str(), port)) {
-                    Err(e) => {
-                        error!(target:"realmlist", err=e.to_string(), "Could not resolve localAddress {local_address} for realm \"{}\" id {}", name, realm_id);
-                        continue;
-                    },
-                    Ok(a) => a,
-                };
-                let local_subnet_mask = match net_resolve((local_subnet_mask.as_str(), port)) {
-                    Err(e) => {
-                        error!(target:"realmlist", err=e.to_string(),"Could not resolve localSubnetMask {local_subnet_mask} for realm \"{}\" id {}", name, realm_id);
-                        continue;
-                    },
-                    Ok(a) => a,
-                };
-                let mut icon = RealmType::try_from(fields.get::<u8, _>(6)).unwrap_or(RealmType::Normal);
-                if matches!(icon, RealmType::FfaPvp) {
-                    icon = RealmType::Pvp;
-                }
-                let flag = fields.get(7);
-                let timezone = fields.get(8);
-                let mut allowed_security_level = AccountTypes::try_from(fields.get::<u8, _>(9)).unwrap_or(AccountTypes::SecPlayer);
-                if allowed_security_level as u8 > AccountTypes::SecAdministrator as u8 {
-                    allowed_security_level = AccountTypes::SecAdministrator
-                }
-                let pop = fields.get(10);
-                let build = fields.get(11);
-                let region = fields.get(12);
-                let battlegroup = fields.get(13);
 
-                let id = BnetRealmHandle::new(region, battlegroup, realm_id);
-                let local_network = match IpNet::with_netmask(local_address.ip(), local_subnet_mask.ip()) {
+                let realm: Realm = match realm.try_into() {
                     Err(e) => {
-                        error!(target:"realmlist", err=e.to_string(),"localSubnetMask {local_subnet_mask} for realm \"{}\" id {} is wrong: err={e}", name, realm_id);
+                        error!(target:"realmlist", cause=%e, "error converting Realm info from DB entry");
                         continue;
                     },
-                    Ok(l) => l,
-                };
-                let realm = Realm {
-                    id,
-                    build,
-                    name,
-                    external_address,
-                    local_address,
-                    local_network,
-                    port,
-                    realm_type: icon,
-                    flag: FlagSet::new_truncated(flag),
-                    timezone,
-                    allowed_security_level,
-                    population_level: pop,
+                    Ok(r) => r,
                 };
                 let name = realm.name.as_str();
-                if existing_realms.contains_key(&id) {
-                    info!(target:"realmlist", "Added realm \"{name}\" at {external_address}:{port}.");
+                if existing_realms.remove(&realm.id).is_some() {
+                    info!(target:"realmlist", "Updating realm \"{name}\" at {}.", realm.external_address);
                 } else {
-                    info!(target:"realmlist", "Updating realm \"{name}\" at {external_address}:{port}.");
+                    info!(target:"realmlist", "Added realm \"{name}\" at {}.", realm.external_address);
                 }
-                new_realms.insert(id, realm);
-
-                new_sub_regions.insert(BnetRealmHandle::new(region, battlegroup, 0).get_address_string());
+                new_sub_regions.insert(BnetRealmHandle::new(realm.id.region, realm.id.site, 0).get_address_string());
+                new_realms.insert(realm.id, realm);
             }
-
             for r in existing_realms.values() {
                 info!(target:"realmlist", "Removed realm \"{r}\".");
             }

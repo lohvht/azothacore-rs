@@ -15,6 +15,7 @@ use sqlx::{
     Row,
 };
 use tokio::time::Instant;
+use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, info, instrument, trace, warn};
 use walkdir::WalkDir;
 
@@ -85,15 +86,17 @@ struct AppliedFileEntry {
 }
 
 pub struct UpdateFetcher<'c, 'l, 'd, 'u> {
-    src_directory: String,
-    module_list:   &'l [&'l str],
-    database_cfg:  &'c ExtendedDBInfo<'d, 'u>,
+    cancel_token: CancellationToken,
+    module_list:  &'l [&'l str],
+    database_cfg: &'c ExtendedDBInfo<'d, 'u>,
 }
 
+const DATABASE_FILES_SRC_ROOT: &str = ".";
+
 impl<'c, 'l, 'd, 'u> UpdateFetcher<'c, 'l, 'd, 'u> {
-    pub fn new(src_directory: String, module_list: &'l [&'l str], database_cfg: &'c ExtendedDBInfo<'d, 'u>) -> Self {
+    pub fn new(cancel_token: CancellationToken, module_list: &'l [&'l str], database_cfg: &'c ExtendedDBInfo<'d, 'u>) -> Self {
         Self {
-            src_directory,
+            cancel_token,
             module_list,
             database_cfg,
         }
@@ -101,7 +104,7 @@ impl<'c, 'l, 'd, 'u> UpdateFetcher<'c, 'l, 'd, 'u> {
 
     fn module_db_paths(&self) -> impl Iterator<Item = PathBuf> + '_ {
         let r = self.module_list.iter().map(|e| {
-            let mut p = Path::new(&self.src_directory).to_path_buf();
+            let mut p = Path::new(DATABASE_FILES_SRC_ROOT).to_path_buf();
 
             p.extend(&["azothacore-script-modules", e, "data/sql", self.database_cfg.db_module_name()]);
             p
@@ -123,7 +126,7 @@ impl<'c, 'l, 'd, 'u> UpdateFetcher<'c, 'l, 'd, 'u> {
             .filter_map(|row| {
                 let p = row.get::<String, _>("path");
                 let p = if p.starts_with("$/") {
-                    let mut pb = Path::new(&self.src_directory).to_path_buf();
+                    let mut pb = Path::new(DATABASE_FILES_SRC_ROOT).to_path_buf();
                     pb.push(p.trim_start_matches("$/"));
                     pb
                 } else {
@@ -266,6 +269,7 @@ impl<'c, 'l, 'd, 'u> UpdateFetcher<'c, 'l, 'd, 'u> {
         for (avail_file, avail_file_state) in available.iter() {
             if !avail_file_state.is_custom_update() {
                 imported_updates += apply_update_file(
+                    self.cancel_token.clone(),
                     self.database_cfg.updates,
                     &mut *conn,
                     &mut applied,
@@ -280,6 +284,7 @@ impl<'c, 'l, 'd, 'u> UpdateFetcher<'c, 'l, 'd, 'u> {
         for (avail_file, avail_file_state) in available.iter() {
             if avail_file_state.is_custom_update() {
                 imported_updates += apply_update_file(
+                    self.cancel_token.clone(),
                     self.database_cfg.updates,
                     &mut *conn,
                     &mut applied,
@@ -349,12 +354,14 @@ where
     Ok(())
 }
 
+#[expect(clippy::too_many_arguments)]
 #[instrument(skip_all, fields(
     file_path=%file_path.display(),
     file_state=?file_state,
     update_cfg=?update_cfg,
 ))]
 async fn apply_update_file<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
+    cancel_token: CancellationToken,
     update_cfg: &DbUpdates,
     conn: A,
     applied: &mut BTreeMap<PathBuf, AppliedFileEntry>,
@@ -453,7 +460,7 @@ async fn apply_update_file<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
     let now = Instant::now();
     match mode {
         UpdateMode::Apply => {
-            apply_file(&mut *tx, file_path, is_gz).await?;
+            apply_file(cancel_token, &mut *tx, file_path, is_gz).await?;
             let speed = now.elapsed();
             update_entry(&mut *tx, filename, &hash, file_state, speed).await?;
         },

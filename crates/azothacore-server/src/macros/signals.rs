@@ -15,8 +15,11 @@ macro_rules! short_curcuit_unix_signal_unwrap {
 /// The run_expr must return a Result of some sort
 #[macro_export]
 macro_rules! receive_signal_and_run_expr {
-    ( $run_expr:expr, $($signal_literals:literal => $signals_to_receive:expr) *) => {
+    ( $run_expr:expr, $cancel_token:expr, $($signal_literals:literal => $signals_to_receive:expr) *) => {
         tokio::select! {
+            _ = $cancel_token.cancelled() => {
+                info!("Token cancelled, terminating!");
+            },
             $(
                 _ = $signals_to_receive.recv() => {
                     tracing::info!("Received signal: {}", $signal_literals);

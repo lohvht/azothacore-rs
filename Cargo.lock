@@ -355,6 +355,7 @@ version = "0.0.0"
 dependencies = [
  "anyhow",
  "bincode",
+ "chrono",
  "console-subscriber",
  "const_format",
  "convert_case",
@@ -384,11 +385,13 @@ version = "0.1.0"
 dependencies = [
  "azothacore-common",
  "flate2",
+ "futures-core",
  "hugsqlx",
  "sha2",
  "sqlx",
  "thiserror",
  "tokio",
+ "tokio-util",
  "tracing",
  "walkdir",
 ]
@@ -410,6 +413,7 @@ dependencies = [
  "bytes",
  "flagset",
  "flate2",
+ "futures",
  "ipnet",
  "nalgebra",
  "num",
@@ -647,8 +651,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4e3c5919066adf22df73762e50cffcde3a758f2a848b113b586d1f86728b673b"
 dependencies = [
  "iana-time-zone",
+ "js-sys",
  "num-integer",
  "num-traits",
+ "time 0.1.45",
+ "wasm-bindgen",
  "winapi",
 ]
 
@@ -1039,6 +1046,7 @@ dependencies = [
  "azothacore-server",
  "clap",
  "tokio",
+ "tokio-util",
  "tracing",
 ]
 
@@ -1321,7 +1329,7 @@ checksum = "fe9006bed769170c11f845cf00c7c1e9092aeb3f268e007c3e760ac68008070f"
 dependencies = [
  "cfg-if",
  "libc",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
 ]
 
 [[package]]
@@ -1581,8 +1589,7 @@ checksum = "df3b46402a9d5adb4c86a0cf463f42e19994e3ee891101b1841f30a545cb49a9"
 [[package]]
 name = "hugsqlx"
 version = "0.2.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b37b5f84bddd4e8d34fea5b0e0dd36ad9682a0c30f79986eb031ab9654c8797"
+source = "git+https://github.com/lohvht/hugsqlx.git?branch=fix/fix-sqlx-lifetime#6af2c0a41dfc33ae25f0e9dd63d273c9ffcb6c7a"
 dependencies = [
  "hugsqlx-core",
  "hugsqlx-derive",
@@ -1591,8 +1598,7 @@ dependencies = [
 [[package]]
 name = "hugsqlx-core"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d551e194c88c9cad8e88a1833da5d7515be3d0bd094a858bb05813d6b31ccca8"
+source = "git+https://github.com/lohvht/hugsqlx.git?branch=fix/fix-sqlx-lifetime#6af2c0a41dfc33ae25f0e9dd63d273c9ffcb6c7a"
 dependencies = [
  "cfg-if",
  "chumsky",
@@ -1605,8 +1611,7 @@ dependencies = [
 [[package]]
 name = "hugsqlx-derive"
 version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f3f051b24640d4c41563c0e7b1356fcb8e566c4dd69c822ee3e763cdfe8ae734"
+source = "git+https://github.com/lohvht/hugsqlx.git?branch=fix/fix-sqlx-lifetime#6af2c0a41dfc33ae25f0e9dd63d273c9ffcb6c7a"
 dependencies = [
  "hugsqlx-core",
  "proc-macro2",
@@ -1964,7 +1969,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8f3d0b296e374a4e6f3c7b0a1f5a51d748a0d34c85e7dc48fc3fa9a87657fe09"
 dependencies = [
  "libc",
- "wasi",
+ "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.48.0",
 ]
 
@@ -3345,6 +3350,17 @@ dependencies = [
 
 [[package]]
 name = "time"
+version = "0.1.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1b797afad3f312d1c66a56d11d0316f916356d11bd158fbc6ca6389ff6bf805a"
+dependencies = [
+ "libc",
+ "wasi 0.10.0+wasi-snapshot-preview1",
+ "winapi",
+]
+
+[[package]]
+name = "time"
 version = "0.3.30"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c4a34ab300f2dee6e562c10a046fc05e358b29f9bf92277f30c3c8d82275f6f5"
@@ -3587,7 +3603,7 @@ checksum = "3566e8ce28cc0a3fe42519fc80e6b4c943cc4c8cef275620eb8dac2d3d4e06cf"
 dependencies = [
  "crossbeam-channel",
  "thiserror",
- "time",
+ "time 0.3.30",
  "tracing-subscriber",
 ]
 
@@ -3773,6 +3789,12 @@ checksum = "bfa7760aed19e106de2c7c0b581b509f2f25d3dacaf737cb82ac61bc6d760b0e"
 dependencies = [
  "try-lock",
 ]
+
+[[package]]
+name = "wasi"
+version = "0.10.0+wasi-snapshot-preview1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1a143597ca7c7793eff794def352d41792a93c481eb1042423ff7ff72ba2c31f"
 
 [[package]]
 name = "wasi"

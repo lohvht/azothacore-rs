@@ -1,4 +1,4 @@
-use std::{path::Path, time::Duration};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use authserver::{rest::LoginRESTService, ssl_context::SslContext, BnetSessionManager};
 use azothacore_common::{
@@ -54,12 +54,13 @@ fn signal_handler(rt: &tokio::runtime::Runtime, cancel_token: CancellationToken)
     }
 
     rt.spawn(
-        async {
+        async move {
             let mut sig_interrupt = short_curcuit_unix_signal_unwrap!(SignalKind::interrupt());
             let mut sig_terminate = short_curcuit_unix_signal_unwrap!(SignalKind::terminate());
             let mut sig_quit = short_curcuit_unix_signal_unwrap!(SignalKind::quit());
             receive_signal_and_run_expr!(
-                cancel_func(cancel_token),
+                cancel_func(cancel_token.clone()),
+                cancel_token,
                 "SIGINT" => sig_interrupt
                 "SIGTERM" => sig_terminate
                 "SIGQUIT" => sig_quit
@@ -91,7 +92,7 @@ fn main() -> AzResult<()> {
         )
     };
 
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
+    let rt = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build()?);
     let token = tokio_util::sync::CancellationToken::new();
     banner::azotha_banner_show("authserver-daemon", || {
         info!(
@@ -100,6 +101,7 @@ fn main() -> AzResult<()> {
             ConfigMgr::r().get_filename().display()
         )
     });
+
     // Seed the OsRng here.
     // That way it won't auto-seed when calling OsRng and slow down the first world login
     OsRng.gen::<u64>();
@@ -111,20 +113,18 @@ fn main() -> AzResult<()> {
     }
 
     SslContext::initialise()?;
-
-    rt.block_on(start_db())?;
-
     // // TODO: Impl me? Init Secret Manager
     // sSecretMgr->Initialize();
 
-    let _db_handle = dropper_wrapper_fn(rt.handle(), stop_db);
+    rt.block_on(start_db(token.clone()))?;
+    let _db_handle = dropper_wrapper_fn(rt.handle(), token.clone(), stop_db());
 
     LoginRESTService::start(rt.handle(), token.clone())?;
-    let _login_service_handle = dropper_wrapper_fn(rt.handle(), LoginRESTService::stop);
+    let _login_service_handle = dropper_wrapper_fn(rt.handle(), token.clone(), LoginRESTService::stop());
 
     // Get the list of realms for the server
-    RealmList::init(rt.handle(), token.clone(), ConfigMgr::r().get("RealmsStateUpdateDelay", || 10));
-    // let _realm_list_handle = dropper_wrapper_fn(rt.handle(), || async { RealmList::close().await });
+    let realm_list_task = RealmList::init(rt.handle(), token.clone(), ConfigMgr::r().get("RealmsStateUpdateDelay", || 10));
+    let _realm_list_handle = dropper_wrapper_fn(rt.handle(), token.clone(), async { Ok(realm_list_task.await?) });
 
     // Stop auth server if dry run
     if ConfigMgr::r().is_dry_run() {
@@ -136,7 +136,7 @@ fn main() -> AzResult<()> {
     let bnport = ConfigMgr::r().get("BattlenetPort", || 1119u16);
 
     BnetSessionManager::start_network(rt.handle(), token.clone(), (bind_ip, bnport))?;
-    let _session_mgr_handle = dropper_wrapper_fn(rt.handle(), || async { BnetSessionManager::stop_network().await.map_err(|e| e.into()) });
+    let _session_mgr_handle = dropper_wrapper_fn(rt.handle(), token.clone(), async { Ok(BnetSessionManager::stop_network().await?) });
 
     // Set signal handlers
     let ct = token.clone();
@@ -147,7 +147,12 @@ fn main() -> AzResult<()> {
     // SetProcessPriority("server.bnetserver", sConfigMgr->GetIntDefault(CONFIG_PROCESSOR_AFFINITY, 0), sConfigMgr->GetBoolDefault(CONFIG_HIGH_PRIORITY, false));
 
     let ban_expiry_check_interval = Duration::from_secs(ConfigMgr::r().get("BanExpiryCheckInterval", || 60));
-    let _ban_expiry_handler = rt.spawn(ban_expiry_task(token.clone(), ban_expiry_check_interval));
+    let ban_expiry_task = rt.spawn(ban_expiry_task(token.clone(), ban_expiry_check_interval));
+    let _ban_expiry_handle = dropper_wrapper_fn(rt.handle(), token.clone(), async {
+        ban_expiry_task.await?;
+        info!(target = "server::authserver", "Closed ban expiry handler");
+        Ok(())
+    });
 
     // TODO: Impl me? Windows service status watcher
     // #if TRINITY_PLATFORM == TRINITY_PLATFORM_WINDOWS
@@ -163,12 +168,8 @@ fn main() -> AzResult<()> {
     //     }
     // #endif
 
-    rt.block_on(async {
-        token.cancelled().await;
-        _ = _ban_expiry_handler.await;
-        _ = _signal_handler.await;
-    });
-    info!(target = "server::bnetserver", "Halting process...");
+    rt.block_on(async { _signal_handler.await? })?;
+    info!(target:"server::authserver", "Halting process...");
 
     Ok(())
 }
@@ -197,13 +198,13 @@ async fn ban_expiry_task(cancel_token: CancellationToken, ban_expiry_check_inter
 }
 
 /// Initialize connection to the database
-async fn start_db() -> AzResult<()> {
+async fn start_db(cancel_token: CancellationToken) -> AzResult<()> {
     let (updates, auth_cfg) = {
         let config_mgr_r = ConfigMgr::r();
         (config_mgr_r.get_option::<DbUpdates>("Updates")?, config_mgr_r.get_option("LoginDatabaseInfo")?)
     };
 
-    let login_db_loader = DatabaseLoader::new(DatabaseType::Login, &auth_cfg, &updates, &[]);
+    let login_db_loader = DatabaseLoader::new(cancel_token, DatabaseType::Login, &auth_cfg, &updates, &[]);
     let auth_db = login_db_loader.load().await?;
     LoginDatabase::set(auth_db);
     info!("Started auth database connection pool.");
@@ -211,7 +212,9 @@ async fn start_db() -> AzResult<()> {
 }
 
 async fn stop_db() -> AzResult<()> {
-    LoginDatabase::get().close().await;
+    info!("Stopping auth database connection.");
+
+    LoginDatabase::close().await;
 
     Ok(())
 }

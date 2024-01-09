@@ -1,4 +1,4 @@
-use std::path::Path;
+use std::{path::Path, sync::Arc};
 
 use azothacore_common::{
     az_error,
@@ -43,6 +43,7 @@ use clap::Parser;
 use flagset::FlagSet;
 use rand::{rngs::OsRng, Rng};
 use tokio::task::JoinHandle;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, info_span, instrument, Instrument};
 
 #[cfg(target_os = "windows")]
@@ -62,15 +63,16 @@ fn signal_handler(rt: &tokio::runtime::Runtime) -> JoinHandle<Result<(), std::io
 }
 
 #[cfg(target_os = "linux")]
-fn signal_handler(rt: &tokio::runtime::Runtime) -> JoinHandle<Result<(), std::io::Error>> {
+fn signal_handler(rt: &tokio::runtime::Runtime, cancel_token: CancellationToken) -> JoinHandle<Result<(), std::io::Error>> {
     rt.spawn(
-        async {
+        async move {
             use tokio::signal::unix::SignalKind;
             let mut sig_interrupt = short_curcuit_unix_signal_unwrap!(SignalKind::interrupt());
             let mut sig_terminate = short_curcuit_unix_signal_unwrap!(SignalKind::terminate());
             let mut sig_quit = short_curcuit_unix_signal_unwrap!(SignalKind::quit());
             receive_signal_and_run_expr!(
                 mut_g!(S_WORLD).stop_now(1),
+                cancel_token,
                 "SIGINT" => sig_interrupt
                 "SIGTERM" => sig_terminate
                 "SIGQUIT" => sig_quit
@@ -103,7 +105,7 @@ fn main() -> AzResult<()> {
         )
     };
 
-    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
+    let runtime = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build()?);
     let token = tokio_util::sync::CancellationToken::new();
     banner::azotha_banner_show("worldserver-daemon", || {
         info!(
@@ -121,7 +123,9 @@ fn main() -> AzResult<()> {
         let pid = create_pid_file(pid_file)?;
         error!(target:"server", "Daemon PID: {}", pid);
     }
-    let signal_handler = signal_handler(&rt);
+    let rt = runtime.clone();
+    let ct = token.clone();
+    let signal_handler = signal_handler(&rt, ct);
 
     // // TODO: Follow thread pool based model? from the original core code
     // // Start the Boost based thread pool
@@ -152,17 +156,17 @@ fn main() -> AzResult<()> {
     info!(target:"server::loading", "Initializing Scripts...");
     // Loading modules configs before scripts
     ConfigMgr::m().load_modules_configs(false, true, |reload| get_g!(SCRIPT_MGR).on_load_module_config(reload))?;
-    let _s_script_mgr_handle = dropper_wrapper_fn(rt.handle(), || async { mut_g!(SCRIPT_MGR).unload() });
+    let _s_script_mgr_handle = dropper_wrapper_fn(runtime.handle(), token.clone(), async { mut_g!(SCRIPT_MGR).unload() });
     scripts::add_scripts()?;
     azothacore_modules::add_scripts()?;
 
     let realm_id = ConfigMgr::r().get_option::<u32>("RealmID")?;
-    rt.block_on(async { start_db(realm_id).await })?;
-    let _db_handle = dropper_wrapper_fn(rt.handle(), stop_db);
+    runtime.block_on(start_db(token.clone(), realm_id))?;
+    let _db_handle = dropper_wrapper_fn(runtime.handle(), token.clone(), stop_db());
 
     // set server offline (not connectable)
 
-    rt.block_on(async {
+    runtime.block_on(async {
         query_with(
             "UPDATE realmlist SET flag = (flag & ~?) | ? WHERE id = ?",
             params!(
@@ -175,7 +179,11 @@ fn main() -> AzResult<()> {
         .await
     })?;
 
-    RealmList::init(rt.handle(), token.clone(), ConfigMgr::r().get_option("RealmsStateUpdateDelay").unwrap_or(10));
+    RealmList::init(
+        runtime.handle(),
+        token.clone(),
+        ConfigMgr::r().get_option("RealmsStateUpdateDelay").unwrap_or(10),
+    );
 
     // // TODO: Implement metrics?
     // sMetric->Initialize(realm.Name, *ioContext, []()
@@ -207,7 +215,7 @@ fn main() -> AzResult<()> {
     Ok(())
 }
 
-async fn start_db(realm_id: u32) -> AzResult<()> {
+async fn start_db(cancel_token: CancellationToken, realm_id: u32) -> AzResult<()> {
     let updates;
     let auth_cfg;
     let world_cfg;
@@ -221,10 +229,10 @@ async fn start_db(realm_id: u32) -> AzResult<()> {
         character_cfg = config_mgr_r.get_option("CharacterDatabaseInfo")?;
         hotfix_cfg = config_mgr_r.get_option("HotfixDatabaseInfo")?;
     }
-    let login_db_loader = DatabaseLoader::new(DBFlagLogin, &auth_cfg, &updates, MODULES_LIST);
-    let world_db_loader = DatabaseLoader::new(DBFlagWorld, &world_cfg, &updates, MODULES_LIST);
-    let chars_db_loader = DatabaseLoader::new(DBFlagCharacter, &character_cfg, &updates, MODULES_LIST);
-    let hotfixes_db_loader = DatabaseLoader::new(DBFlagHotfix, &hotfix_cfg, &updates, MODULES_LIST);
+    let login_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagLogin, &auth_cfg, &updates, MODULES_LIST);
+    let world_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagWorld, &world_cfg, &updates, MODULES_LIST);
+    let chars_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagCharacter, &character_cfg, &updates, MODULES_LIST);
+    let hotfixes_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagHotfix, &hotfix_cfg, &updates, MODULES_LIST);
 
     LoginDatabase::set(login_db_loader.load().await?);
     WorldDatabase::set(world_db_loader.load().await?);
@@ -263,10 +271,10 @@ async fn start_db(realm_id: u32) -> AzResult<()> {
 }
 
 async fn stop_db() -> AzResult<()> {
-    LoginDatabase::get().close().await;
-    WorldDatabase::get().close().await;
-    CharacterDatabase::get().close().await;
-    HotfixDatabase::get().close().await;
+    LoginDatabase::close().await;
+    WorldDatabase::close().await;
+    CharacterDatabase::close().await;
+    HotfixDatabase::close().await;
 
     Ok(())
 }

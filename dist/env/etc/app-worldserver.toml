@@ -3931,14 +3931,14 @@ type = "Console"
 name = "Console"
 min_level = "Info"
 max_level = "Error"
-flags = 6
+flags = 54
 
 [[Appender]]
 type = "File"
 name = "Server"
 min_level = "Warning"
 max_level = "Error"
-flags = 7
+flags = 55
 file = "Server.log"
 
 [[Appender]]
@@ -3946,7 +3946,7 @@ type = "File"
 name = "GM"
 min_level = "Warning"
 max_level = "Error"
-flags = 15
+flags = 63
 file = "gm.log"
 
 [[Appender]]
@@ -3954,7 +3954,7 @@ type = "File"
 name = "DBErrors"
 min_level = "Warning"
 max_level = "Error"
-flags = 0
+flags = 48
 file = "DBErrors.log"
 
 #  Logger config values: Given a logger "name"

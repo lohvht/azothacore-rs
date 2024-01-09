@@ -9,11 +9,13 @@ edition = "2021"
 # Local crates
 azothacore-common.workspace = true
 # External crates
-hugsqlx.workspace = true
-sqlx.workspace = true
 flate2.workspace = true
-thiserror.workspace = true
-tracing.workspace = true
+futures-core.workspace = true
+hugsqlx.workspace = true
 sha2.workspace = true
+sqlx.workspace = true
+thiserror.workspace = true
+tokio-util.workspace = true
 tokio.workspace = true
+tracing.workspace = true
 walkdir.workspace = true

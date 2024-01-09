@@ -314,16 +314,16 @@ flags! {
     ///
     /// AppendFileTimestamps (8) - Append timestamp to the log file name. This causes the file to roll daily
     ///
-    /// BackupBeforeOverwrite (16) - Make a backup of existing file before overwrite
+    /// TruncateFile (16) - Truncate file before writing
     ///
-    /// TruncateFile (32) - Truncate file before writing
+    /// BackupBeforeOverwrite (32) - Make a backup of existing file before overwrite, TruncateFile must be set
     pub enum LogFlags: u8 {
         AddLogTimestamps        = 0b000001,
         AddLogLevel             = 0b000010,
         AddLogFilter            = 0b000100,
         AppendFileTimestamps    = 0b001000,
-        // BackupBeforeOverwrite   = 0b010000,
-        // TruncateFile            = 0b100000,
+        TruncateFile            = 0b010000,
+        BackupBeforeOverwrite   = 0b100000,
     }
 }
 

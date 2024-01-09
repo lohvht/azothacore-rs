@@ -1,4 +1,4 @@
--- :name sel_realmlist :*
+-- :name sel_realmlist :typed :^
 -- :doc Returns all realms from DB ordered by name
 SELECT id, name, address, localAddress, localSubnetMask, port, icon, flag, timezone, allowedSecurityLevel, population, gamebuild, Region, Battlegroup FROM realmlist WHERE flag <> 3 ORDER BY name;
 
@@ -323,7 +323,7 @@ SELECT a.username, a.expansion, ab.bandate, ab.unbandate, ab.banreason FROM acco
 UPDATE battlenet_accounts SET failed_logins = failed_logins + 1 WHERE id = ?;
 
 -- :name ins_bnet_account_auto_banned
-INSERT INTO battlenet_account_bans(id, bandate, unbandate, bannedby, banreason) VALUES(?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+?, 'Trinity Auth', 'Failed login autoban');
+INSERT INTO battlenet_account_bans(id, bandate, unbandate, bannedby, banreason) VALUES(?, UNIX_TIMESTAMP(), UNIX_TIMESTAMP()+?, 'Azothacore Auth', 'Failed login autoban');
 
 -- :name del_bnet_expired_account_banned
 DELETE FROM battlenet_account_bans WHERE unbandate<>bandate AND unbandate<=UNIX_TIMESTAMP();

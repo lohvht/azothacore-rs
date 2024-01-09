@@ -1,4 +1,5 @@
 use sqlx::Connection;
+use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, warn};
 use walkdir::WalkDir;
 
@@ -26,7 +27,11 @@ pub async fn db_updater_create<'e, E: DbExecutor<'e>>(executor: E, cfg: &Extende
 }
 
 #[instrument(skip(conn))]
-pub async fn db_updater_populate<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(conn: A, cfg: &ExtendedDBInfo<'_, '_>) -> Result<(), DatabaseLoaderError> {
+pub async fn db_updater_populate<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
+    cancel_token: CancellationToken,
+    conn: A,
+    cfg: &ExtendedDBInfo<'_, '_>,
+) -> Result<(), DatabaseLoaderError> {
     let mut conn = conn.acquire().await?;
 
     let res = query("SHOW TABLES").fetch_optional(&mut *conn).await?;
@@ -63,10 +68,11 @@ pub async fn db_updater_populate<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
     }
 
     for f in files {
+        let cancel_token = cancel_token.clone();
         conn.transaction(|tx| {
             Box::pin(async move {
                 let is_gz = f.path().extension().filter(|ext| *ext == "gz").is_some();
-                apply_file(&mut **tx, f.path(), is_gz).await?;
+                apply_file(cancel_token, &mut **tx, f.path(), is_gz).await?;
                 Ok::<_, DatabaseLoaderError>(())
             })
         })
@@ -78,6 +84,7 @@ pub async fn db_updater_populate<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
 
 #[instrument(skip(conn))]
 pub async fn db_updater_update<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
+    cancel_token: CancellationToken,
     conn: A,
     cfg: &ExtendedDBInfo<'_, '_>,
     modules_list: &[&str],
@@ -86,11 +93,10 @@ pub async fn db_updater_update<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
 
     info!("Updating {} database...", cfg.DatabaseName);
 
-    check_update_table(&mut *conn, cfg, "updates").await?;
-    check_update_table(&mut *conn, cfg, "updates_include").await?;
+    check_update_table(cancel_token.clone(), &mut *conn, cfg, "updates").await?;
+    check_update_table(cancel_token.clone(), &mut *conn, cfg, "updates_include").await?;
 
-    let source_directory = ".".to_string();
-    let uf = UpdateFetcher::new(source_directory, modules_list, cfg);
+    let uf = UpdateFetcher::new(cancel_token, modules_list, cfg);
 
     let (updated, recent, archived) = uf.update(&mut *conn).await?;
     let info = format!("Containing {} new and {} archived updates.", recent, archived);
@@ -104,6 +110,7 @@ pub async fn db_updater_update<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
 
 #[instrument(skip(conn))]
 async fn check_update_table<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
+    cancel_token: CancellationToken,
     conn: A,
     cfg: &ExtendedDBInfo<'_, '_>,
     table_name: &str,
@@ -125,7 +132,7 @@ async fn check_update_table<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
 
     let db_name = cfg.DatabaseName.clone();
     conn.transaction(|tx| Box::pin(async move {
-        apply_file(&mut **tx, f, is_gz).await.map_err(|e| {
+        apply_file(cancel_token, &mut **tx, f, is_gz).await.map_err(|e| {
             error!(
                 "Failed apply file to database {db_name} due to error: {e}! Does the user (named in *.conf) have `INSERT` and `DELETE` privileges on the MySQL server?",
             );

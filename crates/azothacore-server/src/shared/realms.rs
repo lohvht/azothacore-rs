@@ -68,7 +68,7 @@ pub struct Realm {
     pub flag:                   FlagSet<RealmFlags>,
     pub timezone:               u8,
     pub allowed_security_level: AccountTypes,
-    pub population_level:       f64,
+    pub population_level:       f32,
 }
 
 impl Realm {

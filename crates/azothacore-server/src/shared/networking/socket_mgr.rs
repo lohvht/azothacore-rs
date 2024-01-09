@@ -2,9 +2,8 @@ use std::{collections::VecDeque, future::Future, io, sync::Arc, time::Duration};
 
 use tokio::{
     net::{TcpListener, ToSocketAddrs},
-    runtime::Handle as TokioRuntimeHandler,
     sync::Mutex as AsyncMutex,
-    task::JoinHandle,
+    task::JoinSet,
 };
 use tokio_util::sync::CancellationToken;
 use tracing::{debug, error};
@@ -19,10 +18,9 @@ where
     fn socket_removed(_s: Arc<S>) {}
     fn start_network_impl<A>(
         all_sockets: Arc<AsyncMutex<Vec<Arc<S>>>>,
-        rt_h: TokioRuntimeHandler,
         cancel_token: CancellationToken,
         bind_addr: A,
-    ) -> impl Future<Output = io::Result<(JoinHandle<()>, JoinHandle<()>)>> + Send
+    ) -> impl Future<Output = io::Result<JoinSet<()>>> + Send
     where
         A: ToSocketAddrs + Send,
     {
@@ -30,29 +28,23 @@ where
             let acceptor = TcpListener::bind(bind_addr).await?;
             let new_sockets = Arc::new(AsyncMutex::new(VecDeque::new()));
 
-            let async_accept_task = Self::start_async_accept(&rt_h, cancel_token.clone(), acceptor, new_sockets.clone());
-            let async_socket_update_task = Self::start_async_socket_management(&rt_h, cancel_token.clone(), new_sockets, all_sockets);
+            let mut joinset = JoinSet::new();
+            Self::start_async_accept(&mut joinset, cancel_token.clone(), acceptor, new_sockets.clone());
+            Self::start_async_socket_management(&mut joinset, cancel_token.clone(), new_sockets, all_sockets);
 
-            Ok((async_accept_task, async_socket_update_task))
+            Ok(joinset)
         }
     }
 
-    fn stop_network(&mut self) -> io::Result<()>;
+    fn stop_network(&self) -> impl Future<Output = io::Result<()>> + Send;
 
     #[tracing::instrument(skip_all, target = "network", name = "async_socket_update_span")]
-    fn start_async_accept(
-        rt_h: &TokioRuntimeHandler,
-        cancel_token: CancellationToken,
-        acceptor: TcpListener,
-        new_sockets: Arc<AsyncMutex<VecDeque<Arc<S>>>>,
-    ) -> JoinHandle<()> {
-        let rth_clone = rt_h.clone();
-        rt_h.spawn(async move {
-            let rth_clone = rth_clone;
+    fn start_async_accept(joinset: &mut JoinSet<()>, cancel_token: CancellationToken, acceptor: TcpListener, new_sockets: Arc<AsyncMutex<VecDeque<Arc<S>>>>) {
+        joinset.spawn(async move {
             loop {
                 let (conn, addr) = tokio::select! {
                     _ = cancel_token.cancelled() => {
-                        debug!("cancellation token set, terminating network");
+                        debug!("cancellation token set, terminating network async accept");
                         break;
                     }
                     conn = acceptor.accept() => {
@@ -65,40 +57,35 @@ where
                         }
                     },
                 };
-                let sock = match S::new_from_tcp(rth_clone.clone(), cancel_token.child_token(), AddressOrName::Addr(addr), conn).await {
+                let sock = match S::start_from_tcp(cancel_token.child_token(), AddressOrName::Addr(addr), conn).await {
                     Err(e) => {
-                        error!(cause=?e, name=%addr, "error creating socket from TCP connection");
+                        error!(cause=?e, name=%addr, "error creating socket / starting from TCP connection");
                         continue;
                     },
                     Ok(s) => s,
                 };
-                // similar to running OnSocketAccept in TC/AC
-                if let Err(e) = sock.start().await {
-                    error!(cause=?e, name=%addr, "failed to start client connection");
-                    continue;
-                }
                 new_sockets.lock().await.push_back(sock);
             }
             cancel_token.cancel();
             new_sockets.lock().await.clear();
-        })
+        });
     }
 
     #[tracing::instrument(skip_all, target = "network", name = "tcp_async_accept_span")]
     fn start_async_socket_management(
-        rt_h: &TokioRuntimeHandler,
+        joinset: &mut JoinSet<()>,
         cancel_token: CancellationToken,
         new_sockets: Arc<AsyncMutex<VecDeque<Arc<S>>>>,
         all_sockets: Arc<AsyncMutex<Vec<Arc<S>>>>,
-    ) -> JoinHandle<()> {
-        rt_h.spawn(async move {
+    ) {
+        joinset.spawn(async move {
             let mut interval = tokio::time::interval(Duration::from_millis(10));
             interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
 
             loop {
                 let _t = tokio::select! {
                     _ = cancel_token.cancelled() => {
-                        debug!("cancellation token set, terminating network");
+                        debug!("cancellation token set, terminating network socket mgmt");
                         break;
                     }
                     t = interval.tick() => t,
@@ -113,16 +100,16 @@ where
                     }
                 }
                 all_sockets.retain(|s| {
-                    let r = s.is_running();
-                    if r.is_err() {
+                    let closed = s.is_closed();
+                    if closed {
                         Self::socket_removed(s.clone());
                     }
-                    r.is_ok()
+                    !closed
                 });
             }
             cancel_token.cancel();
             all_sockets.lock().await.clear();
             new_sockets.lock().await.clear();
-        })
+        });
     }
 }

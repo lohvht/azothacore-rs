@@ -222,14 +222,14 @@ type = "Console"
 name = "Console"
 min_level = "Info"
 max_level = "Error"
-flags = 6
+flags = 54
 
 [[Appender]]
 type = "File"
 name = "DBImport"
 min_level = "Debug"
 max_level = "Error"
-flags = 7
+flags = 55
 file = "DBImport.log"
 
 #  Logger config values: Given a logger "name"

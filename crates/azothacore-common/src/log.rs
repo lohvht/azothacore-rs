@@ -1,5 +1,6 @@
-use std::{collections::BTreeMap, io, path::Path};
+use std::{collections::BTreeMap, fs, io, path::Path};
 
+use chrono::Local;
 use flagset::FlagSet;
 use tracing::subscriber::set_global_default;
 use tracing_appender::non_blocking as tanb;
@@ -227,6 +228,23 @@ pub fn init_logging<P: AsRef<Path>>(logs_dir: P, appenders: &[LogAppender], logg
     let mut layers = vec![];
     let mut guards = vec![];
     for a in appenders {
+        if let LogAppender::File { flags, file, .. } = &a {
+            if flags.contains(LogFlags::TruncateFile) {
+                let original = logs_dir.as_ref().join(file);
+                if flags.contains(LogFlags::BackupBeforeOverwrite) {
+                    let now = Local::now().to_rfc3339();
+                    let dst_base_name = if let Some((left, right)) = file.rsplit_once('.') {
+                        format!("{left}_{now}.{right}")
+                    } else {
+                        format!("{file}.{now}")
+                    };
+                    let dst = logs_dir.as_ref().join(dst_base_name);
+                    _ = fs::rename(&original, dst);
+                } else {
+                    _ = fs::File::create(&original);
+                }
+            }
+        }
         let ProcessedAppenderPart {
             make_writer,
             mut f_guard,
