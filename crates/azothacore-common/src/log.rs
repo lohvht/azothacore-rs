@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, fs, io, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    io::{self, Read},
+    path::Path,
+};
 
 use chrono::Local;
 use flagset::FlagSet;
@@ -176,11 +181,11 @@ fn is_target_in_logger_targets(m: &tracing::Metadata, logger_target: &str) -> bo
     }
 }
 
-fn default_server_appenders() -> Vec<LogAppender> {
+fn default_server_appenders(appenders_name: &str) -> Vec<LogAppender> {
     vec![
         LogAppender::Console {
             name:      String::from("Console"),
-            min_level: LogLevel::Trace,
+            min_level: LogLevel::Debug,
             max_level: LogLevel::Error,
             flags:     LogFlags::AddLogLevel | LogFlags::AddLogFilter,
             // colours: vec![
@@ -193,22 +198,27 @@ fn default_server_appenders() -> Vec<LogAppender> {
             // ],
         },
         LogAppender::File {
-            name:      String::from("Server"),
-            min_level: LogLevel::Trace,
+            name:      String::from(appenders_name),
+            min_level: LogLevel::Debug,
             max_level: LogLevel::Error,
-            flags:     LogFlags::AddLogLevel | LogFlags::AddLogFilter | LogFlags::AddLogTimestamps, // TruncateFile.into(),
-            file:      String::from("Server.log"),
+            flags:     LogFlags::AddLogLevel | LogFlags::AddLogFilter | LogFlags::AddLogTimestamps | LogFlags::TruncateFile | LogFlags::BackupBeforeOverwrite,
+            file:      format!("{appenders_name}.log"),
         },
     ]
 }
 
-fn default_server_loggers() -> Vec<LogLoggerConfig> {
+fn default_server_loggers(appenders_name: &str) -> Vec<LogLoggerConfig> {
     vec![LogLoggerConfig {
         name:      String::from("root"),
         min_level: LogLevel::Trace,
         max_level: LogLevel::Error,
-        appenders: vec![String::from("Console"), String::from("Server")],
+        appenders: vec![String::from("Console"), String::from(appenders_name)],
     }]
+}
+
+pub fn init_default<P: AsRef<Path>>(logs_dir: P, appenders_name: &str) -> LogGuard {
+    let (appenders, loggers) = (default_server_appenders(appenders_name), default_server_loggers(appenders_name));
+    init(logs_dir, &appenders, &loggers)
 }
 
 /// Compose multiple layers into a `tracing`'s subscriber.
@@ -216,15 +226,7 @@ fn default_server_loggers() -> Vec<LogLoggerConfig> {
 /// Then register the subscriber as global default to process span data.
 ///
 /// It should only be called once!
-pub fn init_logging<P: AsRef<Path>>(logs_dir: P, appenders: &[LogAppender], loggers: &[LogLoggerConfig]) -> LogGuard {
-    let defaults = (default_server_appenders(), default_server_loggers());
-    let (appenders, loggers) = if appenders.is_empty() || loggers.is_empty() {
-        eprintln!("Using default configurations. Creating default loggers");
-        (defaults.0.as_slice(), defaults.1.as_slice())
-    } else {
-        (appenders, loggers)
-    };
-
+pub fn init<P: AsRef<Path>>(logs_dir: P, appenders: &[LogAppender], loggers: &[LogLoggerConfig]) -> LogGuard {
     let mut layers = vec![];
     let mut guards = vec![];
     for a in appenders {
@@ -239,7 +241,17 @@ pub fn init_logging<P: AsRef<Path>>(logs_dir: P, appenders: &[LogAppender], logg
                         format!("{file}.{now}")
                     };
                     let dst = logs_dir.as_ref().join(dst_base_name);
-                    _ = fs::rename(&original, dst);
+                    let mut should_rename = false;
+                    if let Ok(mut m) = fs::File::open(&original) {
+                        if let Ok(n) = m.read_to_end(&mut vec![]) {
+                            if n > 0 {
+                                should_rename = true;
+                            }
+                        }
+                    }
+                    if should_rename {
+                        _ = fs::rename(&original, &dst);
+                    }
                 } else {
                     _ = fs::File::create(&original);
                 }

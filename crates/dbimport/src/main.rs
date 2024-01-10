@@ -7,7 +7,7 @@ use azothacore_common::{
         DatabaseType::{Character as DBFlagCharacter, Hotfix as DBFlagHotfix, Login as DBFlagLogin, World as DBFlagWorld},
         DbUpdates,
     },
-    log::init_logging,
+    log,
     AzResult,
     AZOTHA_DB_IMPORT_CONFIG,
     CONF_DIR,
@@ -79,7 +79,7 @@ fn main() -> AzResult<()> {
         // TODO: Setup DB logging. Original code below
         // // Init all logs
         // sLog->RegisterAppender<AppenderDB>();
-        init_logging(
+        log::init(
             cfg_mgr_r.get_option::<String>("LogsDir")?,
             &cfg_mgr_r.get_option::<Vec<_>>("Appender")?,
             &cfg_mgr_r.get_option::<Vec<_>>("Logger")?,

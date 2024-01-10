@@ -9,7 +9,7 @@ use azothacore_common::{
         DbUpdates,
     },
     get_g,
-    log::init_logging,
+    log,
     mut_g,
     utils::create_pid_file,
     AzResult,
@@ -98,7 +98,7 @@ fn main() -> AzResult<()> {
         // TODO: Setup DB logging. Original code below
         // // Init all logs
         // sLog->RegisterAppender<AppenderDB>();
-        init_logging(
+        log::init(
             cfg_mgr_r.get_option::<String>("LogsDir")?,
             &cfg_mgr_r.get_option::<Vec<_>>("Appender")?,
             &cfg_mgr_r.get_option::<Vec<_>>("Logger")?,

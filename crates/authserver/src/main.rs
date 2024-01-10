@@ -4,7 +4,7 @@ use authserver::{rest::LoginRESTService, ssl_context::SslContext, BnetSessionMan
 use azothacore_common::{
     banner,
     configuration::{ConfigMgr, DatabaseType, DbUpdates},
-    log::init_logging,
+    log,
     utils::create_pid_file,
     AzResult,
     AZOTHA_REALM_CONFIG,
@@ -85,7 +85,7 @@ fn main() -> AzResult<()> {
         // TODO: Setup DB logging. Original code below
         // // Init all logs
         // sLog->RegisterAppender<AppenderDB>();
-        init_logging(
+        log::init(
             cfg_mgr_r.get_option::<String>("LogsDir")?,
             &cfg_mgr_r.get_option::<Vec<_>>("Appender")?,
             &cfg_mgr_r.get_option::<Vec<_>>("Logger")?,

@@ -3,7 +3,7 @@ use std::io;
 use azothacore_common::{
     banner,
     configuration::{LogAppender, LogFlags, LogLevel, LogLoggerConfig},
-    log::init_logging,
+    log,
     utils::buffered_file_open,
     AzResult,
     Locale,
@@ -49,7 +49,7 @@ fn main() -> AzResult<()> {
     let (las, lcfgs) = full_extractor_log_cfg();
     let mut f = buffered_file_open("env/dist/etc/extractor.toml")?;
     let args = ExtractorConfig::from_toml(&mut f)?;
-    let _wg = init_logging(&args.logs_dir, &las, &lcfgs);
+    let _wg = log::init(&args.logs_dir, &las, &lcfgs);
 
     banner::azotha_banner_show("Azothacore Full Extractor", || {
         info!("Client directory: {}", args.input_path);
