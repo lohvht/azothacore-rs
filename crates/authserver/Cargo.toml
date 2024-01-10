@@ -19,13 +19,12 @@ hyper-util = { version = "0" }
 ipnet.workspace = true
 prost.workspace = true
 rand.workspace = true
-rustls-pemfile = { version = "2" }
 serde_json.workspace = true
 serde.workspace = true
 sha2.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
-tokio-rustls = { version = "0", features=["tls12"] }
+tokio-native-tls = { version = "0", features=["vendored"] }
 tokio-util.workspace = true
 tokio.workspace = true
 tower-service = "0"

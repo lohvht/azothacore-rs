@@ -1,5 +1,4 @@
 use std::{
-    io,
     net::SocketAddr,
     sync::{OnceLock, RwLock},
     time::Duration,
@@ -19,6 +18,7 @@ use axum_extra::{
     TypedHeader,
 };
 use azothacore_common::{
+    az_error,
     configuration::{ConfigMgr, WrongPass, WrongPassBanType},
     get_g,
     hex_str,
@@ -252,8 +252,8 @@ impl LoginRESTService {
         (StatusCode::NOT_FOUND, Json(Empty {}))
     }
 
-    async fn handle_get_form() -> Json<FormInputs> {
-        Json(FormInputs {
+    async fn handle_get_form() -> impl IntoResponse {
+        let j = FormInputs {
             r#type: FormType::LOGIN_FORM,
             inputs: vec![
                 FormInput {
@@ -275,7 +275,8 @@ impl LoginRESTService {
                     max_length: None,
                 },
             ],
-        })
+        };
+        (StatusCode::OK, [("Content-Type", "application/json;charset=utf-8")], Json(j))
     }
 
     async fn handle_get_game_accounts(
@@ -640,13 +641,13 @@ struct LoginServiceRequestContext {
     source_ip: SocketAddr,
 }
 
-async fn serve_https_call(router: Router<()>, cnx: TcpStream, addr: SocketAddr) -> io::Result<()> {
+async fn serve_https_call(router: Router<()>, stream: TcpStream, addr: SocketAddr) -> AzResult<()> {
     // Wait for tls handshake to happen
-    let stream = match SslContext::get().accept(cnx).await {
+    let stream = match SslContext::get().accept(stream).await {
         Ok(s) => s,
         Err(e) => {
             error!(target:"server::rest", "Failed SSL handshake from Addr {addr}, err: {e}");
-            return Err(e);
+            return Err(e.into());
         },
     };
 
@@ -667,12 +668,16 @@ async fn serve_https_call(router: Router<()>, cnx: TcpStream, addr: SocketAddr) 
         router.clone().call(request)
     });
 
-    HyperServerConnBuilder::new(TokioExecutor::new())
+    let mut builder = HyperServerConnBuilder::new(TokioExecutor::new());
+    builder.http1().title_case_headers(true);
+
+    builder
+        // .serve_connection(stream, hyper_svc)
         .serve_connection_with_upgrades(stream, hyper_svc)
         .await
         .map_err(|e| {
             warn!(target:"server::rest", "error serving connection from {addr}: {e}");
-            io::Error::new(io::ErrorKind::Other, e)
+            az_error!("{e}")
         })
 }
 

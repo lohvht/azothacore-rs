@@ -1,14 +1,13 @@
 use std::{
     fs::File,
-    io::BufReader,
+    io::{BufReader, Read},
     path::Path,
-    sync::{Arc, OnceLock},
+    sync::OnceLock,
 };
 
 use azothacore_common::{configuration::ConfigMgr, AzResult, CONF_DIR};
-use rustls_pemfile::{certs, rsa_private_keys};
-use tokio_rustls::{
-    rustls::{pki_types::PrivateKeyDer, version::TLS12, ServerConfig},
+use tokio_native_tls::{
+    native_tls::{self, Identity},
     TlsAcceptor,
 };
 use tracing::{debug, error};
@@ -18,21 +17,16 @@ pub struct SslContext;
 impl SslContext {
     pub fn initialise() -> AzResult<()> {
         fn helper() -> AzResult<TlsAcceptor> {
-            let builder = ServerConfig::builder_with_protocol_versions(&[&TLS12]).with_no_client_auth();
-
             let certificate_chain_file = Path::new(CONF_DIR).join(ConfigMgr::r().get("CertificatesFile", || "bnetserver.cert.pem".to_string()));
             let private_key_file = Path::new(CONF_DIR).join(ConfigMgr::r().get("PrivateKeyFile", || "bnetserver.key.pem".to_string()));
 
             debug!(target:"server::authserver", cert=%certificate_chain_file.display(), privkey=%private_key_file.display(), "Attempting to open cert and private key files");
-            let cert_chain = certs(&mut BufReader::new(File::open(certificate_chain_file)?)).filter_map(|v| v.ok()).collect();
+            let mut cert_chain = vec![];
+            BufReader::new(File::open(certificate_chain_file)?).read_to_end(&mut cert_chain)?;
+            let mut key_der = vec![];
+            BufReader::new(File::open(private_key_file)?).read_to_end(&mut key_der)?;
 
-            let key_der = rsa_private_keys(&mut BufReader::new(File::open(private_key_file)?))
-                .filter_map(|v| v.ok())
-                .next()
-                .unwrap();
-            let cfg = builder.with_single_cert(cert_chain, PrivateKeyDer::Pkcs1(key_der))?;
-
-            Ok(TlsAcceptor::from(Arc::new(cfg)))
+            Ok(TlsAcceptor::from(native_tls::TlsAcceptor::new(Identity::from_pkcs8(&cert_chain, &key_der)?)?))
         }
 
         let acceptor = helper().map_err(|e| {
