@@ -7,7 +7,7 @@ pub mod shared_defines;
 use std::{
     future::Future,
     io::{self, Write},
-    sync::{mpsc, Arc, Mutex},
+    sync::{mpsc, Mutex},
 };
 
 use azothacore_common::AzResult;

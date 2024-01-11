@@ -58,10 +58,11 @@ impl<'tb> MapBuilder<'tb> {
         let mut tiles = HashMap::new();
 
         for f in get_dir_contents(args.output_map_path(), "*")? {
-            let map_id = match f.file_stem().and_then(|file_stem| file_stem.to_str()).and_then(|f| {
-                let (map_id_str, _rest) = f.split_once('_')?;
-                map_id_str.parse::<u32>().ok()
-            }) {
+            let map_id = match f
+                .file_stem()
+                .and_then(|file_stem| file_stem.to_str())
+                .and_then(|f| f.split_once('_')?.0.parse::<u32>().ok())
+            {
                 None => {
                     warn!("cannot take map_id from maps file: {}", f.display());
                     continue;
@@ -90,38 +91,38 @@ impl<'tb> MapBuilder<'tb> {
         let mut count = 0;
         for (map_id, map_tiles) in tiles.iter_mut() {
             for f in get_dir_contents(args.output_vmap_output_path(), &format!("{map_id:04}_*.vmtile"))? {
-                let tile_id = match f.file_stem().and_then(|file_stem| file_stem.to_str()).map(|f| {
-                    let splitted = f.splitn(3, '_').collect::<Vec<_>>();
-                    let (_map_id, first, second) = (splitted[0], splitted[1], splitted[2]);
-
-                    let first = first.parse::<u16>().ok().unwrap(); // tileY
-                    let second = second.parse::<u16>().ok().unwrap(); // tileX
-
-                    (first, second)
-                }) {
+                let tile_id = match f.file_stem().and_then(|file_stem| file_stem.to_str()) {
                     None => {
                         warn!("cannot take tileID from vmap tree tile file: {}", f.display());
                         continue;
                     },
-                    Some(i) => i,
+                    Some(f) => {
+                        let splitted = f.splitn(3, '_').collect::<Vec<_>>();
+                        let (_map_id, first, second) = (splitted[0], splitted[1], splitted[2]);
+
+                        let first = first.parse::<u16>().ok().unwrap(); // tileY
+                        let second = second.parse::<u16>().ok().unwrap(); // tileX
+
+                        (first, second)
+                    },
                 };
                 map_tiles.insert(tile_id);
             }
             for f in get_dir_contents(args.output_map_path(), &format!("{map_id:04}*"))? {
-                let tile_id = match f.file_stem().and_then(|file_stem| file_stem.to_str()).map(|f| {
-                    let splitted = f.splitn(3, '_').collect::<Vec<_>>();
-                    let (_map_id, first, second) = (splitted[0], splitted[1], splitted[2]);
-
-                    let first = first.parse::<u16>().ok().unwrap(); // tileY
-                    let second = second.parse::<u16>().ok().unwrap(); // tileX
-
-                    (second, first)
-                }) {
+                let tile_id = match f.file_stem().and_then(|file_stem| file_stem.to_str()) {
                     None => {
                         warn!("cannot take tileID from vmap tree tile file: {}", f.display());
                         continue;
                     },
-                    Some(i) => i,
+                    Some(f) => {
+                        let splitted = f.splitn(3, '_').collect::<Vec<_>>();
+                        let (_map_id, first, second) = (splitted[0], splitted[1], splitted[2]);
+
+                        let first = first.parse::<u16>().ok().unwrap(); // tileY
+                        let second = second.parse::<u16>().ok().unwrap(); // tileX
+
+                        (second, first)
+                    },
                 };
                 map_tiles.insert(tile_id);
             }
@@ -387,7 +388,7 @@ impl<'tb> MapBuilder<'tb> {
         let mut bmin = [0.0; 3];
         let mut bmax = [0.0; 3];
         // use Max because '32 - tile_x' is negative for values over 32
-        get_tile_bounds(tile_x_max, tile_y_max, &vec![], &mut bmin, &mut bmax);
+        get_tile_bounds(tile_x_max, tile_y_max, &[], &mut bmin, &mut bmax);
 
         /***       now create the navmesh       ***/
         // navmesh creation params

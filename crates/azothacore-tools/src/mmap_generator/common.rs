@@ -16,7 +16,7 @@ pub const GRID_PART_SIZE: f32 = GRID_SIZE / V8_SIZE as f32;
 // static const float self.use_min_height = -2000.f;
 pub const INVALID_MAP_LIQ_HEIGHT_MAX: f32 = 5000.0;
 
-pub fn get_tile_bounds(tile_x: u16, tile_y: u16, verts: &Vec<f32>, bmin: &mut [f32; 3], bmax: &mut [f32; 3]) {
+pub fn get_tile_bounds(tile_x: u16, tile_y: u16, verts: &[f32], bmin: &mut [f32; 3], bmax: &mut [f32; 3]) {
     // this is for elevation
     if !verts.is_empty() {
         unsafe { rcCalcBounds(verts.as_ptr(), verts.len() as i32 / 3, bmin.as_mut_ptr(), bmax.as_mut_ptr()) };
