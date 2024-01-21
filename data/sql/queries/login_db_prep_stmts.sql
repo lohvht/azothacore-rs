@@ -25,10 +25,10 @@ SELECT ip, bandate, unbandate, bannedby, banreason FROM ip_banned WHERE (bandate
 -- :name sel_ip_banned_by_ip
 SELECT ip, bandate, unbandate, bannedby, banreason FROM ip_banned WHERE (bandate = unbandate OR unbandate > UNIX_TIMESTAMP()) AND ip LIKE CONCAT('%%', ?, '%%') ORDER BY unbandate;
 
--- :name sel_account_banned_all
+-- :name sel_account_banned_all :typed :*
 SELECT account.id, username FROM account, account_banned WHERE account.id = account_banned.id AND active = 1 GROUP BY account.id;
 
--- :name sel_account_banned_by_username
+-- :name sel_account_banned_by_username :typed :*
 SELECT account.id, username FROM account, account_banned WHERE account.id = account_banned.id AND active = 1 AND username LIKE CONCAT('%%', ?, '%%') GROUP BY account.id;
 
 -- :name del_account_banned
@@ -62,7 +62,7 @@ SELECT id, username FROM account WHERE email = ?;
 -- :name sel_account_by_ip
 SELECT id, username FROM account WHERE last_ip = ?;
 
--- :name sel_account_by_id
+-- :name sel_account_by_id :?
 SELECT 1 FROM account WHERE id = ?;
 
 -- :name ins_ip_banned
@@ -143,16 +143,19 @@ DELETE FROM account_access WHERE id = ? AND (RealmID = ? OR RealmID = -1);
 -- :name ins_account_access
 INSERT INTO account_access (id,gmlevel,RealmID) VALUES (?, ?, ?);
 
--- :name get_account_access_gmlevel
+-- :name get_account_id_by_username :typed :?
+SELECT id FROM account WHERE username = ?;
+
+-- :name get_account_access_gmlevel :typed :?
 SELECT gmlevel FROM account_access WHERE id = ?;
 
--- :name get_gmlevel_by_realmid
+-- :name get_gmlevel_by_realmid :typed :?
 SELECT gmlevel FROM account_access WHERE id = ? AND (RealmID = ? OR RealmID = -1);
 
--- :name get_username_by_id
+-- :name get_username_by_id :typed :?
 SELECT username FROM account WHERE id = ?;
 
--- :name sel_check_password
+-- :name sel_check_password :?
 SELECT 1 FROM account WHERE id = ? AND sha_pass_hash = ?;
 
 -- :name sel_check_password_by_name
@@ -195,7 +198,7 @@ DELETE FROM account WHERE id = ?;
 -- :name sel_autobroadcast
 SELECT id, weight, text FROM autobroadcast WHERE realmid = ? OR realmid = -1;
 
--- :name get_email_by_id
+-- :name get_email_by_id :typed :?
 SELECT email FROM account WHERE id = ?;
 
 -- :name ins_aldl_ip_logging
@@ -214,7 +217,7 @@ INSERT INTO logs_ip_actions (account_id,character_guid,type,ip,systemnote,unixti
 -- Complete name: Login_Insert_CharacterDelete_IP_Logging
 INSERT INTO logs_ip_actions (account_id,character_guid,type,ip,systemnote,unixtime,time) VALUES (?, ?, ?, ?, ?, unix_timestamp(NOW()), NOW());
 
--- :name sel_rbac_account_permissions
+-- :name sel_rbac_account_permissions :typed :*
 SELECT permissionId, granted FROM rbac_account_permissions WHERE accountId = ? AND (realmId = ? OR realmId = -1) ORDER BY permissionId, realmId;
 
 -- :name ins_rbac_account_permission
@@ -226,14 +229,14 @@ DELETE FROM rbac_account_permissions WHERE accountId = ? AND permissionId = ? AN
 -- :name ins_account_mute
 INSERT INTO account_muted VALUES (?, UNIX_TIMESTAMP(), ?, ?, ?);
 
--- :name sel_account_mute_info
+-- :name sel_account_mute_info :typed :*
 SELECT mutedate, mutetime, mutereason, mutedby FROM account_muted WHERE guid = ? ORDER BY mutedate ASC;
 
 -- :name del_account_muted
 DELETE FROM account_muted WHERE guid = ?;
 
--- :name sel_bnet_authentication :?
-SELECT ba.id, ba.sha_pass_hash, ba.failed_logins, ba.LoginTicket, ba.LoginTicketExpiry, bab.unbandate > UNIX_TIMESTAMP() OR bab.unbandate = bab.bandate FROM battlenet_accounts ba LEFT JOIN battlenet_account_bans bab ON ba.id = bab.id WHERE email = ?;
+-- :name sel_bnet_authentication :typed :?
+SELECT ba.id, ba.sha_pass_hash, ba.failed_logins, ba.LoginTicket, ba.LoginTicketExpiry, (bab.unbandate > UNIX_TIMESTAMP() OR bab.unbandate = bab.bandate) as is_banned FROM battlenet_accounts ba LEFT JOIN battlenet_account_bans bab ON ba.id = bab.id WHERE email = ?;
 
 -- :name upd_bnet_authentication,
 UPDATE battlenet_accounts SET LoginTicket = ?, LoginTicketExpiry = ? WHERE id = ?;
@@ -286,16 +289,16 @@ INSERT INTO account_last_played_character (accountId, region, battlegroup, realm
 -- :name ins_bnet_account
 INSERT INTO battlenet_accounts (`email`,`sha_pass_hash`) VALUES (?, ?);
 
--- :name sel_bnet_account_email_by_id
+-- :name sel_bnet_account_email_by_id :typed :?
 SELECT email FROM battlenet_accounts WHERE id = ?;
 
--- :name sel_bnet_account_id_by_email
+-- :name sel_bnet_account_id_by_email :typed :?
 SELECT id FROM battlenet_accounts WHERE email = ?;
 
 -- :name upd_bnet_password
 UPDATE battlenet_accounts SET sha_pass_hash = ? WHERE id = ?;
 
--- :name sel_bnet_check_password
+-- :name sel_bnet_check_password :?
 SELECT 1 FROM battlenet_accounts WHERE id = ? AND sha_pass_hash = ?;
 
 -- :name upd_bnet_account_lock
@@ -304,14 +307,14 @@ UPDATE battlenet_accounts SET locked = ? WHERE id = ?;
 -- :name upd_bnet_account_lock_country
 UPDATE battlenet_accounts SET lock_country = ? WHERE id = ?;
 
--- :name sel_bnet_account_id_by_game_account
+-- :name sel_bnet_account_id_by_game_account :typed :?
 SELECT battlenet_account FROM account WHERE id = ?;
 
 -- :name upd_bnet_game_account_link
 UPDATE account SET battlenet_account = ?, battlenet_index = ? WHERE id = ?;
 
--- :name sel_bnet_max_account_index
-SELECT MAX(battlenet_index) FROM account WHERE battlenet_account = ?;
+-- :name sel_bnet_max_account_index :typed :?
+SELECT MAX(battlenet_index) as bnet_max_index FROM account WHERE battlenet_account = ?;
 
 -- :name sel_bnet_game_account_list_small
 SELECT a.id, a.username FROM account a LEFT JOIN battlenet_accounts ba ON a.battlenet_account = ba.id WHERE ba.email = ?;

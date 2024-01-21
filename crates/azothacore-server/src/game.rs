@@ -1,3 +1,4 @@
+pub mod accounts;
 pub mod globals;
 pub mod map;
 pub mod scripting;

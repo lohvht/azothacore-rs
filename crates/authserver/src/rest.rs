@@ -30,7 +30,7 @@ use azothacore_database::{
     database_env::{LoginDatabase, LoginPreparedStmts},
     params,
 };
-use azothacore_server::shared::networking::socket::AddressOrName;
+use azothacore_server::{game::accounts::battlenet_account_mgr::BattlenetAccountMgr, shared::networking::socket::AddressOrName};
 use hyper::{body::Incoming, service::service_fn, StatusCode};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
@@ -38,7 +38,6 @@ use hyper_util::{
 };
 use ipnet::IpNet;
 use rand::{rngs::OsRng, Rng};
-use sha2::{Digest, Sha256};
 use sqlx::Row;
 use tokio::{
     net::{TcpListener, TcpStream},
@@ -233,21 +232,6 @@ impl LoginRESTService {
         Ok(())
     }
 
-    fn calculate_sha_pass_hash(name: &str, password: &str) -> String {
-        let mut email = Sha256::new();
-        email.update(name.as_bytes());
-        let email_bytes = &email.finalize()[..];
-
-        let mut sha = Sha256::new();
-        sha.update(hex_str!(email_bytes).as_bytes());
-        sha.update(":");
-        sha.update(password.as_bytes());
-        let sha_bytes = &mut sha.finalize()[..];
-
-        sha_bytes.reverse();
-        hex_str!(sha_bytes)
-    }
-
     async fn handle_404() -> impl IntoResponse {
         (StatusCode::NOT_FOUND, Json(Empty {}))
     }
@@ -375,9 +359,9 @@ impl LoginRESTService {
         let mut password = None;
         for input in login_form.inputs {
             if login.is_none() && input.input_id == "account_name" {
-                login = Some(input.input_id)
+                login = Some(input.value)
             } else if password.is_none() && input.input_id == "password" {
-                password = Some(input.input_id)
+                password = Some(input.value)
             }
         }
         let (login, password) = match (login, password) {
@@ -396,6 +380,22 @@ impl LoginRESTService {
                 );
             },
         };
+
+        #[derive(sqlx::FromRow)]
+        struct BnetAuth {
+            #[sqlx(rename = "ba.id")]
+            account_id:          u32,
+            #[sqlx(rename = "ba.sha_pass_hash")]
+            pass_hash:           String,
+            #[sqlx(rename = "ba.failed_logins")]
+            failed_logins:       u64,
+            #[sqlx(rename = "ba.LoginTicket")]
+            login_ticket:        String,
+            #[sqlx(rename = "ba.LoginTicketExpiry")]
+            login_ticket_expiry: u64,
+            is_banned:           u64,
+        }
+
         let login_db = LoginDatabase::get();
         let fields = match handle_login_err!(
             LoginDatabase::sel_bnet_authentication(login_db, params!(&login)).await,
@@ -407,14 +407,17 @@ impl LoginRESTService {
             },
             Some(o) => o,
         };
-        let sent_password_hash = Self::calculate_sha_pass_hash(&login, &password);
+        let sent_password_hash = BattlenetAccountMgr::calculate_sha_pass_hash(&login, &password);
 
-        let account_id = fields.get::<u32, _>(0);
-        let pass_hash = fields.get::<String, _>(1);
-        let mut failed_logins = fields.get::<u64, _>(2);
-        let mut login_ticket = fields.get::<String, _>(3);
-        let login_ticket_expiry = fields.get::<u64, _>(4);
-        let is_banned = fields.get::<u64, _>(5) != 0;
+        let BnetAuth {
+            account_id,
+            pass_hash,
+            mut failed_logins,
+            mut login_ticket,
+            login_ticket_expiry,
+            is_banned,
+        } = fields;
+        let is_banned = is_banned != 0;
 
         let now = unix_now().as_secs();
         if sent_password_hash == pass_hash {

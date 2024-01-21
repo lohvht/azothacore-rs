@@ -16,6 +16,8 @@ use tracing::debug;
 
 pub struct DropperWrapperFn {
     cancel_token:              CancellationToken,
+    /// Need a mutex to ensure that mpsc is sync. Its pretty much the only way to bridge the
+    /// async to sync boundary
     has_finished_cancellation: Mutex<mpsc::Receiver<()>>,
 }
 
@@ -26,8 +28,13 @@ impl Drop for DropperWrapperFn {
     }
 }
 
-/// dropper_wrapper_fn provides an easy way to properly handled by awaiting
-/// any futures passed into after cancelling the given token on drop
+/// dropper_wrapper_fn provides an easy way to properly handle async futures
+/// by awaiting any futures passed into it on drop.
+///
+/// It handles this by cancelling the given token on drop, this causes
+/// the spawned inner handler to unblock and causes the underlying future to
+/// be awaited before sending the done signal back.
+///
 pub fn dropper_wrapper_fn<Fut>(handler: &tokio::runtime::Handle, cancel_token: CancellationToken, f: Fut) -> DropperWrapperFn
 where
     Fut: Future<Output = AzResult<()>> + Send + 'static,

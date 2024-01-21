@@ -23,7 +23,7 @@ SELECT 1 FROM characters WHERE name = ?;
 -- :name sel_check_guid
 SELECT 1 FROM characters WHERE guid = ?;
 
--- :name sel_sum_chars
+-- :name sel_sum_chars :typed :?
 SELECT COUNT(guid) FROM characters WHERE account = ?;
 
 -- :name sel_char_create_info
@@ -962,7 +962,7 @@ SELECT guid, deleteInfos_Name, deleteInfos_Account, deleteDate FROM characters W
 -- :name sel_char_del_info
 SELECT guid, deleteInfos_Name, deleteInfos_Account, deleteDate FROM characters WHERE deleteDate IS NOT NULL;
 
--- :name sel_chars_by_account_id
+-- :name sel_chars_by_account_id :typed :*
 SELECT guid FROM characters WHERE account = ?;
 
 -- :name sel_char_pinfo

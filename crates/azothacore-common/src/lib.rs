@@ -21,12 +21,12 @@ pub use anyhow::{anyhow as az_error, Context as AzContext};
 pub use compile_options::*;
 use flagset::{flags, FlagSet};
 pub use hex_fmt::HexFmt;
-use num::FromPrimitive;
-use num_derive::FromPrimitive;
+use num::{FromPrimitive, ToPrimitive};
+use num_derive::{FromPrimitive, ToPrimitive};
 use thiserror::Error;
 use tracing::warn;
 
-#[derive(Copy, Clone, Debug, FromPrimitive)]
+#[derive(Copy, Clone, Debug, ToPrimitive, FromPrimitive, PartialEq, PartialOrd, Ord, Eq)]
 pub enum AccountTypes {
     SecPlayer = 0,
     SecModerator = 1,
@@ -34,6 +34,25 @@ pub enum AccountTypes {
     SecAdministrator = 3,
     /// must be always last in list, accounts must have less security level always also
     SecConsole = 4,
+}
+
+impl AccountTypes {
+    pub fn to_num(&self) -> u8 {
+        self.to_u8()
+            .unwrap_or_else(|| panic!("account type should never fail to become primitive {self:?}"))
+    }
+
+    pub fn is_player_account(&self) -> bool {
+        matches!(self, AccountTypes::SecPlayer)
+    }
+
+    pub fn is_admin_account(&self) -> bool {
+        matches!(self, AccountTypes::SecAdministrator) && matches!(self, AccountTypes::SecConsole)
+    }
+
+    pub fn is_console_account(&self) -> bool {
+        matches!(self, AccountTypes::SecConsole)
+    }
 }
 
 #[derive(Error, Debug, Clone)]

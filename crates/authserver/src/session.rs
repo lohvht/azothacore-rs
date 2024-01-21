@@ -33,7 +33,6 @@ use azothacore_server::shared::{
 };
 use bnet_rpc::{
     bgs::protocol::{
-        self,
         account::v1::{
             AccountFieldTags,
             AccountService,
@@ -572,7 +571,7 @@ impl BnetRpcService for Session {
         stream
     }
 
-    async fn send_server_response<M>(&self, response: bnet_rpc::BnetServiceWrapper<M>) -> std::io::Result<()>
+    async fn send_server_response<M>(&self, response: BnetServiceWrapper<M>) -> std::io::Result<()>
     where
         M: prost::Message,
     {
@@ -583,7 +582,7 @@ impl BnetRpcService for Session {
             Ok(p) => (None, Some(p)),
         };
 
-        let header = protocol::Header {
+        let header = Header {
             token,
             status,
             service_id: 0xFE,
@@ -609,7 +608,7 @@ impl BnetRpcService for Session {
         Ok(())
     }
 
-    async fn make_client_request<M>(&self, request: bnet_rpc::BnetServiceWrapper<M>) -> std::io::Result<()>
+    async fn make_client_request<M>(&self, request: BnetServiceWrapper<M>) -> std::io::Result<()>
     where
         M: prost::Message,
     {
@@ -621,7 +620,7 @@ impl BnetRpcService for Session {
         } = request;
         let request = result.expect("client request should always be set, check impl of `pre_send_store_client_request`");
 
-        let header = protocol::Header {
+        let header = Header {
             service_id: 0,
             service_hash: Some(service_hash),
             method_id: Some(method_id),
