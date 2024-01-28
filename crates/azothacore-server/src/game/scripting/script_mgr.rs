@@ -3,12 +3,12 @@ use std::{
     sync::{
         atomic::{AtomicI32, AtomicI64},
         Arc,
-        RwLock,
     },
 };
 
 use azothacore_common::{configuration::DatabaseType, AzResult};
 use flagset::FlagSet;
+use tokio::sync::RwLock as AsyncRwLock;
 
 use crate::game::globals::object_mgr::OBJECT_MGR;
 
@@ -102,10 +102,22 @@ pub trait DatabaseScript: ScriptObject {
     fn on_after_databases_loaded(&self, _update_flags: FlagSet<DatabaseType>) {}
 }
 
+pub trait AccountScript: ScriptObject {
+    fn on_account_login(&self, _account_id: u32) {}
+    fn on_last_ip_update(&self, _account_id: u32, _ip: &str) {}
+    fn on_failed_account_login(&self, _account_id: u32) {}
+    fn on_email_change(&self, _account_id: u32) {}
+    fn on_failed_email_change(&self, _account_id: u32) {}
+    fn on_password_change(&self, _account_id: u32) {}
+    fn on_failed_password_change(&self, _account_id: u32) {}
+    fn can_account_create_character(&self, _account_id: u32, _char_race: u8, _char_class: u8) {}
+}
+
 pub struct ScriptMgr {
     scheduled_scripts: AtomicI32,
     world:             ScriptRegistry<dyn WorldScript>,
     database:          ScriptRegistry<dyn DatabaseScript>,
+    account:           ScriptRegistry<dyn AccountScript>,
 }
 
 impl ScriptMgr {
@@ -114,12 +126,14 @@ impl ScriptMgr {
             scheduled_scripts: AtomicI32::new(0),
             world:             ScriptRegistry::new(),
             database:          ScriptRegistry::new(),
+            account:           ScriptRegistry::new(),
         }
     }
 
     pub fn unload(&mut self) -> AzResult<()> {
         self.world.unload();
         self.database.unload();
+        self.account.unload();
         Ok(())
     }
 }
@@ -218,7 +232,7 @@ impl ScriptMgr {
     }
 }
 
-/// WorldScript functions
+/// DatabaseScript functions
 impl ScriptMgr {
     pub fn register_database_script(&mut self, script: Arc<dyn DatabaseScript>) {
         self.database.add_script(script);
@@ -231,7 +245,63 @@ impl ScriptMgr {
     }
 }
 
-// template class AC_GAME_API ScriptRegistry<AccountScript>;
+/// AccountScript functions
+impl ScriptMgr {
+    pub fn register_account_script(&mut self, script: Arc<dyn AccountScript>) {
+        self.account.add_script(script);
+    }
+
+    pub fn on_account_login(&self, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            script.on_account_login(account_id);
+        }
+    }
+
+    // TODO: Impl this azerothcore hook (Not in TC)
+    pub fn on_last_ip_update(&self, account_id: u32, ip: String) {
+        for script in self.account.script_pointer_list.values() {
+            script.on_last_ip_update(account_id, &ip);
+        }
+    }
+
+    pub fn on_failed_account_login(&self, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            script.on_failed_account_login(account_id);
+        }
+    }
+
+    pub fn on_email_change(&self, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            script.on_email_change(account_id);
+        }
+    }
+
+    pub fn on_failed_email_change(&self, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            script.on_failed_email_change(account_id);
+        }
+    }
+
+    pub fn on_password_change(&self, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            script.on_password_change(account_id);
+        }
+    }
+
+    pub fn on_failed_password_change(&self, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            script.on_failed_password_change(account_id);
+        }
+    }
+
+    // TODO: Impl this azerothcore hook (Not in TC)
+    pub fn can_account_create_character(&self, account_id: u32, char_race: u8, char_class: u8) {
+        for script in self.account.script_pointer_list.values() {
+            script.can_account_create_character(account_id, char_race, char_class);
+        }
+    }
+}
+
 // template class AC_GAME_API ScriptRegistry<AchievementCriteriaScript>;
 // template class AC_GAME_API ScriptRegistry<AchievementScript>;
 // template class AC_GAME_API ScriptRegistry<AllCreatureScript>;
@@ -333,7 +403,7 @@ impl<T: ScriptObject + ?Sized> ScriptRegistry<T> {
             let script_name = script.name();
             // Get an ID for the script. An ID only exists if it's a script that is assigned in the database
             // through a script name (or similar).
-            let script_id = match OBJECT_MGR.read().unwrap().get_script_id(&script_name) {
+            let script_id = match OBJECT_MGR.blocking_read().get_script_id(&script_name) {
                 Err(e) => {
                     if !script_name.contains("Smart") {
                         tracing::error!(
@@ -368,4 +438,4 @@ impl<T: ScriptObject + ?Sized> ScriptRegistry<T> {
     }
 }
 
-pub static SCRIPT_MGR: RwLock<ScriptMgr> = RwLock::new(ScriptMgr::new());
+pub static SCRIPT_MGR: AsyncRwLock<ScriptMgr> = AsyncRwLock::const_new(ScriptMgr::new());

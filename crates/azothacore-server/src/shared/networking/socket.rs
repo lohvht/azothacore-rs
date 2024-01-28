@@ -6,9 +6,10 @@ use tokio::{
     net::TcpStream,
     runtime::Handle as TokioRuntimeHandler,
     sync::{mpsc, Mutex as AsyncMutex},
+    task::JoinHandle,
 };
 use tokio_util::sync::CancellationToken;
-use tracing::{debug, error, info_span, Instrument};
+use tracing::{debug, error, instrument};
 
 use crate::shared::{dropper_wrapper_fn, DropperWrapperFn};
 
@@ -25,65 +26,13 @@ pub struct SocketWrappper {
 /// SocketWrappper provides a socket wrapper that is cancel safe, with reads/writes not being
 /// mutable (via channels and interior mutability w/ mutexes)
 impl SocketWrappper {
-    pub fn new<R, W>(rt_handler: TokioRuntimeHandler, cancel_token: CancellationToken, name: AddressOrName, rd: R, mut wr: W) -> Self
+    pub fn new<R, W>(rt_handler: TokioRuntimeHandler, cancel_token: CancellationToken, name: AddressOrName, rd: R, wr: W) -> Self
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let (write_sender_channel, mut wr_rcv) = mpsc::channel(1024);
-        let ct = cancel_token.clone();
         let read_stream: AsyncSharedRead = Arc::new(AsyncMutex::new(Some(Box::pin(rd))));
-
-        let socket_write_span = info_span!(target: "network", "socket_write_span", name=name.to_string());
-        let read_stream_clone = read_stream.clone();
-        let write_sender_channel_clone = write_sender_channel.clone();
-        let _task = rt_handler.spawn(
-            async move {
-                let mut flush_interval = tokio::time::interval(Duration::from_secs(1));
-                flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-                loop {
-                    let mut recv_bytes_to_write = tokio::select! {
-                        _ = ct.cancelled() => {
-                            debug!("shutdown write socket due to token cancellation");
-                            break;
-                        },
-                        _ = flush_interval.tick() => match wr.flush().await {
-                            Err(e) if e.kind() != io::ErrorKind::WriteZero => {
-                                error!(cause=?e, "shutdown as encountered non recoverable error when flushing buffers");
-                                break;
-                            },
-                            _ => continue,
-                        },
-                        opt_by = wr_rcv.recv() => {
-                            match opt_by {
-                                None => {
-                                    error!("shutdown write socket to due to write receiver channel closing");
-                                    break;
-                                },
-                                Some(b) => b,
-                            }
-                        },
-                    };
-                    if let Err(e) = wr.write_all_buf(&mut recv_bytes_to_write).await {
-                        error!(cause=?e, "shutdown write socket to due to write receiver channel closing");
-                        break;
-                    }
-                }
-                // Shutdown everything, cleaning up
-                if let Err(e) = wr.shutdown().await {
-                    error!(cause=?e, "shutdown write socket error: {e}");
-                }
-                // doesn't hurt to cancel another time anyway
-                ct.cancel();
-                // drop receiver, this should make the sender execute immediately too
-                drop(wr_rcv);
-                // drop read stream, this should have the effect of closing the read half of the stream
-                *read_stream_clone.lock().await = None;
-                // wait for sender to close, this should also run immediately
-                write_sender_channel_clone.closed().await;
-            }
-            .instrument(socket_write_span),
-        );
+        let (write_sender_channel, _task) = spawn_task(cancel_token.clone(), &rt_handler, &name.to_string(), read_stream.clone(), wr);
 
         let _task = dropper_wrapper_fn(&rt_handler, cancel_token.clone(), async { Ok(_task.await?) });
         Self {
@@ -151,6 +100,77 @@ impl SocketWrappper {
         }
         res
     }
+}
+
+fn spawn_task<W>(
+    ct: CancellationToken,
+    handle: &TokioRuntimeHandler,
+    name: &str,
+    read_stream: AsyncSharedRead,
+    wr: W,
+) -> (mpsc::Sender<bytes::Bytes>, JoinHandle<()>)
+where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    let (write_sender_channel, write_receiver_channel) = mpsc::channel(1024);
+    let name = name.to_string();
+    let task = handle.spawn(handle_socket(ct, name, wr, read_stream, write_sender_channel.clone(), write_receiver_channel));
+    (write_sender_channel, task)
+}
+
+#[instrument(skip_all, fields(target="network", name=%name))]
+async fn handle_socket<W>(
+    ct: CancellationToken,
+    name: String,
+    mut wr: W,
+    read_stream: AsyncSharedRead,
+    write_sender_channel: mpsc::Sender<bytes::Bytes>,
+    mut write_receiver_channel: mpsc::Receiver<bytes::Bytes>,
+) where
+    W: AsyncWrite + Unpin + Send + 'static,
+{
+    let mut flush_interval = tokio::time::interval(Duration::from_secs(1));
+    flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        let mut recv_bytes_to_write = tokio::select! {
+            _ = ct.cancelled() => {
+                debug!("shutdown write socket due to token cancellation");
+                break;
+            },
+            _ = flush_interval.tick() => match wr.flush().await {
+                Err(e) if e.kind() != io::ErrorKind::WriteZero => {
+                    error!(cause=?e, "shutdown as encountered non recoverable error when flushing buffers");
+                    break;
+                },
+                _ => continue,
+            },
+            opt_by = write_receiver_channel.recv() => {
+                match opt_by {
+                    None => {
+                        error!("shutdown write socket to due to write receiver channel closing");
+                        break;
+                    },
+                    Some(b) => b,
+                }
+            },
+        };
+        if let Err(e) = wr.write_all_buf(&mut recv_bytes_to_write).await {
+            error!(cause=?e, "shutdown write socket to due to write receiver channel closing");
+            break;
+        }
+    }
+    // Shutdown everything, cleaning up
+    if let Err(e) = wr.shutdown().await {
+        error!(cause=?e, "shutdown write socket error: {e}");
+    }
+    // doesn't hurt to cancel another time anyway
+    ct.cancel();
+    // drop receiver, this should make the sender execute immediately too
+    drop(write_receiver_channel);
+    // drop read stream, this should have the effect of closing the read half of the stream
+    *read_stream.lock().await = None;
+    // wait for sender to close, this should also run immediately
+    write_sender_channel.closed().await;
 }
 
 #[derive(Clone)]

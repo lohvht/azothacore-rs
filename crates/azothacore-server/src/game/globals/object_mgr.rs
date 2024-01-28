@@ -1,4 +1,4 @@
-use std::sync::RwLock;
+use tokio::sync::RwLock as AsyncRwLock;
 
 pub struct ObjectMgr {}
 
@@ -12,4 +12,4 @@ impl ObjectMgr {
     }
 }
 
-pub static OBJECT_MGR: RwLock<ObjectMgr> = RwLock::new(ObjectMgr::new());
+pub static OBJECT_MGR: AsyncRwLock<ObjectMgr> = AsyncRwLock::const_new(ObjectMgr::new());

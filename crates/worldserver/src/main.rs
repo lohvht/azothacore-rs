@@ -8,9 +8,7 @@ use azothacore_common::{
         DatabaseType::{Character as DBFlagCharacter, Hotfix as DBFlagHotfix, Login as DBFlagLogin, World as DBFlagWorld},
         DbUpdates,
     },
-    get_g,
     log,
-    mut_g,
     utils::create_pid_file,
     AzResult,
     AZOTHA_CORE_CONFIG,
@@ -29,7 +27,7 @@ use azothacore_server::{
     game::{
         scripting::script_mgr::SCRIPT_MGR,
         scripts,
-        world::{WorldTrait, S_WORLD},
+        world::{WorldTrait, WORLD},
     },
     receive_signal_and_run_expr,
     shared::{
@@ -53,7 +51,7 @@ fn signal_handler(rt: &tokio::runtime::Runtime) -> JoinHandle<Result<(), std::io
             use tokio::signal::windows::ctrl_break;
             let mut sig_break = ctrl_break()?;
             receive_signal_and_run_expr!(
-                S_WORLD.write().await.stop_now(1),
+                WORLD.write().await.stop_now(1),
                 "SIGBREAK" => sig_break
             );
             Ok(())
@@ -71,7 +69,7 @@ fn signal_handler(rt: &tokio::runtime::Runtime, cancel_token: CancellationToken)
             let mut sig_terminate = short_curcuit_unix_signal_unwrap!(SignalKind::terminate());
             let mut sig_quit = short_curcuit_unix_signal_unwrap!(SignalKind::quit());
             receive_signal_and_run_expr!(
-                mut_g!(S_WORLD).stop_now(1),
+                WORLD.blocking_write().stop_now(1),
                 cancel_token,
                 "SIGINT" => sig_interrupt
                 "SIGTERM" => sig_terminate
@@ -155,8 +153,8 @@ fn main() -> AzResult<()> {
 
     info!(target:"server::loading", "Initializing Scripts...");
     // Loading modules configs before scripts
-    ConfigMgr::m().load_modules_configs(false, true, |reload| get_g!(SCRIPT_MGR).on_load_module_config(reload))?;
-    let _s_script_mgr_handle = dropper_wrapper_fn(runtime.handle(), token.clone(), async { mut_g!(SCRIPT_MGR).unload() });
+    ConfigMgr::m().load_modules_configs(false, true, |reload| SCRIPT_MGR.blocking_write().on_load_module_config(reload))?;
+    let _s_script_mgr_handle = dropper_wrapper_fn(runtime.handle(), token.clone(), async { SCRIPT_MGR.write().await.unload() });
     scripts::add_scripts()?;
     azothacore_modules::add_scripts()?;
 
@@ -206,7 +204,7 @@ fn main() -> AzResult<()> {
 
     // // // TODO: hirogoro@29/03/2023: Implement set initial world settings
     // // sWorld->SetInitialWorldSettings();
-    // S_WORLD.write().await.set_initial_world_settings().await?;
+    // WORLD.write().await.set_initial_world_settings().await?;
 
     // Begin shutdown, waiting for signal handler first. Then unload everything else.
     rt.block_on(async { signal_handler.await? })?;
@@ -261,11 +259,12 @@ async fn start_db(cancel_token: CancellationToken, realm_id: u32) -> AzResult<()
         .execute(WorldDatabase::get())
         .await?;
 
-    mut_g!(S_WORLD).load_db_version()?;
+    let mut w = WORLD.write().await;
+    w.load_db_version().await?;
 
-    info!("> Version DB world:     {}", get_g!(S_WORLD).get_db_version());
+    info!("> Version DB world:     {}", w.get_db_version());
 
-    get_g!(SCRIPT_MGR).on_after_databases_loaded(updates.EnableDatabases);
+    SCRIPT_MGR.read().await.on_after_databases_loaded(updates.EnableDatabases);
 
     Ok(())
 }

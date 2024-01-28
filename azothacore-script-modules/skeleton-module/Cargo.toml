@@ -10,3 +10,4 @@ azothacore-server.workspace = true
 # External crates
 tracing.workspace = true
 serde.workspace = true
+tokio.workspace = true

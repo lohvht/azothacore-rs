@@ -18,10 +18,11 @@ use super::{
     AccountOpResult,
     DbId,
 };
-use crate::game::{accounts::rbac::RbacData, world::CurrentRealm};
+use crate::game::{accounts::rbac::RbacData, scripting::script_mgr::SCRIPT_MGR, world::CurrentRealm};
 
 pub const MAX_ACCOUNT_STR: usize = 20;
 pub const MAX_PASS_STR: usize = 16;
+pub const MAX_EMAIL_STR: usize = 64;
 
 pub struct AccountMgr {
     permissions:         BTreeMap<RawRbacPermId, RbacPermission>,
@@ -100,6 +101,7 @@ impl AccountMgr {
         Ok(())
     }
 
+    // TODO: Implement me: DeleteAccount
     // pub async fn delete_account(account_id: u32) -> AccountOpResult<()>
     //     {
     //         let login_db = LoginDatabase::get();
@@ -175,164 +177,127 @@ impl AccountMgr {
     //         Ok(())
     //     }
 
-    //     static AccountOpResult ChangeUsername(account_id: u32, std::string newUsername, std::string newPassword)
-    //     {
-    //         // Check if accounts exists
-    //         PreparedStatement* stmt = LoginDatabase::sel_account_by_id(login_db, params!());
-    //         stmt->setUInt32(0, account_id);
-    //         PreparedQueryResult result = LoginDatabase.Query(stmt);
+    pub async fn change_username(account_id: u32, new_username: &str, new_password: &str) -> AccountOpResult<()> {
+        // Check if accounts exists
+        let login_db = LoginDatabase::get();
+        let result = LoginDatabase::sel_account_by_id(login_db, params!())
+            .await
+            .map_err(db_internal("error when selecting account by ID from DB on change username"))?
+            .is_some();
 
-    //         if (!result)
-    //             return Err(AccountOpError::NameNotExist);
+        if !result {
+            return Err(AccountOpError::NameNotExist);
+        }
+        if new_username.len() > MAX_ACCOUNT_STR {
+            return Err(AccountOpError::NameTooLong);
+        }
+        if new_password.len() > MAX_PASS_STR {
+            return Err(AccountOpError::PassTooLong);
+        }
+        let new_username = new_username.to_ascii_uppercase();
+        let new_password = new_password.to_ascii_uppercase();
 
-    //         if (utf8length(newUsername) > MAX_ACCOUNT_STR)
-    //             return Err(AccountOpError::NameTooLong);
+        LoginDatabase::upd_username(
+            login_db,
+            params!(&new_username, Self::calculate_sha_pass_hash(&new_username, &new_password), account_id),
+        )
+        .await
+        .map_err(db_internal("error when updating username on change username"))?;
 
-    //         if (utf8length(newPassword) > MAX_PASS_STR)
-    //             return Err(AccountOpError::PassTooLong);
+        Ok(())
+    }
 
-    //         Utf8ToUpperOnlyLatin(newUsername);
-    //         Utf8ToUpperOnlyLatin(newPassword);
+    pub async fn change_password(account_id: u32, new_password: &str) -> AccountOpResult<()> {
+        let Some(username) = Self::get_name(account_id).await? else {
+            SCRIPT_MGR.read().await.on_failed_password_change(account_id);
+            return Err(AccountOpError::NameNotExist); // account doesn't exist
+        };
+        if new_password.len() > MAX_PASS_STR {
+            SCRIPT_MGR.read().await.on_failed_password_change(account_id);
+            return Err(AccountOpError::PassTooLong);
+        }
+        let username = username.to_ascii_uppercase();
+        let new_password = new_password.to_ascii_uppercase();
+        LoginDatabase::get()
+            .acquire()
+            .await
+            .map_err(db_internal("unable to retrive connection for transaction to change_password"))?
+            .transaction(|txn| {
+                Box::pin(async move {
+                    LoginDatabase::upd_password(&mut **txn, params!(Self::calculate_sha_pass_hash(&username, &new_password), account_id)).await?;
+                    LoginDatabase::upd_vs(&mut **txn, params!("", "", username)).await?;
+                    Ok(())
+                })
+            })
+            .await
+            .map_err(db_internal("error change_password in txn"))?;
 
-    //         stmt = LoginDatabase::upd_username(login_db, params!());
+        SCRIPT_MGR.read().await.on_password_change(account_id);
 
-    //         stmt->setString(0, newUsername);
-    //         stmt->setString(1, Self::calculate_sha_pass_hash(newUsername, newPassword));
-    //         stmt->setUInt32(2, account_id);
+        Ok(())
+    }
 
-    //         LoginDatabase.Execute(stmt);
+    pub async fn change_email(account_id: u32, new_email: &str) -> AccountOpResult<()> {
+        if Self::get_name(account_id).await?.is_none() {
+            SCRIPT_MGR.read().await.on_failed_email_change(account_id);
+            return Err(AccountOpError::NameNotExist); // account doesn't exist
+        };
+        if new_email.len() > MAX_EMAIL_STR {
+            SCRIPT_MGR.read().await.on_failed_email_change(account_id);
+            return Err(AccountOpError::EmailTooLong);
+        }
+        let new_email = new_email.to_ascii_uppercase();
 
-    //         Ok(())
-    //     }
-    //     static AccountOpResult ChangePassword(account_id: u32, std::string newPassword)
-    //     {
-    //         std::string username;
+        LoginDatabase::upd_email(LoginDatabase::get(), params!(&new_email, account_id))
+            .await
+            .map_err(db_internal("change_email error"))?;
+        SCRIPT_MGR.read().await.on_email_change(account_id);
+        Ok(())
+    }
 
-    //         if (!GetName(account_id, username))
-    //         {
-    //             sScriptMgr->OnFailedPasswordChange(account_id);
-    //             return Err(AccountOpError::NameNotExist);                          // account doesn't exist
-    //         }
+    pub async fn change_reg_email(account_id: u32, new_email: &str) -> AccountOpResult<()> {
+        if Self::get_name(account_id).await?.is_none() {
+            SCRIPT_MGR.read().await.on_failed_email_change(account_id);
+            return Err(AccountOpError::NameNotExist); // account doesn't exist
+        };
+        if new_email.len() > MAX_EMAIL_STR {
+            SCRIPT_MGR.read().await.on_failed_email_change(account_id);
+            return Err(AccountOpError::EmailTooLong);
+        }
+        let new_email = new_email.to_ascii_uppercase();
 
-    //         if (utf8length(newPassword) > MAX_PASS_STR)
-    //         {
-    //             sScriptMgr->OnFailedPasswordChange(account_id);
-    //             return Err(AccountOpError::PassTooLong);
-    //         }
+        LoginDatabase::upd_reg_email(LoginDatabase::get(), params!(&new_email, account_id))
+            .await
+            .map_err(db_internal("change_email error"))?;
 
-    //         Utf8ToUpperOnlyLatin(username);
-    //         Utf8ToUpperOnlyLatin(newPassword);
+        SCRIPT_MGR.read().await.on_email_change(account_id);
+        Ok(())
+    }
 
-    //         PreparedStatement* stmt = LoginDatabase::upd_password(login_db, params!());
+    pub async fn check_password(account_id: u32, password: &str) -> bool {
+        let Some(username) = Self::get_name(account_id).await.ok().flatten() else {
+            return false;
+        };
+        let username = username.to_ascii_uppercase();
+        let password = password.to_ascii_uppercase();
 
-    //         stmt->setString(0, Self::calculate_sha_pass_hash(username, newPassword));
-    //         stmt->setUInt32(1, account_id);
+        LoginDatabase::sel_check_password(LoginDatabase::get(), params!(account_id, Self::calculate_sha_pass_hash(&username, &password)))
+            .await
+            .ok()
+            .flatten()
+            .is_some()
+    }
 
-    //         LoginDatabase.Execute(stmt);
+    pub async fn check_email(account_id: u32, new_email: &str) -> bool {
+        // We simply return false for a non-existing email
+        let Some(old_email) = Self::get_name(account_id).await.ok().flatten() else {
+            return false;
+        };
+        let old_email = old_email.to_ascii_uppercase();
+        let new_email = new_email.to_ascii_uppercase();
 
-    //         stmt = LoginDatabase::upd_vs(login_db, params!());
-
-    //         stmt->setString(0, "");
-    //         stmt->setString(1, "");
-    //         stmt->setString(2, username);
-
-    //         LoginDatabase.Execute(stmt);
-
-    //         sScriptMgr->OnPasswordChange(account_id);
-    //         Ok(())
-    //     }
-
-    //     static AccountOpResult ChangeEmail(account_id: u32, std::string newEmail)
-    //     {
-    //         std::string username;
-
-    //         if (!GetName(account_id, username))
-    //         {
-    //             sScriptMgr->OnFailedEmailChange(account_id);
-    //             return Err(AccountOpError::NameNotExist);                          // account doesn't exist
-    //         }
-
-    //         if (utf8length(newEmail) > MAX_EMAIL_STR)
-    //         {
-    //             sScriptMgr->OnFailedEmailChange(account_id);
-    //             return Err(AccountOpError::EmailTooLong);
-    //         }
-
-    //         Utf8ToUpperOnlyLatin(username);
-    //         Utf8ToUpperOnlyLatin(newEmail);
-
-    //         PreparedStatement* stmt = LoginDatabase::upd_email(login_db, params!());
-
-    //         stmt->setString(0, newEmail);
-    //         stmt->setUInt32(1, account_id);
-
-    //         LoginDatabase.Execute(stmt);
-
-    //         sScriptMgr->OnEmailChange(account_id);
-    //         Ok(())
-    //     }
-    //     static AccountOpResult ChangeRegEmail(account_id: u32, std::string newEmail)
-    //     {
-    //         std::string username;
-
-    //         if (!GetName(account_id, username))
-    //         {
-    //             sScriptMgr->OnFailedEmailChange(account_id);
-    //             return Err(AccountOpError::NameNotExist);                          // account doesn't exist
-    //         }
-
-    //         if (utf8length(newEmail) > MAX_EMAIL_STR)
-    //         {
-    //             sScriptMgr->OnFailedEmailChange(account_id);
-    //             return Err(AccountOpError::EmailTooLong);
-    //         }
-
-    //         Utf8ToUpperOnlyLatin(username);
-    //         Utf8ToUpperOnlyLatin(newEmail);
-
-    //         PreparedStatement* stmt = LoginDatabase::upd_reg_email(login_db, params!());
-
-    //         stmt->setString(0, newEmail);
-    //         stmt->setUInt32(1, account_id);
-
-    //         LoginDatabase.Execute(stmt);
-
-    //         sScriptMgr->OnEmailChange(account_id);
-    //         Ok(())
-    //     }
-    //     static bool CheckPassword(account_id: u32, std::string password)
-    //     {
-    //         std::string username;
-
-    //         if (!GetName(account_id, username))
-    //             return false;
-
-    //         Utf8ToUpperOnlyLatin(username);
-    //         Utf8ToUpperOnlyLatin(password);
-
-    //         PreparedStatement* stmt = LoginDatabase::sel_check_password(login_db, params!());
-    //         stmt->setUInt32(0, account_id);
-    //         stmt->setString(1, Self::calculate_sha_pass_hash(username, password));
-    //         PreparedQueryResult result = LoginDatabase.Query(stmt);
-
-    //         return (result) ? true : false;
-    //     }
-    //     static bool CheckEmail(account_id: u32, std::string newEmail)
-    //     {
-    //         std::string oldEmail;
-
-    //         // We simply return false for a non-existing email
-    //         if (!GetEmail(account_id, oldEmail))
-    //             return false;
-
-    //         Utf8ToUpperOnlyLatin(oldEmail);
-    //         Utf8ToUpperOnlyLatin(newEmail);
-
-    //         if (strcmp(oldEmail.c_str(), newEmail.c_str()) == 0)
-    //             return true;
-
-    //         return false;
-    //     }
+        old_email == new_email
+    }
 
     pub async fn get_id(username: &str) -> AccountOpResult<Option<u32>> {
         let id = LoginDatabase::get_account_id_by_username::<_, DbId>(LoginDatabase::get(), params!(username))

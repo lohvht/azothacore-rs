@@ -2,3 +2,5 @@
 /env
 /.vscode/settings.json
 /logs
+*.profraw
+coverage/

@@ -102,10 +102,10 @@ impl Realm {
 
 #[derive(Copy, Clone, Debug)]
 pub struct BnetRealmHandle {
-    region: u8,
-    site:   u8,
+    pub region: u8,
+    pub site:   u8,
     /// primary key in `realmlist` table
-    realm:  u32,
+    pub realm:  u32,
 }
 
 impl BnetRealmHandle {
