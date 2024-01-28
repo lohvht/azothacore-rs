@@ -8,7 +8,7 @@ use std::{
 
 use flate2::{write::GzEncoder, Compression};
 use sqlx::{mysql::MySqlPoolOptions, Executor, Row};
-use tokio::task::join_set;
+use tokio::task::JoinSet;
 
 async fn database_names(user: &str, password: &str, host: &str) -> Vec<String> {
     let url = format!("mysql://{user}:{password}@{host}");
@@ -43,7 +43,7 @@ fn main() {
     rt.block_on(async move {
         let dbnames = database_names(&user, &password, &host).await;
 
-        let mut jhs = join_set::JoinSet::new();
+        let mut jhs = JoinSet::new();
 
         for db in dbnames {
             if db == "information_schema" {
