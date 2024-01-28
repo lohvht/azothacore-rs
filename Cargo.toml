@@ -27,7 +27,7 @@ flagset = { version = "0", features = ["serde"] }
 flate2 = { version = "1.0.17", features = ["zlib-ng-compat"], default-features = false }
 futures = "0"
 futures-core = "0"
-hugsqlx = { git="https://github.com/lohvht/hugsqlx.git", branch = "fix/fix-sqlx-lifetime", features = [ "mysql" ] } # version = "0",
+hugsqlx = { version = "0", features = [ "mysql" ] }
 ipnet = { version = "2" }
 nalgebra = { version = "0", features = [ "serde-serialize" ] }
 num = { version = "0" }

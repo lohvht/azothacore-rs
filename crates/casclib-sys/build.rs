@@ -1,6 +1,17 @@
+#![feature(lint_reasons)]
+
 use std::{collections::HashSet, env, path::PathBuf};
 
 use cmake::Config;
+#[expect(
+    clippy::single_component_path_imports,
+    unused_imports,
+    reason = r#"
+import here just as a reminder that by including this flate2 library (with the given features),
+it will also statically link zlib to the final casclib-sys library too.
+"#
+)]
+use flate2;
 
 #[derive(Debug)]
 struct IgnoreMacros(HashSet<String>);
@@ -43,7 +54,6 @@ fn setup_casc_build() {
     // println!("cargo:rustc-link-lib=dylib=casc");
     println!("cargo:rustc-link-lib=static=casc");
     println!("cargo:rerun-if-changed={}", wrapper_header);
-    println!("cargo:rustc-link-lib=dylib=stdc++");
     // // NOTE: Usually If system has zlib, we need to include this line
     // // But we have forked the underlying casclib to not use
     // // system zlib for now.
