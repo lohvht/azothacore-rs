@@ -29,3 +29,4 @@ pub const CONF_MODULES_DIR: &str = unwrap_default(option_env!("CONF_MODULES_DIR"
 pub const AZOTHA_CORE_CONFIG: &str = unwrap_default(option_env!("AZOTHA_CORE_CONFIG"), "app-worldserver.toml");
 pub const AZOTHA_REALM_CONFIG: &str = unwrap_default(option_env!("AZOTHA_REALM_CONFIG"), "app-authserver.toml");
 pub const AZOTHA_DB_IMPORT_CONFIG: &str = unwrap_default(option_env!("AZOTHA_DB_IMPORT_CONFIG"), "tools-dbimport.toml");
+pub const AZOTHA_FULL_EXTRACTOR_CONFIG: &str = unwrap_default(option_env!("AZOTHA_FULL_EXTRACTOR_CONFIG"), "extractor.toml");

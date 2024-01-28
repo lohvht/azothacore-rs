@@ -1,4 +1,4 @@
-use std::io;
+use std::{io, path::Path};
 
 use azothacore_common::{
     banner,
@@ -7,6 +7,8 @@ use azothacore_common::{
     utils::buffered_file_open,
     AzResult,
     Locale,
+    AZOTHA_FULL_EXTRACTOR_CONFIG,
+    CONF_DIR,
 };
 use azothacore_tools::{
     basic_extractor::main_db2_and_map_extract,
@@ -47,7 +49,7 @@ fn full_extractor_log_cfg() -> (Vec<LogAppender>, Vec<LogLoggerConfig>) {
 
 fn main() -> AzResult<()> {
     let (las, lcfgs) = full_extractor_log_cfg();
-    let mut f = buffered_file_open("env/dist/etc/extractor.toml")?;
+    let mut f = buffered_file_open(Path::new(CONF_DIR).join(AZOTHA_FULL_EXTRACTOR_CONFIG))?;
     let args = ExtractorConfig::from_toml(&mut f)?;
     let _wg = log::init(&args.logs_dir, &las, &lcfgs);
 
