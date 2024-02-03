@@ -221,6 +221,24 @@ pub fn init_default<P: AsRef<Path>>(logs_dir: P, appenders_name: &str) -> LogGua
     init(logs_dir, &appenders, &loggers)
 }
 
+pub fn init_console() -> LogGuard {
+    init(
+        "",
+        &[LogAppender::Console {
+            name:      String::from("Console"),
+            min_level: LogLevel::Debug,
+            max_level: LogLevel::Error,
+            flags:     LogFlags::AddLogLevel | LogFlags::AddLogFilter,
+        }],
+        &[LogLoggerConfig {
+            name:      String::from("root"),
+            min_level: LogLevel::Trace,
+            max_level: LogLevel::Error,
+            appenders: vec![String::from("Console")],
+        }],
+    )
+}
+
 /// Compose multiple layers into a `tracing`'s subscriber.
 ///
 /// Then register the subscriber as global default to process span data.

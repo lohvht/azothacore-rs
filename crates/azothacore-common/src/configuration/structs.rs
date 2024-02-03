@@ -249,6 +249,7 @@ impl DatabaseInfo {
 }
 
 flags! {
+  #[derive(PartialOrd, Ord)]
   pub enum DatabaseType: u8 {
     #[allow(clippy::identity_op)]
     Login       = 0b0001,

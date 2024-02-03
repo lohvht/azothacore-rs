@@ -8,7 +8,6 @@ use tracing::{error, warn};
 
 use super::{
     account_mgr::{AccountMgr, MAX_PASS_STR},
-    db_internal,
     AccountOpError,
     AccountOpResult,
     DbBattlenetAccount,
@@ -38,11 +37,11 @@ impl BattlenetAccountMgr {
             return Err(AccountOpError::NameAlreadyExist);
         }
 
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         let pass_hash = Self::calculate_sha_pass_hash(&email, &password);
         if let Err(e) = LoginDatabase::ins_bnet_account(login_db, params!(&email, pass_hash)).await {
             warn!(target:"sql::sql", cause=%e, "error when creating bnet account from DB");
-            return Err(AccountOpError::DbInternalError);
+            return Err(e.into());
         }
 
         let new_account_id = Self::get_id(&email)
@@ -73,11 +72,9 @@ impl BattlenetAccountMgr {
             return Err(AccountOpError::PassTooLong);
         }
 
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         let pass_hash = Self::calculate_sha_pass_hash(&username, &new_password);
-        LoginDatabase::upd_bnet_password(login_db, params!(pass_hash, account_id))
-            .await
-            .map_err(db_internal(&format!("change DB password failed for account: {account_id}")))?;
+        LoginDatabase::upd_bnet_password(login_db, params!(pass_hash, account_id)).await?;
 
         Ok(())
     }
@@ -90,7 +87,7 @@ impl BattlenetAccountMgr {
         let username = username.to_ascii_uppercase();
         let password = password.to_ascii_uppercase();
 
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         let pass_hash = Self::calculate_sha_pass_hash(&username, &password);
         LoginDatabase::sel_bnet_check_password(login_db, params!(account_id, pass_hash))
             .await
@@ -113,18 +110,16 @@ impl BattlenetAccountMgr {
             return Err(AccountOpError::AccountBadLink);
         }
 
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
 
         // TODO: Sounds like a good idea to wrap these 2 queries below in a transaction
-        let max_index = Self::get_max_index(bnetaccount_id).await?.ok_or_else(|| {
+        let Some(max_index) = Self::get_max_index(bnetaccount_id).await? else {
             error!(target:"sql::sql", bnetaccount_id=bnetaccount_id, "get max index failed for Battlenet account, this should not happen will be treated as a DB error");
-            AccountOpError::DbInternalError
-        })? ;
+            return Err(AccountOpError::DbInternalError(sqlx::Error::RowNotFound));
+        };
         let next_index_to_use = max_index + 1;
 
-        LoginDatabase::upd_bnet_game_account_link(login_db, params!(bnetaccount_id, next_index_to_use, game_account_id))
-            .await
-            .map_err(db_internal("error linking bnet account w/ game account"))?;
+        LoginDatabase::upd_bnet_game_account_link(login_db, params!(bnetaccount_id, next_index_to_use, game_account_id)).await?;
 
         Ok(())
     }
@@ -139,40 +134,30 @@ impl BattlenetAccountMgr {
             return Err(AccountOpError::AccountBadLink);
         }
 
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
 
-        LoginDatabase::upd_bnet_game_account_link(login_db, params!(None::<u32>, None::<u8>, game_account_id))
-            .await
-            .map_err(db_internal("error unlinking game account from bnet account"))?;
+        LoginDatabase::upd_bnet_game_account_link(login_db, params!(None::<u32>, None::<u8>, game_account_id)).await?;
         Ok(())
     }
 
     pub async fn get_id(username: &str) -> AccountOpResult<Option<u32>> {
-        let id = LoginDatabase::sel_bnet_account_id_by_email::<_, DbId>(LoginDatabase::get(), params!(username))
-            .await
-            .map_err(db_internal("error when getting bnet account ID from DB"))?;
+        let id = LoginDatabase::sel_bnet_account_id_by_email::<_, DbId>(&LoginDatabase::get(), params!(username)).await?;
 
         Ok(id.map(|v| v.id))
     }
 
     pub async fn get_name(account_id: u32) -> AccountOpResult<Option<String>> {
-        let name = LoginDatabase::sel_bnet_account_email_by_id::<_, DbEmail>(LoginDatabase::get(), params!(account_id))
-            .await
-            .map_err(db_internal("error when getting bnet account name from DB"))?;
+        let name = LoginDatabase::sel_bnet_account_email_by_id::<_, DbEmail>(&LoginDatabase::get(), params!(account_id)).await?;
         Ok(name.map(|v| v.email))
     }
 
     pub async fn get_id_by_game_account(game_account_id: u32) -> AccountOpResult<Option<u32>> {
-        let id = LoginDatabase::sel_bnet_account_id_by_game_account::<_, DbBattlenetAccount>(LoginDatabase::get(), params!(game_account_id))
-            .await
-            .map_err(db_internal("error when getting bnet account id by game account from DB"))?;
+        let id = LoginDatabase::sel_bnet_account_id_by_game_account::<_, DbBattlenetAccount>(&LoginDatabase::get(), params!(game_account_id)).await?;
         Ok(id.map(|v| v.battlenet_account))
     }
 
     pub async fn get_max_index(account_id: u32) -> AccountOpResult<Option<u8>> {
-        let max_index = LoginDatabase::sel_bnet_max_account_index::<_, DbBnetMaxIndex>(LoginDatabase::get(), params!(account_id))
-            .await
-            .map_err(db_internal("error when getting max index by account ID from DB"))?;
+        let max_index = LoginDatabase::sel_bnet_max_account_index::<_, DbBnetMaxIndex>(&LoginDatabase::get(), params!(account_id)).await?;
         Ok(max_index.map(|v| v.bnet_max_index))
     }
 

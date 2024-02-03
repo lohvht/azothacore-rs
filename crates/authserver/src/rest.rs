@@ -282,7 +282,7 @@ impl LoginRESTService {
             }};
         }
 
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         let result = handle_resp_error!(
             LoginDatabase::sel_bnet_game_account_list(login_db, params!(basic_auth.username())).await,
             StatusCode::INTERNAL_SERVER_ERROR
@@ -396,7 +396,7 @@ impl LoginRESTService {
             is_banned:           u64,
         }
 
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         let fields = match handle_login_err!(
             LoginDatabase::sel_bnet_authentication(login_db, params!(&login)).await,
             "DB error for post login"
@@ -485,7 +485,7 @@ impl LoginRESTService {
             return err_empty_resp(StatusCode::UNAUTHORIZED);
         }
         let mut login_refresh_result = LoginRefreshResult::default();
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         let login_ticket_expiry = match LoginDatabase::sel_bnet_existing_authentication(login_db, params!(basic_auth.username())).await {
             Err(e) => {
                 error!(target:"server::rest", username=basic_auth.username(), "unable to select existing bnet authentications; err={e}");

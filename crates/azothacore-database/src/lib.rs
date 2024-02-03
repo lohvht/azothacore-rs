@@ -10,6 +10,7 @@ use std::{ops, path::PathBuf};
 
 use azothacore_common::configuration::{DatabaseInfo, DatabaseType, DbUpdates};
 pub use hugsqlx::params;
+use sqlx::{pool::PoolConnection, MySqlConnection};
 pub use sqlx::{query, query_as, query_as_with, query_with};
 
 /// DbDriver used in azothacore -> attempt to abstract out database specific code
@@ -18,6 +19,9 @@ pub use sqlx::{query, query_as, query_as_with, query_with};
 // Potentially giving users a way to specify the DB engine that they wanna use.
 pub type DbDriver = sqlx::MySql;
 
+pub type DbPoolConnection = PoolConnection<DbDriver>;
+
+pub type DbConnection = MySqlConnection;
 /// Db executor used in azothacore -> attempt to abstract out database specific code
 /// is an alias to the underlying sqlx executor implementation used
 // TODO: hirogoro@23dec2023: Can consider abstracting these out and toggle it via feature flag?
@@ -25,6 +29,10 @@ pub type DbDriver = sqlx::MySql;
 pub trait DbExecutor<'c>: sqlx::MySqlExecutor<'c> {}
 
 impl<'c, T: sqlx::MySqlExecutor<'c>> DbExecutor<'c> for T {}
+
+pub trait DbAcquire<'c>: sqlx::Acquire<'c, Database = DbDriver> {}
+
+impl<'c, T: sqlx::Acquire<'c, Database = DbDriver>> DbAcquire<'c> for T {}
 
 #[derive(Debug)]
 pub struct ExtendedDBInfo<'d, 'u> {

@@ -5,6 +5,9 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+test-utils = ["dep:dotenvy"]
+
 [dependencies]
 # Local crates
 azothacore-common.workspace = true
@@ -19,3 +22,4 @@ tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 walkdir.workspace = true
+dotenvy = { version = "0", optional = true }

@@ -420,7 +420,7 @@ impl RealmList {
         key_data[32..].clone_from_slice(&server_secret);
 
         if let Err(e) = LoginDatabase::upd_bnet_game_account_login_info(
-            LoginDatabase::get(),
+            &LoginDatabase::get(),
             params!(hex_str!(&key_data), client_address.ip_str_or_name(), locale as u8, os, account_name),
         )
         .await
@@ -455,7 +455,8 @@ impl RealmList {
             let mut new_sub_regions = BTreeSet::new();
             let mut new_realms = BTreeMap::new();
 
-            let mut result = LoginDatabase::sel_realmlist::<_, LoginDbRealm>(LoginDatabase::get(), params!()).await;
+            let login_db = &LoginDatabase::get();
+            let mut result = LoginDatabase::sel_realmlist::<_, LoginDbRealm>(login_db, params!()).await;
 
             while let Some(res) = result.next().await {
                 let realm = match res {

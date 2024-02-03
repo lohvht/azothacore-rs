@@ -184,7 +184,7 @@ async fn ban_expiry_task(cancel_token: CancellationToken, ban_expiry_check_inter
             }
             i = interval.tick() => i,
         };
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         if let Err(e) = LoginDatabase::del_expired_ip_bans(login_db, params!()).await {
             error!(target:"bnetserver", cause=%e, "del_expired_ip_bans err");
         };

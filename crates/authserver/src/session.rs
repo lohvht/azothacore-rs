@@ -303,7 +303,7 @@ impl Session {
         if web_credentials.is_empty() {
             return Err(BattlenetRpcErrorCode::Denied);
         }
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         let result = LoginDatabase::sel_bnet_account_info(login_db, params!(web_credentials))
             .await
             .map_err(map_err_to_denied)?;
@@ -488,7 +488,7 @@ impl Socket for Session {
         trace!(target:"session", caller = s.caller_info(), "Accepted connection");
 
         // Verify that this IP is not in the ip_banned table
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         LoginDatabase::del_expired_ip_bans(login_db, params!()).await?;
         for fields in LoginDatabase::sel_ip_info(login_db, params!(ip_address)).await? {
             let banned = fields.get::<u64, _>("banned") != 0;
@@ -1103,7 +1103,7 @@ impl Session {
             return Err(BattlenetRpcErrorCode::WowServicesDeniedRealmListTicket);
         }
 
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         LoginDatabase::upd_bnet_last_login_info(
             login_db,
             params!(

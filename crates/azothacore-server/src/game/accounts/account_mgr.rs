@@ -4,6 +4,8 @@ use azothacore_common::{hex_str, AccountTypes};
 use azothacore_database::{
     database_env::{CharacterDatabase, CharacterPreparedStmts, LoginDatabase, LoginPreparedStmts},
     params,
+    DbAcquire,
+    DbExecutor,
 };
 use sha2::{Digest, Sha256};
 use sqlx::{query_as, Connection};
@@ -11,14 +13,12 @@ use tokio::{sync::RwLock as AsyncRwLock, time::Instant};
 use tracing::{debug, error, info, trace};
 
 use super::{
-    db_internal,
     rbac::{RawRbacPermId, RbacPermission},
-    rbac_err_internal,
     AccountOpError,
     AccountOpResult,
     DbId,
 };
-use crate::game::{accounts::rbac::RbacData, scripting::script_mgr::SCRIPT_MGR, world::CurrentRealm};
+use crate::game::{scripting::script_mgr::SCRIPT_MGR, world::CurrentRealm};
 
 pub const MAX_ACCOUNT_STR: usize = 20;
 pub const MAX_PASS_STR: usize = 16;
@@ -59,6 +59,18 @@ impl AccountMgr {
     }
 
     pub async fn create_account(username: &str, password: &str, email: &str, bnet_account_id_index: Option<(u32, u8)>) -> AccountOpResult<()> {
+        Self::create_account_inner(&LoginDatabase::get(), username, password, email, bnet_account_id_index).await
+    }
+
+    pub(super) async fn create_account_inner<'a, A: DbAcquire<'a>>(
+        login_db: A,
+        username: &str,
+        password: &str,
+        email: &str,
+        bnet_account_id_index: Option<(u32, u8)>,
+    ) -> AccountOpResult<()> {
+        let mut login_db = login_db.acquire().await?;
+
         if username.len() > MAX_ACCOUNT_STR {
             // username's too long
             return Err(AccountOpError::NameTooLong);
@@ -69,23 +81,24 @@ impl AccountMgr {
             return Err(AccountOpError::PassTooLong);
         }
 
+        if email.len() > MAX_EMAIL_STR {
+            // email too long
+            return Err(AccountOpError::EmailTooLong);
+        }
+
         let username = username.to_ascii_uppercase();
         let password = password.to_ascii_uppercase();
         let email = email.to_ascii_uppercase();
 
-        if Self::get_id(&email).await?.is_some() {
+        if Self::get_id_inner(&mut *login_db, &username).await?.is_some() {
             // username does already exist
             return Err(AccountOpError::NameAlreadyExist);
         }
 
-        let login_db = LoginDatabase::get();
         let (bnet_account_id, bnet_index) = bnet_account_id_index.map_or((None, None), |i| (Some(i.0), Some(i.1)));
         let sha_hash = Self::calculate_sha_pass_hash(&username, &password);
 
         login_db
-            .acquire()
-            .await
-            .map_err(db_internal("unable to retrive connection for transaction"))?
             .transaction(|txn| {
                 Box::pin(async move {
                     LoginDatabase::ins_account(&mut **txn, params!(username, sha_hash, &email, &email, bnet_account_id, bnet_index)).await?;
@@ -96,18 +109,15 @@ impl AccountMgr {
                 })
             })
             .await
-            .map_err(db_internal("error inserting account / realm characters init in txn"))?;
-        // everything's fine
-        Ok(())
     }
 
     // TODO: Implement me: DeleteAccount
     // pub async fn delete_account(account_id: u32) -> AccountOpResult<()>
     //     {
-    //         let login_db = LoginDatabase::get();
+    //         let login_db = &LoginDatabase::get();
     //         let char_db = CharacterDatabase::get();
     //         // Check if accounts exists
-    //         let exists = LoginDatabase::sel_account_by_id(login_db, params!(account_id)).await.map_err(db_internal("delete account name check failed"))?.is_some();
+    //         let exists = LoginDatabase::sel_account_by_id(login_db, params!(account_id)).await?.is_some();
     //         if !exists {
     //             return Err(AccountOpError::NameNotExist);
     //         }
@@ -177,13 +187,20 @@ impl AccountMgr {
     //         Ok(())
     //     }
 
-    pub async fn change_username(account_id: u32, new_username: &str, new_password: &str) -> AccountOpResult<()> {
+    /// ChangeUsername in TC
+    pub async fn change_username_password(account_id: u32, new_username: &str, new_password: &str) -> AccountOpResult<()> {
+        Self::change_username_password_inner(&LoginDatabase::get(), account_id, new_username, new_password).await
+    }
+
+    pub(super) async fn change_username_password_inner<'a, A: DbAcquire<'a>>(
+        login_db: A,
+        account_id: u32,
+        new_username: &str,
+        new_password: &str,
+    ) -> AccountOpResult<()> {
         // Check if accounts exists
-        let login_db = LoginDatabase::get();
-        let result = LoginDatabase::sel_account_by_id(login_db, params!())
-            .await
-            .map_err(db_internal("error when selecting account by ID from DB on change username"))?
-            .is_some();
+        let mut login_db = login_db.acquire().await?;
+        let result = LoginDatabase::sel_account_by_id(&mut *login_db, params!(account_id)).await?.is_some();
 
         if !result {
             return Err(AccountOpError::NameNotExist);
@@ -198,17 +215,21 @@ impl AccountMgr {
         let new_password = new_password.to_ascii_uppercase();
 
         LoginDatabase::upd_username(
-            login_db,
+            &mut *login_db,
             params!(&new_username, Self::calculate_sha_pass_hash(&new_username, &new_password), account_id),
         )
-        .await
-        .map_err(db_internal("error when updating username on change username"))?;
+        .await?;
 
         Ok(())
     }
 
     pub async fn change_password(account_id: u32, new_password: &str) -> AccountOpResult<()> {
-        let Some(username) = Self::get_name(account_id).await? else {
+        Self::change_password_inner(&LoginDatabase::get(), account_id, new_password).await
+    }
+
+    pub(super) async fn change_password_inner<'a, A: DbAcquire<'a>>(login_db: A, account_id: u32, new_password: &str) -> AccountOpResult<()> {
+        let mut login_db = login_db.acquire().await?;
+        let Some(username) = Self::get_name_inner(&mut *login_db, account_id).await? else {
             SCRIPT_MGR.read().await.on_failed_password_change(account_id);
             return Err(AccountOpError::NameNotExist); // account doesn't exist
         };
@@ -218,27 +239,23 @@ impl AccountMgr {
         }
         let username = username.to_ascii_uppercase();
         let new_password = new_password.to_ascii_uppercase();
-        LoginDatabase::get()
-            .acquire()
-            .await
-            .map_err(db_internal("unable to retrive connection for transaction to change_password"))?
-            .transaction(|txn| {
-                Box::pin(async move {
-                    LoginDatabase::upd_password(&mut **txn, params!(Self::calculate_sha_pass_hash(&username, &new_password), account_id)).await?;
-                    LoginDatabase::upd_vs(&mut **txn, params!("", "", username)).await?;
-                    Ok(())
-                })
-            })
-            .await
-            .map_err(db_internal("error change_password in txn"))?;
+        let mut txn = login_db.begin().await?;
 
+        let new_sha_hash = Self::calculate_sha_pass_hash(&username, &new_password);
+        LoginDatabase::upd_password(&mut *txn, params!(&new_sha_hash, account_id)).await?;
+        LoginDatabase::upd_vs(&mut *txn, params!("", "", username)).await?;
         SCRIPT_MGR.read().await.on_password_change(account_id);
-
+        txn.commit().await?;
         Ok(())
     }
 
     pub async fn change_email(account_id: u32, new_email: &str) -> AccountOpResult<()> {
-        if Self::get_name(account_id).await?.is_none() {
+        Self::change_email_inner(&LoginDatabase::get(), account_id, new_email).await
+    }
+
+    pub(super) async fn change_email_inner<'a, A: DbAcquire<'a>>(login_db: A, account_id: u32, new_email: &str) -> AccountOpResult<()> {
+        let mut login_db = login_db.acquire().await?;
+        if Self::get_name_inner(&mut *login_db, account_id).await?.is_none() {
             SCRIPT_MGR.read().await.on_failed_email_change(account_id);
             return Err(AccountOpError::NameNotExist); // account doesn't exist
         };
@@ -248,15 +265,18 @@ impl AccountMgr {
         }
         let new_email = new_email.to_ascii_uppercase();
 
-        LoginDatabase::upd_email(LoginDatabase::get(), params!(&new_email, account_id))
-            .await
-            .map_err(db_internal("change_email error"))?;
+        LoginDatabase::upd_email(&mut *login_db, params!(&new_email, account_id)).await?;
         SCRIPT_MGR.read().await.on_email_change(account_id);
         Ok(())
     }
 
     pub async fn change_reg_email(account_id: u32, new_email: &str) -> AccountOpResult<()> {
-        if Self::get_name(account_id).await?.is_none() {
+        Self::change_reg_email_inner(&LoginDatabase::get(), account_id, new_email).await
+    }
+
+    pub(super) async fn change_reg_email_inner<'a, A: DbAcquire<'a>>(login_db: A, account_id: u32, new_email: &str) -> AccountOpResult<()> {
+        let mut login_db = login_db.acquire().await?;
+        if Self::get_name_inner(&mut *login_db, account_id).await?.is_none() {
             SCRIPT_MGR.read().await.on_failed_email_change(account_id);
             return Err(AccountOpError::NameNotExist); // account doesn't exist
         };
@@ -266,22 +286,28 @@ impl AccountMgr {
         }
         let new_email = new_email.to_ascii_uppercase();
 
-        LoginDatabase::upd_reg_email(LoginDatabase::get(), params!(&new_email, account_id))
-            .await
-            .map_err(db_internal("change_email error"))?;
+        LoginDatabase::upd_reg_email(&mut *login_db, params!(&new_email, account_id)).await?;
 
         SCRIPT_MGR.read().await.on_email_change(account_id);
         Ok(())
     }
 
     pub async fn check_password(account_id: u32, password: &str) -> bool {
-        let Some(username) = Self::get_name(account_id).await.ok().flatten() else {
+        Self::check_password_inner(&LoginDatabase::get(), account_id, password).await
+    }
+
+    pub(super) async fn check_password_inner<'a, A: DbAcquire<'a>>(login_db: A, account_id: u32, password: &str) -> bool {
+        let Ok(mut login_db) = login_db.acquire().await else {
+            return false;
+        };
+        let Some(username) = Self::get_name_inner(&mut *login_db, account_id).await.ok().flatten() else {
             return false;
         };
         let username = username.to_ascii_uppercase();
         let password = password.to_ascii_uppercase();
 
-        LoginDatabase::sel_check_password(LoginDatabase::get(), params!(account_id, Self::calculate_sha_pass_hash(&username, &password)))
+        let pass_hash = Self::calculate_sha_pass_hash(&username, &password);
+        LoginDatabase::sel_check_password(&mut *login_db, params!(account_id, pass_hash))
             .await
             .ok()
             .flatten()
@@ -289,8 +315,12 @@ impl AccountMgr {
     }
 
     pub async fn check_email(account_id: u32, new_email: &str) -> bool {
+        Self::check_email_inner(&LoginDatabase::get(), account_id, new_email).await
+    }
+
+    pub(super) async fn check_email_inner<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32, new_email: &str) -> bool {
         // We simply return false for a non-existing email
-        let Some(old_email) = Self::get_name(account_id).await.ok().flatten() else {
+        let Some(old_email) = Self::get_email_inner(login_db, account_id).await.ok().flatten() else {
             return false;
         };
         let old_email = old_email.to_ascii_uppercase();
@@ -300,48 +330,50 @@ impl AccountMgr {
     }
 
     pub async fn get_id(username: &str) -> AccountOpResult<Option<u32>> {
-        let id = LoginDatabase::get_account_id_by_username::<_, DbId>(LoginDatabase::get(), params!(username))
-            .await
-            .map_err(db_internal("error when getting account ID from DB"))?;
+        Self::get_id_inner(&LoginDatabase::get(), username).await
+    }
+
+    pub(super) async fn get_id_inner<'e, E: DbExecutor<'e>>(login_db: E, username: &str) -> AccountOpResult<Option<u32>> {
+        let id = LoginDatabase::get_account_id_by_username::<_, DbId>(login_db, params!(username)).await?;
         Ok(id.map(|v| v.id))
     }
 
-    pub async fn get_security(account_id: u32) -> AccountOpResult<AccountTypes> {
-        let sec = LoginDatabase::get_account_access_gmlevel::<_, (u8,)>(LoginDatabase::get(), params!(account_id))
-            .await
-            .map_err(db_internal("error when getting account security level from DB"))?;
-        Ok(sec.and_then(|sec| sec.0.try_into().ok()).unwrap_or(AccountTypes::SecPlayer))
+    pub async fn get_security(account_id: u32, realm_id: Option<u32>) -> AccountOpResult<AccountTypes> {
+        Self::get_security_inner(&LoginDatabase::get(), account_id, realm_id).await
     }
 
-    pub async fn get_security_by_realm_id(account_id: u32, realm_id: Option<u32>) -> AccountOpResult<AccountTypes> {
+    pub(super) async fn get_security_inner<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32, realm_id: Option<u32>) -> AccountOpResult<AccountTypes> {
         let realm_id_in_db = if let Some(realm_id) = realm_id { i64::from(realm_id) } else { -1 };
-        let sec = LoginDatabase::get_gmlevel_by_realmid::<_, (u8,)>(LoginDatabase::get(), params!(account_id, realm_id_in_db))
-            .await
-            .map_err(db_internal("error when getting account security level by realm_id from DB"))?;
+        let sec = LoginDatabase::get_gmlevel_by_realmid::<_, (u8,)>(login_db, params!(account_id, realm_id_in_db)).await?;
         Ok(sec.and_then(|sec| sec.0.try_into().ok()).unwrap_or(AccountTypes::SecPlayer))
     }
 
     pub async fn get_name(account_id: u32) -> AccountOpResult<Option<String>> {
-        let name = LoginDatabase::get_username_by_id::<_, (String,)>(LoginDatabase::get(), params!(account_id))
-            .await
-            .map_err(db_internal("error when getting account username from DB"))?;
+        Self::get_name_inner(&LoginDatabase::get(), account_id).await
+    }
 
+    pub(super) async fn get_name_inner<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32) -> AccountOpResult<Option<String>> {
+        let name = LoginDatabase::get_username_by_id::<_, (String,)>(login_db, params!(account_id)).await?;
         Ok(name.map(|n| n.0))
     }
 
     pub async fn get_email(account_id: u32) -> AccountOpResult<Option<String>> {
-        let email = LoginDatabase::get_email_by_id::<_, (String,)>(LoginDatabase::get(), params!(account_id))
-            .await
-            .map_err(db_internal("error when getting account email from DB"))?;
+        Self::get_email_inner(&LoginDatabase::get(), account_id).await
+    }
+
+    pub(super) async fn get_email_inner<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32) -> AccountOpResult<Option<String>> {
+        let email = LoginDatabase::get_email_by_id::<_, (String,)>(login_db, params!(account_id)).await?;
 
         Ok(email.map(|n| n.0))
     }
 
     pub async fn get_characters_count(account_id: u32) -> AccountOpResult<u64> {
+        Self::get_characters_count_inner(&CharacterDatabase::get(), account_id).await
+    }
+
+    pub(super) async fn get_characters_count_inner<'e, E: DbExecutor<'e>>(char_db: E, account_id: u32) -> AccountOpResult<u64> {
         // check character count
-        let counts = CharacterDatabase::sel_sum_chars::<_, (u64,)>(CharacterDatabase::get(), params!(account_id))
-            .await
-            .map_err(db_internal("error when getting char counts from DB"))?;
+        let counts = CharacterDatabase::sel_sum_chars::<_, (u64,)>(char_db, params!(account_id)).await?;
 
         Ok(counts.map(|n| n.0).unwrap_or(0))
     }
@@ -357,53 +389,62 @@ impl AccountMgr {
     }
 
     pub async fn is_banned_account(name: &str) -> AccountOpResult<bool> {
-        let is_not_banned = Self::list_banned_account_by_name(name).await?.is_empty();
+        Self::is_banned_account_inner(&LoginDatabase::get(), name).await
+    }
+
+    pub(super) async fn is_banned_account_inner<'e, E: DbExecutor<'e>>(login_db: E, name: &str) -> AccountOpResult<bool> {
+        let is_not_banned = Self::list_banned_account_by_name_inner(login_db, name).await?.is_empty();
         Ok(!is_not_banned)
     }
 
     pub async fn list_banned_account_by_name(name: &str) -> AccountOpResult<Vec<(u32, String)>> {
-        LoginDatabase::sel_account_banned_by_username(LoginDatabase::get(), params!(name))
-            .await
-            .map_err(db_internal("error listing banned accounts by name"))
+        Self::list_banned_account_by_name_inner(&LoginDatabase::get(), name).await
+    }
+
+    pub async fn list_banned_account_by_name_inner<'e, E: DbExecutor<'e>>(login_db: E, name: &str) -> AccountOpResult<Vec<(u32, String)>> {
+        Ok(LoginDatabase::sel_account_banned_by_username(login_db, params!(name)).await?)
     }
 
     pub async fn list_banned_account_all() -> AccountOpResult<Vec<(u32, String)>> {
-        LoginDatabase::sel_account_banned_all(LoginDatabase::get(), params!())
-            .await
-            .map_err(db_internal("error listing all banned accounts"))
+        Self::list_banned_account_all_inner(&LoginDatabase::get()).await
     }
 
-    pub async fn update_account_access(rbac: &mut RbacData, security_level: AccountTypes, realm_id: Option<u32>) -> AccountOpResult<()> {
-        let account_id = rbac.id;
-        rbac.set_security_level(security_level)
-            .await
-            .map_err(rbac_err_internal("set RBAC sec level error"))?;
-        LoginDatabase::get()
-            .acquire()
-            .await
-            .map_err(db_internal("unable to retrive connection for transaction to update account access"))?
-            .transaction(|txn| {
-                Box::pin(async move {
-                    // Delete old security level from DB,
-                    if let Some(realm_id) = realm_id {
-                        LoginDatabase::del_account_access_by_realm(&mut **txn, params!(account_id, realm_id)).await?;
-                    } else {
-                        LoginDatabase::del_account_access(&mut **txn, params!(account_id)).await?;
-                    }
-                    // also retrieve the realm_id to be saved in DB
-                    let realm_id_in_db = if let Some(realm_id) = realm_id { i64::from(realm_id) } else { -1 };
-                    let security_level_in_db = security_level.to_num();
-                    // Add new security level
-                    LoginDatabase::ins_account_access(&mut **txn, params!(account_id, security_level_in_db, realm_id_in_db)).await?;
+    pub(super) async fn list_banned_account_all_inner<'e, E: DbExecutor<'e>>(login_db: E) -> AccountOpResult<Vec<(u32, String)>> {
+        Ok(LoginDatabase::sel_account_banned_all(login_db, params!()).await?)
+    }
 
-                    Ok(())
-                })
-            })
-            .await
-            .map_err(db_internal("error updating account access in txn"))
+    pub async fn update_account_access(account_id: u32, security_level: AccountTypes, realm_id: Option<u32>) -> AccountOpResult<()> {
+        Self::update_account_access_inner(&LoginDatabase::get(), account_id, security_level, realm_id).await
+    }
+
+    pub(super) async fn update_account_access_inner<'a, A: DbAcquire<'a>>(
+        login_db: A,
+        account_id: u32,
+        security_level: AccountTypes,
+        realm_id: Option<u32>,
+    ) -> AccountOpResult<()> {
+        let mut txn = login_db.begin().await?;
+        // Delete old security level from DB,
+        if let Some(realm_id) = realm_id {
+            LoginDatabase::del_account_access_by_realm(&mut *txn, params!(account_id, realm_id)).await?;
+        } else {
+            LoginDatabase::del_account_access(&mut *txn, params!(account_id)).await?;
+        }
+        // also retrieve the realm_id to be saved in DB
+        let realm_id_in_db = if let Some(realm_id) = realm_id { i64::from(realm_id) } else { -1 };
+        let security_level_in_db = security_level.to_num();
+        // Add new security level
+        LoginDatabase::ins_account_access(&mut *txn, params!(account_id, security_level_in_db, realm_id_in_db)).await?;
+        txn.commit().await?;
+        Ok(())
     }
 
     pub async fn load_rbac(&mut self) -> AccountOpResult<()> {
+        self.load_rbac_inner(&LoginDatabase::get()).await
+    }
+
+    pub(super) async fn load_rbac_inner<'a, A: DbAcquire<'a>>(&mut self, login_db: A) -> AccountOpResult<()> {
+        let mut login_db = login_db.acquire().await?;
         self.clear_rbac();
 
         debug!(target:"rbac", "AccountMgr::LoadRBAC");
@@ -414,11 +455,9 @@ impl AccountMgr {
         let mut count3 = 0;
 
         debug!(target:"rbac", "AccountMgr::LoadRBAC: Loading permissions");
-        let login_db = LoginDatabase::get();
         let result = query_as::<_, RbacPermRow>("SELECT id, name FROM rbac_permissions")
-            .fetch_all(login_db)
-            .await
-            .map_err(db_internal("error loading rbac perms"))?;
+            .fetch_all(&mut *login_db)
+            .await?;
         if result.is_empty() {
             info!(target:"server::loading", ">> Loaded 0 account permission definitions. DB table `rbac_permissions` is empty.");
             return Ok(());
@@ -436,9 +475,8 @@ impl AccountMgr {
 
         debug!(target:"rbac", "AccountMgr::LoadRBAC: Loading linked permissions");
         let result = query_as::<_, RbacLinkedPermRow>("SELECT id, linkedId FROM rbac_linked_permissions ORDER BY id ASC")
-            .fetch_all(login_db)
-            .await
-            .map_err(db_internal("error loading rbac_linked_permissions"))?;
+            .fetch_all(&mut *login_db)
+            .await?;
         if result.is_empty() {
             info!(target:"server::loading", ">> Loaded 0 linked permissions. DB table `rbac_linked_permissions` is empty.");
             return Ok(());
@@ -465,9 +503,8 @@ impl AccountMgr {
             "SELECT secId, permissionId FROM rbac_default_permissions WHERE (realmId = ? OR realmId = -1) ORDER BY secId ASC",
         )
         .bind(CurrentRealm::get().id.realm)
-        .fetch_all(login_db)
-        .await
-        .map_err(db_internal("error loading rbac_default_permissions"))?;
+        .fetch_all(&mut *login_db)
+        .await?;
         if result.is_empty() {
             info!(target:"server::loading", ">> Loaded 0 default permission definitions. DB table `rbac_default_permissions` is empty.");
             return Ok(());
@@ -508,3 +545,359 @@ impl AccountMgr {
 }
 
 pub static ACCOUNT_MGR: AsyncRwLock<AccountMgr> = AsyncRwLock::const_new(AccountMgr::new());
+
+#[cfg(test)]
+mod tests {
+
+    use azothacore_database::database_env::SHARED_TEST_DB_PERMITS;
+    use sqlx::query;
+
+    use super::*;
+
+    async fn create_account_for_test<'a, A: DbAcquire<'a>>(login_db: A, user: &str, email: &str, password: &str) -> u32 {
+        let mut login_db = login_db.acquire().await.unwrap();
+
+        // Setup a dummy bnet account ID
+        LoginDatabase::ins_bnet_account(&mut *login_db, params!(&email, "dummy")).await.unwrap();
+        let (bnet_id,) = LoginDatabase::sel_bnet_account_id_by_email(&mut *login_db, params!(email))
+            .await
+            .ok()
+            .flatten()
+            .unwrap();
+
+        AccountMgr::create_account_inner(&mut *login_db, user, password, email, Some((bnet_id, 1)))
+            .await
+            .unwrap();
+
+        // Account ID must exist
+        AccountMgr::get_id_inner(&mut *login_db, user).await.ok().flatten().unwrap()
+    }
+
+    #[tokio::test]
+    async fn it_creates_account() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        // let _wg = azothacore_common::log::init_console();
+        // LoginDatabase::setup_for_test().await;
+        let mut txn = LoginDatabase::get().begin().await.unwrap();
+
+        let username = "name___with_20_chars";
+        let email = "sample_email_name_with_64_characters@domain____top.domain_bottom";
+        let password = "pwd_with_16_char";
+
+        // Account ID must exist
+        let account_id = create_account_for_test(&mut *txn, username, email, password).await;
+
+        let res = query_as::<_, (u32, u32)>("SELECT realmid,numchars from realmcharacters where acctid = ?")
+            .bind(account_id)
+            .fetch_all(&mut *txn)
+            .await
+            .unwrap();
+
+        // Has the realm_id 1 (Default) as well as 0.
+        assert_eq!(res, vec![(1, 0)]);
+
+        // Check that we cant create with same username
+        let res = AccountMgr::create_account_inner(&mut *txn, username, password, email, None).await;
+        assert!(matches!(res, Err(AccountOpError::NameAlreadyExist),), "expect no match but got this: {res:?}");
+
+        // test try several checks here
+        assert!(AccountMgr::check_password_inner(&mut *txn, account_id, password).await);
+        assert!(AccountMgr::check_email_inner(&mut *txn, account_id, email).await);
+        assert!(!AccountMgr::check_password_inner(&mut *txn, account_id, "WRONG_PASS").await);
+        assert!(!AccountMgr::check_email_inner(&mut *txn, account_id, "WRONG_EMAIL@WRONG.COM").await);
+        let non_existent_account = 9999;
+        assert!(!AccountMgr::check_password_inner(&mut *txn, non_existent_account, password).await);
+        assert!(!AccountMgr::check_email_inner(&mut *txn, non_existent_account, email).await);
+        assert_eq!(
+            AccountMgr::get_name_inner(&mut *txn, account_id).await.unwrap(),
+            Some(username.to_ascii_uppercase())
+        );
+
+        assert_eq!(
+            AccountMgr::get_email_inner(&mut *txn, account_id).await.unwrap(),
+            Some(email.to_ascii_uppercase())
+        );
+    }
+
+    #[tokio::test]
+    async fn it_cannot_create_account() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        assert!(matches!(
+            AccountMgr::create_account(&"a".repeat(MAX_ACCOUNT_STR + 1), "p1", "e1@e1.com", None).await,
+            Err(AccountOpError::NameTooLong)
+        ));
+        assert!(matches!(
+            AccountMgr::create_account("u1", &"a".repeat(MAX_PASS_STR + 1), "e1@e1.com", None).await,
+            Err(AccountOpError::PassTooLong)
+        ));
+        assert!(matches!(
+            AccountMgr::create_account("u1", "p1", &"a".repeat(MAX_EMAIL_STR + 1), None).await,
+            Err(AccountOpError::EmailTooLong)
+        ));
+    }
+
+    #[tokio::test]
+    async fn it_sets_account_access() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let mut txn = LoginDatabase::get().begin().await.unwrap();
+
+        let account_id = create_account_for_test(&mut *txn, "u", "e@e.e", "p").await;
+        // Init, account has no security => SEC_PLAYER
+        assert_eq!(
+            AccountMgr::get_security_inner(&mut *txn, account_id, Some(1)).await.unwrap(),
+            AccountTypes::SecPlayer
+        );
+        assert_eq!(
+            AccountMgr::get_security_inner(&mut *txn, account_id, None).await.unwrap(),
+            AccountTypes::SecPlayer
+        );
+
+        AccountMgr::update_account_access_inner(&mut *txn, account_id, AccountTypes::SecAdministrator, Some(1))
+            .await
+            .unwrap();
+        AccountMgr::update_account_access_inner(&mut *txn, account_id, AccountTypes::SecGamemaster, Some(2))
+            .await
+            .unwrap();
+        assert_eq!(
+            AccountMgr::get_security_inner(&mut *txn, account_id, Some(1)).await.unwrap(),
+            AccountTypes::SecAdministrator
+        );
+        assert_eq!(
+            AccountMgr::get_security_inner(&mut *txn, account_id, Some(2)).await.unwrap(),
+            AccountTypes::SecGamemaster
+        );
+        assert_eq!(
+            AccountMgr::get_security_inner(&mut *txn, account_id, None).await.unwrap(),
+            AccountTypes::SecPlayer
+        );
+
+        AccountMgr::update_account_access_inner(&mut *txn, account_id, AccountTypes::SecModerator, None)
+            .await
+            .unwrap();
+        assert_eq!(
+            AccountMgr::get_security_inner(&mut *txn, account_id, Some(1)).await.unwrap(),
+            AccountTypes::SecModerator
+        );
+        assert_eq!(
+            AccountMgr::get_security_inner(&mut *txn, account_id, Some(2)).await.unwrap(),
+            AccountTypes::SecModerator
+        );
+        assert_eq!(
+            AccountMgr::get_security_inner(&mut *txn, account_id, None).await.unwrap(),
+            AccountTypes::SecModerator
+        );
+    }
+
+    #[tokio::test]
+    async fn it_changes_username_password() {
+        // let _wg = azothacore_common::log::init_console();
+
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let mut txn = LoginDatabase::get().begin().await.unwrap();
+
+        let user1 = "user1";
+        let email = "example1@example.domain";
+        let password1 = "password1";
+        let account_id = create_account_for_test(&mut *txn, user1, email, password1).await;
+
+        let user2 = "user2";
+        let password2 = "password2";
+
+        AccountMgr::change_username_password_inner(&mut *txn, account_id, user1, password2)
+            .await
+            .unwrap();
+        assert!(AccountMgr::check_password_inner(&mut *txn, account_id, password2).await);
+        assert_eq!(
+            AccountMgr::get_name_inner(&mut *txn, account_id).await.unwrap(),
+            Some(user1.to_ascii_uppercase())
+        );
+
+        // Change username
+        AccountMgr::change_username_password_inner(&mut *txn, account_id, user2, password2)
+            .await
+            .unwrap();
+        assert!(AccountMgr::check_password_inner(&mut *txn, account_id, password2).await);
+        assert_eq!(
+            AccountMgr::get_name_inner(&mut *txn, account_id).await.unwrap(),
+            Some(user2.to_ascii_uppercase())
+        );
+
+        // Change both
+        AccountMgr::change_username_password_inner(&mut *txn, account_id, user1, password1)
+            .await
+            .unwrap();
+        assert!(AccountMgr::check_password_inner(&mut *txn, account_id, password1).await);
+        assert_eq!(
+            AccountMgr::get_name_inner(&mut *txn, account_id).await.unwrap(),
+            Some(user1.to_ascii_uppercase())
+        );
+
+        // Pass long
+        assert!(matches!(
+            AccountMgr::change_username_password_inner(&mut *txn, account_id, user1, &"a".repeat(MAX_PASS_STR + 1)).await,
+            Err(AccountOpError::PassTooLong)
+        ));
+
+        // Name long
+        assert!(matches!(
+            AccountMgr::change_username_password_inner(&mut *txn, account_id, &"a".repeat(MAX_ACCOUNT_STR + 1), password1).await,
+            Err(AccountOpError::NameTooLong)
+        ));
+    }
+
+    #[tokio::test]
+    async fn it_changes_password() {
+        // let _wg = azothacore_common::log::init_console();
+
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let mut txn = LoginDatabase::get().begin().await.unwrap();
+
+        let user1 = "user1";
+        let email = "example1@example.domain";
+        let password1 = "password1";
+        let account_id = create_account_for_test(&mut *txn, user1, email, password1).await;
+
+        let password2 = "password2";
+
+        AccountMgr::change_password_inner(&mut *txn, account_id, password2).await.unwrap();
+        assert!(AccountMgr::check_password_inner(&mut *txn, account_id, password2).await);
+    }
+
+    #[tokio::test]
+    async fn it_does_not_change_password_too_long() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let mut txn = LoginDatabase::get().begin().await.unwrap();
+
+        let user1 = "user1";
+        let email = "example1@example.domain";
+        let password1 = "password1";
+        let account_id = create_account_for_test(&mut *txn, user1, email, password1).await;
+
+        // Pass long
+        assert!(matches!(
+            AccountMgr::change_password_inner(&mut *txn, account_id, &"a".repeat(MAX_PASS_STR + 1)).await,
+            Err(AccountOpError::PassTooLong)
+        ));
+        assert!(AccountMgr::check_password_inner(&mut *txn, account_id, password1).await);
+    }
+
+    #[tokio::test]
+    async fn it_does_not_change_password_non_existent_account_id() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let non_exist_account_id = 9999;
+
+        assert!(matches!(
+            AccountMgr::change_password(non_exist_account_id, "123").await,
+            Err(AccountOpError::NameNotExist)
+        ));
+    }
+
+    #[tokio::test]
+    async fn it_changes_email() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let mut txn = LoginDatabase::get().begin().await.unwrap();
+
+        let user1 = "user1";
+        let email = "example1@example.domain";
+        let password1 = "password1";
+        let account_id = create_account_for_test(&mut *txn, user1, email, password1).await;
+
+        let email2 = "example2@example.domain";
+
+        AccountMgr::change_email_inner(&mut *txn, account_id, email2).await.unwrap();
+        assert!(AccountMgr::check_email_inner(&mut *txn, account_id, email2).await);
+    }
+
+    #[tokio::test]
+    async fn it_does_not_change_email_too_long() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let mut txn = LoginDatabase::get().begin().await.unwrap();
+
+        let user1 = "user1";
+        let email = "example1@example.domain";
+        let password1 = "password1";
+        let account_id = create_account_for_test(&mut *txn, user1, email, password1).await;
+
+        assert!(matches!(
+            AccountMgr::change_email_inner(&mut *txn, account_id, &"a".repeat(MAX_EMAIL_STR + 1)).await,
+            Err(AccountOpError::EmailTooLong)
+        ));
+        assert!(AccountMgr::check_email_inner(&mut *txn, account_id, email).await);
+    }
+
+    #[tokio::test]
+    async fn it_does_not_change_email_non_existent_account_id() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let non_exist_account_id = 9999;
+
+        assert!(matches!(
+            AccountMgr::change_email(non_exist_account_id, "123").await,
+            Err(AccountOpError::NameNotExist)
+        ));
+    }
+
+    async fn check_reg_email<'e, E: DbExecutor<'e>>(conn: E, account_id: u32, email: &str) -> bool {
+        query("SELECT 1 FROM account where id = ? AND reg_mail = ? LIMIT 1")
+            .bind(account_id)
+            .bind(email)
+            .fetch_optional(conn)
+            .await
+            .unwrap()
+            .is_some()
+    }
+
+    #[tokio::test]
+    async fn it_changes_reg_email() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let mut txn = LoginDatabase::get().begin().await.unwrap();
+
+        let user1 = "user1";
+        let email = "example1@example.domain";
+        let password1 = "password1";
+        let account_id = create_account_for_test(&mut *txn, user1, email, password1).await;
+
+        let email2 = "example2@example.domain";
+
+        AccountMgr::change_reg_email_inner(&mut *txn, account_id, email2).await.unwrap();
+        assert!(check_reg_email(&mut *txn, account_id, email2).await);
+    }
+
+    #[tokio::test]
+    async fn it_does_not_change_reg_email_too_long() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let mut txn = LoginDatabase::get().begin().await.unwrap();
+
+        let user1 = "user1";
+        let email = "example1@example.domain";
+        let password1 = "password1";
+        let account_id = create_account_for_test(&mut *txn, user1, email, password1).await;
+
+        assert!(matches!(
+            AccountMgr::change_reg_email_inner(&mut *txn, account_id, &"a".repeat(MAX_EMAIL_STR + 1)).await,
+            Err(AccountOpError::EmailTooLong)
+        ));
+        assert!(check_reg_email(&mut *txn, account_id, email).await);
+    }
+
+    #[tokio::test]
+    async fn it_does_not_change_reg_email_non_existent_account_id() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
+        let non_exist_account_id = 9999;
+
+        assert!(matches!(
+            AccountMgr::change_reg_email(non_exist_account_id, "123").await,
+            Err(AccountOpError::NameNotExist)
+        ));
+    }
+
+    // #[tokio::test]
+    // async fn it_loads_and_checks_rbac() {
+    // LoginDatabase::setup_for_test().await;
+
+    //     let mut amgr = ACCOUNT_MGR.write().await;
+    //     amgr.load_rbac()
+    //     amgr.get_rbac_permission()
+    //     amgr.clear_rbac()
+    //     amgr.get_rbac_default_permissions()
+    // }
+}

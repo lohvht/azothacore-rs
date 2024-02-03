@@ -1,5 +1,3 @@
-use std::sync::OnceLock;
-
 use sqlx::Pool;
 
 mod login_db {
@@ -41,6 +39,7 @@ pub use world_db::{HugSql as WorldPreparedStmts, WorldDatabase};
 
 use crate::DbDriver;
 
+#[cfg(not(feature = "test-utils"))]
 impl WorldDatabase {
     pub async fn close() {
         if let Some(pool) = WORLD_DB.get() {
@@ -48,8 +47,8 @@ impl WorldDatabase {
         }
     }
 
-    pub fn get() -> &'static Pool<DbDriver> {
-        WORLD_DB.get().expect("WorldDatabase is not initialised yet")
+    pub fn get() -> Pool<DbDriver> {
+        WORLD_DB.get().expect("WorldDatabase is not initialised yet").clone()
     }
 
     pub fn set(pool: Pool<DbDriver>) {
@@ -57,6 +56,7 @@ impl WorldDatabase {
     }
 }
 
+#[cfg(not(feature = "test-utils"))]
 impl CharacterDatabase {
     pub async fn close() {
         if let Some(pool) = CHARACTER_DB.get() {
@@ -64,8 +64,8 @@ impl CharacterDatabase {
         }
     }
 
-    pub fn get() -> &'static Pool<DbDriver> {
-        CHARACTER_DB.get().expect("CharacterDatabase is not initialised yet")
+    pub fn get() -> Pool<DbDriver> {
+        CHARACTER_DB.get().expect("CharacterDatabase is not initialised yet").clone()
     }
 
     pub fn set(pool: Pool<DbDriver>) {
@@ -73,6 +73,7 @@ impl CharacterDatabase {
     }
 }
 
+#[cfg(not(feature = "test-utils"))]
 impl LoginDatabase {
     pub async fn close() {
         if let Some(pool) = LOGIN_DB.get() {
@@ -80,8 +81,8 @@ impl LoginDatabase {
         }
     }
 
-    pub fn get() -> &'static Pool<DbDriver> {
-        LOGIN_DB.get().expect("LoginDatabase is not initialised yet")
+    pub fn get() -> Pool<DbDriver> {
+        LOGIN_DB.get().expect("LoginDatabase is not initialised yet").clone()
     }
 
     pub fn set(pool: Pool<DbDriver>) {
@@ -89,6 +90,7 @@ impl LoginDatabase {
     }
 }
 
+#[cfg(not(feature = "test-utils"))]
 impl HotfixDatabase {
     pub async fn close() {
         if let Some(pool) = HOTFIX_DB.get() {
@@ -96,8 +98,8 @@ impl HotfixDatabase {
         }
     }
 
-    pub fn get() -> &'static Pool<DbDriver> {
-        HOTFIX_DB.get().expect("HotfixDatabase is not initialised yet")
+    pub fn get() -> Pool<DbDriver> {
+        HOTFIX_DB.get().expect("HotfixDatabase is not initialised yet").clone()
     }
 
     pub fn set(pool: Pool<DbDriver>) {
@@ -105,7 +107,89 @@ impl HotfixDatabase {
     }
 }
 
-static WORLD_DB: OnceLock<Pool<DbDriver>> = OnceLock::new();
-static CHARACTER_DB: OnceLock<Pool<DbDriver>> = OnceLock::new();
-static LOGIN_DB: OnceLock<Pool<DbDriver>> = OnceLock::new();
-static HOTFIX_DB: OnceLock<Pool<DbDriver>> = OnceLock::new();
+#[cfg(not(feature = "test-utils"))]
+static WORLD_DB: std::sync::OnceLock<Pool<DbDriver>> = std::sync::OnceLock::new();
+#[cfg(not(feature = "test-utils"))]
+static CHARACTER_DB: std::sync::OnceLock<Pool<DbDriver>> = std::sync::OnceLock::new();
+#[cfg(not(feature = "test-utils"))]
+static LOGIN_DB: std::sync::OnceLock<Pool<DbDriver>> = std::sync::OnceLock::new();
+#[cfg(not(feature = "test-utils"))]
+static HOTFIX_DB: std::sync::OnceLock<Pool<DbDriver>> = std::sync::OnceLock::new();
+
+#[cfg(feature = "test-utils")]
+pub static SHARED_TEST_DB_PERMITS: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(1);
+
+#[cfg(feature = "test-utils")]
+fn get_test_pool(typ: azothacore_common::configuration::DatabaseType) -> Pool<DbDriver> {
+    dotenvy::from_filename(".test.env").ok();
+    let env_var = match typ {
+        azothacore_common::configuration::DatabaseType::Character => "CHARACTER_DATABASE_URL",
+        azothacore_common::configuration::DatabaseType::Hotfix => "HOTFIX_DATABASE_URL",
+        azothacore_common::configuration::DatabaseType::World => "WORLD_DATABASE_URL",
+        azothacore_common::configuration::DatabaseType::Login => "LOGIN_DATABASE_URL",
+        a => panic!("Not supported: {a:?}"),
+    };
+    let url = dotenvy::var(env_var).unwrap_or_else(|e| panic!("err={e}; env var must be set to run DB tests, check .env.test for {env_var}"));
+
+    sqlx::pool::PoolOptions::<DbDriver>::new()
+        .max_connections(5)
+        .idle_timeout(Some(::std::time::Duration::from_secs(30)))
+        .connect_lazy(&url)
+        .unwrap()
+}
+#[cfg(feature = "test-utils")]
+impl WorldDatabase {
+    pub async fn close() {
+        panic!("Test utils no need to close");
+    }
+
+    pub fn set(_pool: Pool<DbDriver>) {
+        panic!("Test utils no need to set");
+    }
+
+    pub fn get() -> Pool<DbDriver> {
+        get_test_pool(azothacore_common::configuration::DatabaseType::World)
+    }
+}
+#[cfg(feature = "test-utils")]
+impl CharacterDatabase {
+    pub async fn close() {
+        panic!("Test utils no need to close");
+    }
+
+    pub fn set(_pool: Pool<DbDriver>) {
+        panic!("Test utils no need to set");
+    }
+
+    pub fn get() -> Pool<DbDriver> {
+        get_test_pool(azothacore_common::configuration::DatabaseType::Character)
+    }
+}
+#[cfg(feature = "test-utils")]
+impl LoginDatabase {
+    pub async fn close() {
+        panic!("Test utils no need to close");
+    }
+
+    pub fn set(_pool: Pool<DbDriver>) {
+        panic!("Test utils no need to set");
+    }
+
+    pub fn get() -> Pool<DbDriver> {
+        get_test_pool(azothacore_common::configuration::DatabaseType::Login)
+    }
+}
+#[cfg(feature = "test-utils")]
+impl HotfixDatabase {
+    pub async fn close() {
+        panic!("Test utils no need to close");
+    }
+
+    pub fn set(_pool: Pool<DbDriver>) {
+        panic!("Test utils no need to set");
+    }
+
+    pub fn get() -> Pool<DbDriver> {
+        get_test_pool(azothacore_common::configuration::DatabaseType::Hotfix)
+    }
+}

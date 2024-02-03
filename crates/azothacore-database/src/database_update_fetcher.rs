@@ -24,7 +24,7 @@ use crate::{
     params,
     query,
     query_with,
-    DbDriver,
+    DbAcquire,
     DbExecutor,
     ExtendedDBInfo,
 };
@@ -113,10 +113,7 @@ impl<'c, 'l, 'd, 'u> UpdateFetcher<'c, 'l, 'd, 'u> {
     }
 
     #[instrument(skip(self, conn))]
-    async fn receive_included_directories<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
-        &self,
-        conn: A,
-    ) -> Result<impl Iterator<Item = (PathBuf, FetcherState)>, DatabaseLoaderError> {
+    async fn receive_included_directories<'a, A: DbAcquire<'a>>(&self, conn: A) -> Result<impl Iterator<Item = (PathBuf, FetcherState)>, DatabaseLoaderError> {
         let mut conn = conn.acquire().await?;
 
         let mut directories: Vec<(PathBuf, FetcherState)> = query("SELECT `path`, `state` FROM `updates_include`")
@@ -171,7 +168,7 @@ impl<'c, 'l, 'd, 'u> UpdateFetcher<'c, 'l, 'd, 'u> {
     }
 
     // #[instrument(skip(self, pool))]
-    async fn get_file_list<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(&self, conn: A) -> Result<Vec<(PathBuf, FetcherState)>, DatabaseLoaderError> {
+    async fn get_file_list<'a, A: DbAcquire<'a>>(&self, conn: A) -> Result<Vec<(PathBuf, FetcherState)>, DatabaseLoaderError> {
         let mut conn = conn.acquire().await?;
 
         const MAX_DEPTH: usize = 10;
@@ -208,10 +205,7 @@ impl<'c, 'l, 'd, 'u> UpdateFetcher<'c, 'l, 'd, 'u> {
     }
 
     #[instrument(skip(self, conn))]
-    async fn receive_applied_files<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
-        &self,
-        conn: A,
-    ) -> Result<BTreeMap<PathBuf, AppliedFileEntry>, DatabaseLoaderError> {
+    async fn receive_applied_files<'a, A: DbAcquire<'a>>(&self, conn: A) -> Result<BTreeMap<PathBuf, AppliedFileEntry>, DatabaseLoaderError> {
         let mut conn = conn.acquire().await?;
 
         let map = query("SELECT `name`, `hash`, `state`, `timestamp` FROM `updates` ORDER BY `name` ASC")
@@ -244,7 +238,7 @@ impl<'c, 'l, 'd, 'u> UpdateFetcher<'c, 'l, 'd, 'u> {
     }
 
     #[instrument(skip(self, conn))]
-    pub async fn update<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(&self, conn: A) -> Result<(usize, usize, usize), DatabaseLoaderError> {
+    pub async fn update<'a, A: DbAcquire<'a>>(&self, conn: A) -> Result<(usize, usize, usize), DatabaseLoaderError> {
         let mut conn = conn.acquire().await?;
 
         let available = self.get_file_list(&mut *conn).await?;
@@ -348,7 +342,7 @@ fn get_sha256_hash<P: AsRef<Path>>(fp: P) -> Result<String, DatabaseLoaderError>
 #[instrument(skip(pool))]
 async fn update_state<'e, E>(pool: E, file_name: &str, state: FetcherState) -> Result<(), DatabaseLoaderError>
 where
-    E: sqlx::Executor<'e, Database = DbDriver>,
+    E: DbExecutor<'e>,
 {
     query("UPDATE `updates` SET `state` = ? where `name` = ?").execute(pool).await?;
     Ok(())
@@ -360,7 +354,7 @@ where
     file_state=?file_state,
     update_cfg=?update_cfg,
 ))]
-async fn apply_update_file<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
+async fn apply_update_file<'a, A: DbAcquire<'a>>(
     cancel_token: CancellationToken,
     update_cfg: &DbUpdates,
     conn: A,
@@ -477,7 +471,7 @@ async fn apply_update_file<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
 }
 
 #[instrument(skip(conn))]
-async fn rename_entry<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(conn: A, from: &str, to: &str) -> Result<(), DatabaseLoaderError> {
+async fn rename_entry<'a, A: DbAcquire<'a>>(conn: A, from: &str, to: &str) -> Result<(), DatabaseLoaderError> {
     let mut conn = conn.acquire().await?;
     query("DELETE FROM `updates` WHERE `name`= ?").bind(to).execute(&mut *conn).await?;
     query_with("UPDATE `updates` SET `name`=? WHERE `name`=?", params!(to, from))

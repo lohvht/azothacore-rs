@@ -401,6 +401,7 @@ name = "azothacore-database"
 version = "0.1.0"
 dependencies = [
  "azothacore-common",
+ "dotenvy",
  "flate2",
  "futures-core",
  "hugsqlx",

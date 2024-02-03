@@ -173,7 +173,7 @@ fn main() -> AzResult<()> {
                 realm_id
             ),
         )
-        .execute(LoginDatabase::get())
+        .execute(&LoginDatabase::get())
         .await
     })?;
 
@@ -256,7 +256,7 @@ async fn start_db(cancel_token: CancellationToken, realm_id: u32) -> AzResult<()
 
     // Insert version info into DB
     query_with("UPDATE version SET core_version = ?, core_revision = ?", params!(GIT_VERSION, GIT_HASH))
-        .execute(WorldDatabase::get())
+        .execute(&WorldDatabase::get())
         .await?;
 
     let mut w = WORLD.write().await;
@@ -284,11 +284,11 @@ async fn clear_online_accounts(realm_id: u32) -> AzResult<()> {
     // Reset online status for all accounts with characters on the current realm
     // pussywizard: tc query would set online=0 even if logged in on another realm >_>
     query_with("UPDATE account SET online = ? WHERE online = ?", params!(false, realm_id))
-        .execute(LoginDatabase::get())
+        .execute(&LoginDatabase::get())
         .await?;
     // Reset online status for all characters
     query_with("UPDATE characters SET online = ? WHERE online <> ?", params!(false, false))
-        .execute(LoginDatabase::get())
+        .execute(&LoginDatabase::get())
         .await?;
 
     Ok(())

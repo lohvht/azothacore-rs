@@ -84,7 +84,7 @@ impl<'l, 'd, 'u> DatabaseLoader<'l, 'd, 'u> {
         if !self.database_config.updates_enabled() {
             return Ok(());
         }
-        if let Err(e) = db_updater_populate(self.cancel_token.clone(), pool, &self.database_config).await {
+        if let Err(e) = db_updater_populate(self.cancel_token.clone(), pool, self.database_config.base_files_dir()).await {
             error!(cause=%e, "Could not populate the {} database, see log for details.", self.database_config.DatabaseName,);
             return Err(e);
         };

@@ -36,7 +36,7 @@ impl WorldTrait for World {
 
     async fn load_db_version(&mut self) -> Result<(), WorldError> {
         let row = query_as("SELECT db_version, cache_id FROM version LIMIT 1")
-            .fetch_optional(WorldDatabase::get())
+            .fetch_optional(&WorldDatabase::get())
             .await?;
 
         let (db_version, conf_cache_version) = match row {

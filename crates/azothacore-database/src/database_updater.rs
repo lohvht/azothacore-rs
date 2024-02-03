@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use sqlx::Connection;
 use tokio_util::sync::CancellationToken;
 use tracing::{error, info, instrument, warn};
@@ -7,7 +9,7 @@ use crate::{
     database_loader_utils::{apply_file, DatabaseLoaderError},
     database_update_fetcher::UpdateFetcher,
     query,
-    DbDriver,
+    DbAcquire,
     DbExecutor,
     ExtendedDBInfo,
 };
@@ -26,11 +28,11 @@ pub async fn db_updater_create<'e, E: DbExecutor<'e>>(executor: E, cfg: &Extende
     Ok(())
 }
 
-#[instrument(skip(conn))]
-pub async fn db_updater_populate<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
+#[instrument(skip_all, fields(base_files_dir=%base_files_dir.as_ref().display()))]
+pub async fn db_updater_populate<'a, A: DbAcquire<'a>, P: AsRef<Path>>(
     cancel_token: CancellationToken,
     conn: A,
-    cfg: &ExtendedDBInfo<'_, '_>,
+    base_files_dir: P,
 ) -> Result<(), DatabaseLoaderError> {
     let mut conn = conn.acquire().await?;
 
@@ -38,9 +40,9 @@ pub async fn db_updater_populate<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
     if res.is_some() {
         return Ok(());
     }
-    info!("database '{}' is empty, auto populating it...", cfg.DatabaseName);
+    info!("database is empty, auto populating it from directory...");
 
-    let dir_path = cfg.base_files_dir();
+    let dir_path = base_files_dir.as_ref();
     if !dir_path.is_dir() {
         let path = format!("{}", dir_path.display());
         error!(">> Directory '{path}' not exist");
@@ -83,7 +85,7 @@ pub async fn db_updater_populate<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
 }
 
 #[instrument(skip(conn))]
-pub async fn db_updater_update<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
+pub async fn db_updater_update<'a, A: DbAcquire<'a>>(
     cancel_token: CancellationToken,
     conn: A,
     cfg: &ExtendedDBInfo<'_, '_>,
@@ -109,7 +111,7 @@ pub async fn db_updater_update<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
 }
 
 #[instrument(skip(conn))]
-async fn check_update_table<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
+async fn check_update_table<'a, A: DbAcquire<'a>>(
     cancel_token: CancellationToken,
     conn: A,
     cfg: &ExtendedDBInfo<'_, '_>,
@@ -123,12 +125,12 @@ async fn check_update_table<'a, A: sqlx::Acquire<'a, Database = DbDriver>>(
     }
     warn!("> Table '{}' not exist! Trying adding base table", table_name);
 
-    let mut f = cfg.base_files_dir();
-    f.push(format!("{table_name}.sql"));
+    let mut is_gz = false;
+    let mut f = cfg.base_files_dir().join("{table_name}.sql");
     if !f.exists() {
-        f.push(format!("{table_name}.sql.gz"));
+        f = cfg.base_files_dir().join("{table_name}.sql.gz");
+        is_gz = true;
     }
-    let is_gz = true;
 
     let db_name = cfg.DatabaseName.clone();
     conn.transaction(|tx| Box::pin(async move {

@@ -1012,7 +1012,7 @@ impl RbacData {
         // Do not save to db when loading data from DB realm_id: Option<u32>( = 0)
         if let Some(realm_id) = realm_id {
             let permission_id_in_u32 = permission_id.map_or_else(|e| e, |v| v.into());
-            LoginDatabase::del_rbac_account_permission(LoginDatabase::get(), params!(self.id, permission_id_in_u32, realm_id)).await?;
+            LoginDatabase::del_rbac_account_permission(&LoginDatabase::get(), params!(self.id, permission_id_in_u32, realm_id)).await?;
             trace!("RBACData::RevokePermission Ok and DB updated");
             self.remove_granted_permission(permission_id);
             self.remove_denied_permission(permission_id);
@@ -1042,7 +1042,7 @@ impl RbacData {
         }
 
         // Load account permissions (granted and denied) that affect current realm
-        let result = LoginDatabase::sel_rbac_account_permissions::<_, DbRbacAccountRow>(LoginDatabase::get(), params!(self.id, self.realm_id)).await?;
+        let result = LoginDatabase::sel_rbac_account_permissions::<_, DbRbacAccountRow>(&LoginDatabase::get(), params!(self.id, self.realm_id)).await?;
         for DbRbacAccountRow { permission_id, granted } in result {
             let permission_id = permission_id.try_into();
             if granted {
@@ -1073,7 +1073,7 @@ impl RbacData {
     // private:
     /// Saves a permission to DB, Granted or Denied
     async fn save_permission(&self, permission: RawRbacPermId, granted: bool, realm: u32) -> RbacCommandResult<()> {
-        let login_db = LoginDatabase::get();
+        let login_db = &LoginDatabase::get();
         let permission = permission.map_or_else(|e| e, |v| v.into());
         LoginDatabase::ins_rbac_account_permission(login_db, params!(self.id, permission, granted, realm)).await?;
         Ok(())

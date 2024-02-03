@@ -42,7 +42,7 @@ serde_default = "0"
 serde_json = "1"
 serde-inline-default = "0"
 sha2 = "0"
-sqlx = { version = "0", features = [ "runtime-tokio-rustls", "mysql", "chrono"] }
+sqlx = { version = "0", features = [ "runtime-tokio-rustls", "mysql", "chrono" ] }
 thiserror = { version = "1" }
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0" }

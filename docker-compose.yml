@@ -9,6 +9,7 @@ version: '3'
 services:
   database:
     image: mariadb:lts
+    profiles: ['']
     networks:
       - az-network
     ports:
@@ -29,9 +30,34 @@ services:
       interval: 5s
       timeout: 10s
       retries: 40
+  test-database:
+    image: mariadb:lts
+    profiles: [test]
+    networks:
+      - az-network
+    ports:
+      - 8893:3306
+    environment:
+      - MYSQL_ROOT_PASSWORD=password
+      - MYSQL_DATABASE=database
+    volumes:
+      - type: volume
+        source: test-az-database
+        target: /var/lib/mysql
+    command:
+      - mariadbd
+      - --max_allowed_packet
+      - "1073741824"
+    restart: unless-stopped
+    healthcheck:
+      test: "/usr/bin/mysql --user=root --password=$$MYSQL_ROOT_PASSWORD --execute \"SHOW DATABASES;\""
+      interval: 5s
+      timeout: 10s
+      retries: 40
 
 volumes:
   az-database:
+  test-az-database:
 
 networks:
   az-network:
