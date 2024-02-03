@@ -18,29 +18,13 @@ pub enum AccountOpError {
     NameAlreadyExist,
     #[error("AOR_NAME_NOT_EXIST")]
     NameNotExist,
-    #[error("AOR_DB_INTERNAL_ERROR")]
-    DbInternalError,
+    #[error("AOR_DB_INTERNAL_ERROR: {0}")]
+    DbInternalError(#[from] sqlx::Error),
     #[error("AOR_ACCOUNT_BAD_LINK")]
     AccountBadLink,
 }
 
 pub type AccountOpResult<T> = Result<T, AccountOpError>;
-
-// DB helpers for the whole module
-
-fn rbac_err_internal(msg: &str) -> impl FnOnce(RbacCommandError) -> AccountOpError + '_ {
-    move |e| {
-        error!(target:"rbac", cause=%e, msg);
-        AccountOpError::DbInternalError
-    }
-}
-
-fn db_internal(msg: &str) -> impl FnOnce(sqlx::Error) -> AccountOpError + '_ {
-    move |e| {
-        error!(target:"sql::sql", cause=%e, msg);
-        AccountOpError::DbInternalError
-    }
-}
 
 #[derive(sqlx::FromRow)]
 struct DbEmail {

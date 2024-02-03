@@ -112,80 +112,79 @@ impl AccountMgr {
     }
 
     // TODO: Implement me: DeleteAccount
-    // pub async fn delete_account(account_id: u32) -> AccountOpResult<()>
-    //     {
-    //         let login_db = &LoginDatabase::get();
-    //         let char_db = CharacterDatabase::get();
-    //         // Check if accounts exists
-    //         let exists = LoginDatabase::sel_account_by_id(login_db, params!(account_id)).await?.is_some();
-    //         if !exists {
-    //             return Err(AccountOpError::NameNotExist);
-    //         }
+    pub async fn delete_account(_account_id: u32) -> AccountOpResult<()> {
+        //         let login_db = &LoginDatabase::get();
+        //         let char_db = CharacterDatabase::get();
+        //         // Check if accounts exists
+        //         let exists = LoginDatabase::sel_account_by_id(login_db, params!(account_id)).await?.is_some();
+        //         if !exists {
+        //             return Err(AccountOpError::NameNotExist);
+        //         }
 
-    //         // Obtain accounts characters
-    //         let player_guids = CharacterDatabase::sel_chars_by_account_id::<_, (u64,)>(char_db, params!(account_id)).await;
+        //         // Obtain accounts characters
+        //         let player_guids = CharacterDatabase::sel_chars_by_account_id::<_, (u64,)>(char_db, params!(account_id)).await;
 
-    //         stmt->setUInt32(0, );
+        //         stmt->setUInt32(0, );
 
-    //         result = CharacterDatabase.Query(stmt);
+        //         result = CharacterDatabase.Query(stmt);
 
-    //         if (result)
-    //         {
-    //             do
-    //             {
-    //                 ObjectGuid guid = ObjectGuid::Create<HighGuid::Player>((*result)[0].GetUInt64());
+        //         if (result)
+        //         {
+        //             do
+        //             {
+        //                 ObjectGuid guid = ObjectGuid::Create<HighGuid::Player>((*result)[0].GetUInt64());
 
-    //                 // Kick if player is online
-    //                 if (Player* p = ObjectAccessor::FindConnectedPlayer(guid))
-    //                 {
-    //                     WorldSession* s = p->GetSession();
-    //                     s->KickPlayer();                            // mark session to remove at next session list update
-    //                     s->LogoutPlayer(false);                     // logout player without waiting next session list update
-    //                 }
+        //                 // Kick if player is online
+        //                 if (Player* p = ObjectAccessor::FindConnectedPlayer(guid))
+        //                 {
+        //                     WorldSession* s = p->GetSession();
+        //                     s->KickPlayer();                            // mark session to remove at next session list update
+        //                     s->LogoutPlayer(false);                     // logout player without waiting next session list update
+        //                 }
 
-    //                 Player::DeleteFromDB(guid, account_id, false);       // no need to update realm characters
-    //             } while (result->NextRow());
-    //         }
+        //                 Player::DeleteFromDB(guid, account_id, false);       // no need to update realm characters
+        //             } while (result->NextRow());
+        //         }
 
-    //         // table realm specific but common for all characters of account for realm
-    //         stmt = CharacterDatabase::del_tutorials(char_db, params!());
-    //         stmt->setUInt32(0, account_id);
-    //         CharacterDatabase.Execute(stmt);
+        //         // table realm specific but common for all characters of account for realm
+        //         stmt = CharacterDatabase::del_tutorials(char_db, params!());
+        //         stmt->setUInt32(0, account_id);
+        //         CharacterDatabase.Execute(stmt);
 
-    //         stmt = CharacterDatabase::del_account_data(char_db, params!());
-    //         stmt->setUInt32(0, account_id);
-    //         CharacterDatabase.Execute(stmt);
+        //         stmt = CharacterDatabase::del_account_data(char_db, params!());
+        //         stmt->setUInt32(0, account_id);
+        //         CharacterDatabase.Execute(stmt);
 
-    //         stmt = CharacterDatabase::del_character_ban(char_db, params!());
-    //         stmt->setUInt32(0, account_id);
-    //         CharacterDatabase.Execute(stmt);
+        //         stmt = CharacterDatabase::del_character_ban(char_db, params!());
+        //         stmt->setUInt32(0, account_id);
+        //         CharacterDatabase.Execute(stmt);
 
-    //         SQLTransaction trans = LoginDatabase.BeginTransaction();
+        //         SQLTransaction trans = LoginDatabase.BeginTransaction();
 
-    //         stmt = LoginDatabase::del_account(login_db, params!());
-    //         stmt->setUInt32(0, account_id);
-    //         trans->Append(stmt);
+        //         stmt = LoginDatabase::del_account(login_db, params!());
+        //         stmt->setUInt32(0, account_id);
+        //         trans->Append(stmt);
 
-    //         stmt = LoginDatabase::del_account_access(login_db, params!());
-    //         stmt->setUInt32(0, account_id);
-    //         trans->Append(stmt);
+        //         stmt = LoginDatabase::del_account_access(login_db, params!());
+        //         stmt->setUInt32(0, account_id);
+        //         trans->Append(stmt);
 
-    //         stmt = LoginDatabase::del_realm_characters(login_db, params!());
-    //         stmt->setUInt32(0, account_id);
-    //         trans->Append(stmt);
+        //         stmt = LoginDatabase::del_realm_characters(login_db, params!());
+        //         stmt->setUInt32(0, account_id);
+        //         trans->Append(stmt);
 
-    //         stmt = LoginDatabase::del_account_banned(login_db, params!());
-    //         stmt->setUInt32(0, account_id);
-    //         trans->Append(stmt);
+        //         stmt = LoginDatabase::del_account_banned(login_db, params!());
+        //         stmt->setUInt32(0, account_id);
+        //         trans->Append(stmt);
 
-    //         stmt = LoginDatabase::del_account_muted(login_db, params!());
-    //         stmt->setUInt32(0, account_id);
-    //         trans->Append(stmt);
+        //         stmt = LoginDatabase::del_account_muted(login_db, params!());
+        //         stmt->setUInt32(0, account_id);
+        //         trans->Append(stmt);
 
-    //         LoginDatabase.CommitTransaction(trans);
-
-    //         Ok(())
-    //     }
+        //         LoginDatabase.CommitTransaction(trans);
+        todo!("IMPLEMENT ME!");
+        //         Ok(())
+    }
 
     /// ChangeUsername in TC
     pub async fn change_username_password(account_id: u32, new_username: &str, new_password: &str) -> AccountOpResult<()> {
@@ -393,24 +392,10 @@ impl AccountMgr {
     }
 
     pub(super) async fn is_banned_account_inner<'e, E: DbExecutor<'e>>(login_db: E, name: &str) -> AccountOpResult<bool> {
-        let is_not_banned = Self::list_banned_account_by_name_inner(login_db, name).await?.is_empty();
+        let account_banned = LoginDatabase::sel_account_banned_by_username::<_, (u32, String)>(login_db, params!(name)).await?;
+
+        let is_not_banned = account_banned.is_empty();
         Ok(!is_not_banned)
-    }
-
-    pub async fn list_banned_account_by_name(name: &str) -> AccountOpResult<Vec<(u32, String)>> {
-        Self::list_banned_account_by_name_inner(&LoginDatabase::get(), name).await
-    }
-
-    pub async fn list_banned_account_by_name_inner<'e, E: DbExecutor<'e>>(login_db: E, name: &str) -> AccountOpResult<Vec<(u32, String)>> {
-        Ok(LoginDatabase::sel_account_banned_by_username(login_db, params!(name)).await?)
-    }
-
-    pub async fn list_banned_account_all() -> AccountOpResult<Vec<(u32, String)>> {
-        Self::list_banned_account_all_inner(&LoginDatabase::get()).await
-    }
-
-    pub(super) async fn list_banned_account_all_inner<'e, E: DbExecutor<'e>>(login_db: E) -> AccountOpResult<Vec<(u32, String)>> {
-        Ok(LoginDatabase::sel_account_banned_all(login_db, params!()).await?)
     }
 
     pub async fn update_account_access(account_id: u32, security_level: AccountTypes, realm_id: Option<u32>) -> AccountOpResult<()> {
@@ -440,10 +425,10 @@ impl AccountMgr {
     }
 
     pub async fn load_rbac(&mut self) -> AccountOpResult<()> {
-        self.load_rbac_inner(&LoginDatabase::get()).await
+        self.load_rbac_inner(&LoginDatabase::get(), CurrentRealm::get().id.realm).await
     }
 
-    pub(super) async fn load_rbac_inner<'a, A: DbAcquire<'a>>(&mut self, login_db: A) -> AccountOpResult<()> {
+    pub(super) async fn load_rbac_inner<'a, A: DbAcquire<'a>>(&mut self, login_db: A, realm_id: u32) -> AccountOpResult<()> {
         let mut login_db = login_db.acquire().await?;
         self.clear_rbac();
 
@@ -502,7 +487,7 @@ impl AccountMgr {
         let result = query_as::<_, RbacDefaultPermRow>(
             "SELECT secId, permissionId FROM rbac_default_permissions WHERE (realmId = ? OR realmId = -1) ORDER BY secId ASC",
         )
-        .bind(CurrentRealm::get().id.realm)
+        .bind(realm_id)
         .fetch_all(&mut *login_db)
         .await?;
         if result.is_empty() {
@@ -553,6 +538,7 @@ mod tests {
     use sqlx::query;
 
     use super::*;
+    use crate::game::accounts::rbac::RbacPermId;
 
     async fn create_account_for_test<'a, A: DbAcquire<'a>>(login_db: A, user: &str, email: &str, password: &str) -> u32 {
         let mut login_db = login_db.acquire().await.unwrap();
@@ -783,7 +769,6 @@ mod tests {
 
     #[tokio::test]
     async fn it_does_not_change_password_non_existent_account_id() {
-        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
         let non_exist_account_id = 9999;
 
         assert!(matches!(
@@ -827,7 +812,6 @@ mod tests {
 
     #[tokio::test]
     async fn it_does_not_change_email_non_existent_account_id() {
-        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
         let non_exist_account_id = 9999;
 
         assert!(matches!(
@@ -881,7 +865,6 @@ mod tests {
 
     #[tokio::test]
     async fn it_does_not_change_reg_email_non_existent_account_id() {
-        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
         let non_exist_account_id = 9999;
 
         assert!(matches!(
@@ -890,14 +873,74 @@ mod tests {
         ));
     }
 
-    // #[tokio::test]
-    // async fn it_loads_and_checks_rbac() {
-    // LoginDatabase::setup_for_test().await;
+    #[tokio::test]
+    async fn it_checks_banned_accounts() {
+        let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
 
-    //     let mut amgr = ACCOUNT_MGR.write().await;
-    //     amgr.load_rbac()
-    //     amgr.get_rbac_permission()
-    //     amgr.clear_rbac()
-    //     amgr.get_rbac_default_permissions()
-    // }
+        let password = "1234";
+        let user = "account1";
+        let banned_user = "account2";
+
+        assert!(!AccountMgr::is_banned_account(user).await.unwrap());
+
+        let mut txn = LoginDatabase::get().begin().await.unwrap();
+
+        create_account_for_test(&mut *txn, user, "email@email.com", password).await;
+        // Make banned account
+        let banned_account_id = create_account_for_test(&mut *txn, banned_user, "email2@email.com", password).await;
+        LoginDatabase::ins_account_banned(&mut *txn, params!(banned_account_id, 300, "ban_author", "ban_reason"))
+            .await
+            .unwrap();
+
+        assert!(!AccountMgr::is_banned_account_inner(&mut *txn, user).await.unwrap());
+        assert!(AccountMgr::is_banned_account_inner(&mut *txn, banned_user).await.unwrap());
+    }
+
+    #[tokio::test]
+    async fn it_loads_and_checks_rbac() {
+        CurrentRealm::setup_test();
+        let mut amgr = ACCOUNT_MGR.write().await;
+        amgr.load_rbac().await.unwrap();
+
+        for (sec_level, expected) in [
+            (AccountTypes::SecPlayer, Some(&BTreeSet::from_iter([Err(195)]))),
+            (AccountTypes::SecModerator, Some(&BTreeSet::from_iter([Err(194)]))),
+            (AccountTypes::SecGamemaster, Some(&BTreeSet::from_iter([Err(193)]))),
+            (AccountTypes::SecAdministrator, Some(&BTreeSet::from_iter([Err(192)]))),
+            (AccountTypes::SecConsole, None),
+        ] {
+            let got = amgr.get_rbac_default_permissions(sec_level);
+            assert_eq!(got, expected);
+        }
+
+        for (perm_id, expected) in [
+            (
+                195.try_into(),
+                Some(&RbacPermission {
+                    id:                 195.try_into(),
+                    name:               "Role: Sec Level Player".to_string(),
+                    linked_permissions: BTreeSet::from_iter([
+                        Ok(RbacPermId::JoinNormalBg),
+                        Ok(RbacPermId::JoinRandomBg),
+                        Ok(RbacPermId::JoinArenas),
+                        Ok(RbacPermId::JoinDungeonFinder),
+                        Ok(RbacPermId::TwoSideCharacterCreation),
+                        Ok(RbacPermId::EmailConfirmForPassChange),
+                        Err(199),
+                    ]),
+                }),
+            ),
+            (
+                Ok(RbacPermId::AllowTwoSideTrade),
+                Some(&RbacPermission {
+                    id:                 Ok(RbacPermId::AllowTwoSideTrade),
+                    name:               "Allow trading between factions".to_string(),
+                    linked_permissions: BTreeSet::new(),
+                }),
+            ),
+        ] {
+            let got = amgr.get_rbac_permission(perm_id);
+            assert_eq!(got, expected);
+        }
+    }
 }

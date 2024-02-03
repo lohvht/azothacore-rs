@@ -801,6 +801,7 @@ pub enum RbacCommandError {
     IdDoesNotExists,
 }
 
+#[derive(Debug, PartialEq, Eq)]
 pub struct RbacPermission {
     /// id of the object
     pub id:                 RawRbacPermId,
