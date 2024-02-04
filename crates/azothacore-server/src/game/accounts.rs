@@ -1,12 +1,10 @@
 use tracing::error;
 
-use self::rbac::RbacCommandError;
-
 pub mod account_mgr;
 pub mod battlenet_account_mgr;
 pub mod rbac;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq)]
 pub enum AccountOpError {
     #[error("AOR_NAME_TOO_LONG")]
     NameTooLong,
@@ -19,29 +17,16 @@ pub enum AccountOpError {
     #[error("AOR_NAME_NOT_EXIST")]
     NameNotExist,
     #[error("AOR_DB_INTERNAL_ERROR: {0}")]
-    DbInternalError(#[from] sqlx::Error),
+    DbInternalError(String),
     #[error("AOR_ACCOUNT_BAD_LINK")]
     AccountBadLink,
 }
 
+impl From<sqlx::Error> for AccountOpError {
+    fn from(value: sqlx::Error) -> Self {
+        error!(target: "sql::sql", cause=%value, "DB error on account related operation");
+        Self::DbInternalError(value.to_string())
+    }
+}
+
 pub type AccountOpResult<T> = Result<T, AccountOpError>;
-
-#[derive(sqlx::FromRow)]
-struct DbEmail {
-    email: String,
-}
-
-#[derive(sqlx::FromRow)]
-struct DbId {
-    id: u32,
-}
-
-#[derive(sqlx::FromRow)]
-struct DbBattlenetAccount {
-    battlenet_account: u32,
-}
-
-#[derive(sqlx::FromRow)]
-struct DbBnetMaxIndex {
-    bnet_max_index: u8,
-}

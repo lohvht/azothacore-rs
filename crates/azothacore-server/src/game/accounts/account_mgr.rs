@@ -16,7 +16,6 @@ use super::{
     rbac::{RawRbacPermId, RbacPermission},
     AccountOpError,
     AccountOpResult,
-    DbId,
 };
 use crate::game::{scripting::script_mgr::SCRIPT_MGR, world::CurrentRealm};
 
@@ -333,8 +332,8 @@ impl AccountMgr {
     }
 
     pub(super) async fn get_id_inner<'e, E: DbExecutor<'e>>(login_db: E, username: &str) -> AccountOpResult<Option<u32>> {
-        let id = LoginDatabase::get_account_id_by_username::<_, DbId>(login_db, params!(username)).await?;
-        Ok(id.map(|v| v.id))
+        let id = LoginDatabase::get_account_id_by_username::<_, (u32,)>(login_db, params!(username)).await?;
+        Ok(id.map(|v| v.0))
     }
 
     pub async fn get_security(account_id: u32, realm_id: Option<u32>) -> AccountOpResult<AccountTypes> {
@@ -563,7 +562,6 @@ mod tests {
     async fn it_creates_account() {
         let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
         // let _wg = azothacore_common::log::init_console();
-        // LoginDatabase::setup_for_test().await;
         let mut txn = LoginDatabase::get().begin().await.unwrap();
 
         let username = "name___with_20_chars";
@@ -584,7 +582,7 @@ mod tests {
 
         // Check that we cant create with same username
         let res = AccountMgr::create_account_inner(&mut *txn, username, password, email, None).await;
-        assert!(matches!(res, Err(AccountOpError::NameAlreadyExist),), "expect no match but got this: {res:?}");
+        assert_eq!(res, Err(AccountOpError::NameAlreadyExist), "expect no match but got this: {res:?}");
 
         // test try several checks here
         assert!(AccountMgr::check_password_inner(&mut *txn, account_id, password).await);
@@ -608,18 +606,18 @@ mod tests {
     #[tokio::test]
     async fn it_cannot_create_account() {
         let _p = SHARED_TEST_DB_PERMITS.acquire().await.unwrap();
-        assert!(matches!(
+        assert_eq!(
             AccountMgr::create_account(&"a".repeat(MAX_ACCOUNT_STR + 1), "p1", "e1@e1.com", None).await,
             Err(AccountOpError::NameTooLong)
-        ));
-        assert!(matches!(
+        );
+        assert_eq!(
             AccountMgr::create_account("u1", &"a".repeat(MAX_PASS_STR + 1), "e1@e1.com", None).await,
             Err(AccountOpError::PassTooLong)
-        ));
-        assert!(matches!(
+        );
+        assert_eq!(
             AccountMgr::create_account("u1", "p1", &"a".repeat(MAX_EMAIL_STR + 1), None).await,
             Err(AccountOpError::EmailTooLong)
-        ));
+        );
     }
 
     #[tokio::test]
@@ -719,16 +717,16 @@ mod tests {
         );
 
         // Pass long
-        assert!(matches!(
+        assert_eq!(
             AccountMgr::change_username_password_inner(&mut *txn, account_id, user1, &"a".repeat(MAX_PASS_STR + 1)).await,
             Err(AccountOpError::PassTooLong)
-        ));
+        );
 
         // Name long
-        assert!(matches!(
+        assert_eq!(
             AccountMgr::change_username_password_inner(&mut *txn, account_id, &"a".repeat(MAX_ACCOUNT_STR + 1), password1).await,
             Err(AccountOpError::NameTooLong)
-        ));
+        );
     }
 
     #[tokio::test]
@@ -760,10 +758,10 @@ mod tests {
         let account_id = create_account_for_test(&mut *txn, user1, email, password1).await;
 
         // Pass long
-        assert!(matches!(
+        assert_eq!(
             AccountMgr::change_password_inner(&mut *txn, account_id, &"a".repeat(MAX_PASS_STR + 1)).await,
             Err(AccountOpError::PassTooLong)
-        ));
+        );
         assert!(AccountMgr::check_password_inner(&mut *txn, account_id, password1).await);
     }
 
@@ -771,10 +769,10 @@ mod tests {
     async fn it_does_not_change_password_non_existent_account_id() {
         let non_exist_account_id = 9999;
 
-        assert!(matches!(
+        assert_eq!(
             AccountMgr::change_password(non_exist_account_id, "123").await,
             Err(AccountOpError::NameNotExist)
-        ));
+        );
     }
 
     #[tokio::test]
@@ -803,10 +801,10 @@ mod tests {
         let password1 = "password1";
         let account_id = create_account_for_test(&mut *txn, user1, email, password1).await;
 
-        assert!(matches!(
+        assert_eq!(
             AccountMgr::change_email_inner(&mut *txn, account_id, &"a".repeat(MAX_EMAIL_STR + 1)).await,
             Err(AccountOpError::EmailTooLong)
-        ));
+        );
         assert!(AccountMgr::check_email_inner(&mut *txn, account_id, email).await);
     }
 
@@ -814,10 +812,7 @@ mod tests {
     async fn it_does_not_change_email_non_existent_account_id() {
         let non_exist_account_id = 9999;
 
-        assert!(matches!(
-            AccountMgr::change_email(non_exist_account_id, "123").await,
-            Err(AccountOpError::NameNotExist)
-        ));
+        assert_eq!(AccountMgr::change_email(non_exist_account_id, "123").await, Err(AccountOpError::NameNotExist));
     }
 
     async fn check_reg_email<'e, E: DbExecutor<'e>>(conn: E, account_id: u32, email: &str) -> bool {
@@ -856,10 +851,10 @@ mod tests {
         let password1 = "password1";
         let account_id = create_account_for_test(&mut *txn, user1, email, password1).await;
 
-        assert!(matches!(
+        assert_eq!(
             AccountMgr::change_reg_email_inner(&mut *txn, account_id, &"a".repeat(MAX_EMAIL_STR + 1)).await,
             Err(AccountOpError::EmailTooLong)
-        ));
+        );
         assert!(check_reg_email(&mut *txn, account_id, email).await);
     }
 
@@ -867,10 +862,10 @@ mod tests {
     async fn it_does_not_change_reg_email_non_existent_account_id() {
         let non_exist_account_id = 9999;
 
-        assert!(matches!(
+        assert_eq!(
             AccountMgr::change_reg_email(non_exist_account_id, "123").await,
             Err(AccountOpError::NameNotExist)
-        ));
+        );
     }
 
     #[tokio::test]

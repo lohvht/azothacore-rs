@@ -9,7 +9,6 @@ edition = "2021"
 anyhow = { version = "1" }
 bincode = { version = "1" }
 chrono.workspace = true
-console-subscriber = { version = "0" }
 const_format = { version = "0" }
 convert_case = { version = "0" }
 flagset.workspace = true

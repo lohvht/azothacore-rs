@@ -331,7 +331,7 @@ pub fn init<P: AsRef<Path>>(logs_dir: P, appenders: &[LogAppender], loggers: &[L
         layers.push(layer.with_filter(filter_fn));
         guards.append(&mut f_guard);
     }
-    let subscriber = ts::Registry::default().with(layers).with(console_subscriber::spawn());
+    let subscriber = ts::Registry::default().with(layers);
     set_global_default(subscriber).expect("Failed to set subscriber");
     LogGuard { _guards: guards }
 }

@@ -3,9 +3,6 @@ name = "azothacore-server"
 version = "0.0.0"
 edition = "2021"
 
-[profile.dev.package.sqlx-macros]
-opt-level = 3
-
 [dev-dependencies]
 # Local crates
 azothacore-database = { path = "../azothacore-database", features = ["test-utils"] }

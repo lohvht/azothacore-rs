@@ -48,7 +48,7 @@ pub async fn db_updater_populate<'a, A: DbAcquire<'a>, P: AsRef<Path>>(
         error!(">> Directory '{path}' not exist");
         return Err(DatabaseLoaderError::NoBaseDirToPopulate { path });
     }
-    let files = WalkDir::new(&dir_path)
+    let files = WalkDir::new(dir_path)
         .sort_by(|a, b| a.path().cmp(b.path()))
         .into_iter()
         .filter_map(|e| {
