@@ -236,9 +236,16 @@ SELECT mutedate, mutetime, mutereason, mutedby FROM account_muted WHERE guid = ?
 DELETE FROM account_muted WHERE guid = ?;
 
 -- :name sel_bnet_authentication :typed :?
-SELECT ba.id, ba.sha_pass_hash, ba.failed_logins, ba.LoginTicket, ba.LoginTicketExpiry, (bab.unbandate > UNIX_TIMESTAMP() OR bab.unbandate = bab.bandate) as is_banned FROM battlenet_accounts ba LEFT JOIN battlenet_account_bans bab ON ba.id = bab.id WHERE email = ?;
+SELECT
+    ba.id as account_id,
+    ba.sha_pass_hash as pass_hash,
+    ba.failed_logins as failed_logins,
+    ba.LoginTicket as login_ticket,
+    ba.LoginTicketExpiry as login_ticket_expiry,
+    (bab.unbandate > UNIX_TIMESTAMP() OR bab.unbandate = bab.bandate) as is_banned
+FROM battlenet_accounts ba LEFT JOIN battlenet_account_bans bab ON ba.id = bab.id WHERE email = ?;
 
--- :name upd_bnet_authentication,
+-- :name upd_bnet_authentication
 UPDATE battlenet_accounts SET LoginTicket = ?, LoginTicketExpiry = ? WHERE id = ?;
 
 -- :name sel_bnet_existing_authentication :?
@@ -247,15 +254,35 @@ SELECT LoginTicketExpiry FROM battlenet_accounts WHERE LoginTicket = ?;
 -- :name upd_bnet_existing_authentication
 UPDATE battlenet_accounts SET LoginTicketExpiry = ? WHERE LoginTicket = ?;
 
--- :name sel_bnet_account_info :*
--- :doc 0: bytes like
+
+-- :name sel_bnet_account_info_by_bnet_login_ticket :typed :?
+-- :doc this replaces TC's single sel_bnet_account_info query.
+-- It aims to split the single query to 2 queries. This one gets the bnet account info
 SELECT
--- BnetAccountInfo
-ba.id, UPPER(ba.email), ba.locked, ba.lock_country, ba.last_ip, ba.LoginTicketExpiry, bab.unbandate > UNIX_TIMESTAMP() OR bab.unbandate = bab.bandate, bab.unbandate = bab.bandate,
--- BnetGameAccountInfo
-a.id, a.username, ab.unbandate, ab.unbandate = ab.bandate, aa.gmlevel
+ba.id as id,
+UPPER(ba.email) as `login`,
+ba.locked as is_locked_to_ip,
+ba.lock_country as lock_country,
+ba.last_ip as last_ip,
+ba.LoginTicketExpiry as login_ticket_expiry,
+(bab.unbandate > UNIX_TIMESTAMP() OR bab.unbandate = bab.bandate) as is_banned,
+(bab.unbandate = bab.bandate) as is_permanently_banned
 FROM battlenet_accounts ba
 LEFT JOIN battlenet_account_bans bab ON ba.id = bab.id
+WHERE
+    ba.LoginTicket = ?;
+
+-- :name sel_game_account_info_by_bnet_login_ticket :typed :*
+-- :doc this replaces TC's single sel_bnet_account_info query.
+-- it aims to split the single query to 2 queries. THis one gets the game account info.
+SELECT
+-- BnetGameAccountInfo
+a.id as id,
+a.username as `name`,
+ab.unbandate as unban_date,
+(ab.unbandate = ab.bandate) as is_permanently_banned,
+aa.gmlevel as security_level
+FROM battlenet_accounts ba
 LEFT JOIN account a ON ba.id = a.battlenet_account
 LEFT JOIN account_banned ab ON a.id = ab.id AND ab.active = 1
 LEFT JOIN account_access aa ON a.id = aa.id AND aa.RealmID = -1

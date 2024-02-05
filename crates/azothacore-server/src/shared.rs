@@ -58,29 +58,15 @@ where
     }
 }
 
-/// NOTE: This matches the zlib use for bnetrpc in TC/AC code, check if this is strict though
-/// Could be possible to use a higher level impl
-// pub fn bnetrpc_zcompress(json: Vec<u8>) -> Option<Vec<u8>> {
-//     use libz_sys::{compress, compressBound, Z_OK};
-//     let mut compressed_length = unsafe { compressBound(json.len() as u64) };
-//     let mut compressed = vec![0; compressed_length as usize + 4];
-//     let payload_eventual_size_in_bytes = u32::try_from(json.len() + 1).unwrap().to_le_bytes();
-//     compressed[..4].clone_from_slice(&payload_eventual_size_in_bytes);
-
-//     if unsafe { compress(compressed[4..].as_mut_ptr(), &mut compressed_length, json.as_ptr(), json.len() as u64 + 1) == Z_OK } {
-//         compressed.resize(compressed_length as usize, 0);
-//         Some(compressed)
-//     } else {
-//         None
-//     }
-// }
-
-pub fn bnetrpc_zcompress(json: Vec<u8>) -> io::Result<Vec<u8>> {
+pub fn bnetrpc_zcompress(mut json: Vec<u8>) -> io::Result<Vec<u8>> {
     use flate2::{write::ZlibEncoder, Compression};
-    // use libz_sys::{compress, compressBound, deflate};
+    json.push(b'\0');
+    let mut compressed = u32::try_from(json.len()).unwrap().to_le_bytes().to_vec();
 
     // Starts with the total eventual size
-    let mut e = ZlibEncoder::new(Vec::from(u32::try_from(json.len() + 1).unwrap().to_le_bytes()), Compression::default());
+    let mut e = ZlibEncoder::new(vec![], Compression::default());
     e.write_all(&json)?;
-    e.flush_finish()
+    let mut res = e.finish()?;
+    compressed.append(&mut res);
+    Ok(compressed)
 }

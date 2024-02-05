@@ -332,7 +332,7 @@ impl LoginRESTService {
     async fn handle_post_login(
         State(state): State<LoginServiceRequestContext>,
         WithRejection(Json(login_form), _): WithRejection<Json<LoginForm>, PostLoginError>,
-    ) -> (StatusCode, Json<LoginResult>) {
+    ) -> impl IntoResponse {
         // following similar to TC's logic
         let error_response = LoginResult {
             authentication_state: AuthenticationState::DONE,
@@ -346,7 +346,7 @@ impl LoginRESTService {
                 match $res {
                     Err(e) => {
                         tracing::error!(target:"server::rest", "{}: err={e:?}", $msg);
-                        return (StatusCode::OK, Json(error_response));
+                        return (StatusCode::OK,  [("Content-Type", "application/json;charset=utf-8")],Json(error_response));
                     },
                     Ok(o) => o
                 }
@@ -370,6 +370,7 @@ impl LoginRESTService {
                 error!(target:"server::rest", "no login details found in request");
                 return (
                     StatusCode::UNAUTHORIZED,
+                    [("Content-Type", "application/json;charset=utf-8")],
                     Json(LoginResult {
                         authentication_state: AuthenticationState::LOGIN,
                         error_code:           Some("UNAUTHORIZED".to_string()),
@@ -383,17 +384,12 @@ impl LoginRESTService {
 
         #[derive(sqlx::FromRow)]
         struct BnetAuth {
-            #[sqlx(rename = "ba.id")]
             account_id:          u32,
-            #[sqlx(rename = "ba.sha_pass_hash")]
             pass_hash:           String,
-            #[sqlx(rename = "ba.failed_logins")]
             failed_logins:       u64,
-            #[sqlx(rename = "ba.LoginTicket")]
-            login_ticket:        String,
-            #[sqlx(rename = "ba.LoginTicketExpiry")]
-            login_ticket_expiry: u64,
-            is_banned:           u64,
+            login_ticket:        Option<String>,
+            login_ticket_expiry: Option<u64>,
+            is_banned:           Option<bool>,
         }
 
         let login_db = &LoginDatabase::get();
@@ -403,7 +399,7 @@ impl LoginRESTService {
         ) {
             None => {
                 debug!(target:"server::rest", "no login details found in DB");
-                return (StatusCode::OK, Json(error_response));
+                return (StatusCode::OK, [("Content-Type", "application/json;charset=utf-8")], Json(error_response));
             },
             Some(o) => o,
         };
@@ -417,32 +413,34 @@ impl LoginRESTService {
             login_ticket_expiry,
             is_banned,
         } = fields;
-        let is_banned = is_banned != 0;
+        let is_banned = is_banned.map_or(false, |b| b);
 
         let now = unix_now().as_secs();
         if sent_password_hash == pass_hash {
-            if login_ticket.is_empty() || login_ticket_expiry < now {
-                login_ticket = format!("AZ-{}", hex_str!(OsRng.gen::<[u8; 20]>()));
+            if login_ticket.is_none() || login_ticket_expiry.map_or(true, |exp_ts| exp_ts < now) {
+                login_ticket = Some(format!("AZ-{}", hex_str!(OsRng.gen::<[u8; 20]>())));
             }
-            let res = LoginDatabase::upd_bnet_authentication(login_db, params!(&login_ticket, now + this.login_ticket_duration.as_secs(), account_id)).await;
+            let new_expiry = now + this.login_ticket_duration.as_secs();
+            let res = LoginDatabase::upd_bnet_authentication(login_db, params!(&login_ticket, new_expiry, account_id)).await;
             if res.is_ok() {
                 return (
                     StatusCode::OK,
+                    [("Content-Type", "application/json;charset=utf-8")],
                     Json(LoginResult {
                         authentication_state: AuthenticationState::DONE,
-                        login_ticket: Some(login_ticket),
+                        login_ticket,
                         ..LoginResult::default()
                     }),
                 );
             }
-            debug!(target:"server::rest", "error somehow when calling DB to update bnet auth: err={res:?}");
+            warn!(target:"server::rest", "error somehow when calling DB to update bnet auth: err={res:?}");
         } else if !is_banned {
             let ip_address = state.source_ip.ip();
             let Some(wrong_pass) = &this.wrong_pass else {
-                return (StatusCode::OK, Json(error_response));
+                return (StatusCode::OK, [("Content-Type", "application/json;charset=utf-8")], Json(error_response));
             };
             if !wrong_pass.Logging {
-                debug!(target:"server::rest", ip_address=ip_address.to_string(), login=login, account_id=account_id, "Attempted to connect with wrong password!");
+                warn!(target:"server::rest", ip_address=ip_address.to_string(), login=login, account_id=account_id, "Attempted to connect with wrong password!");
             }
             let mut trans = handle_login_err!(login_db.begin().await, "unable to open a transaction to update wrong password counts");
             handle_login_err!(
@@ -453,7 +451,7 @@ impl LoginRESTService {
             failed_logins += 1;
             debug!(target:"server::rest", MaxWrongPass=wrong_pass.MaxCount,  account_id=account_id);
             if failed_logins < wrong_pass.MaxCount {
-                return (StatusCode::OK, Json(error_response));
+                return (StatusCode::OK, [("Content-Type", "application/json;charset=utf-8")], Json(error_response));
             }
             let ban_time = wrong_pass.BanTime;
             if matches!(wrong_pass.BanType, WrongPassBanType::BanAccount) {
@@ -475,7 +473,7 @@ impl LoginRESTService {
             handle_login_err!(trans.commit().await, "error commiting failed login update");
         }
 
-        (StatusCode::OK, Json(error_response))
+        (StatusCode::OK, [("Content-Type", "application/json;charset=utf-8")], Json(error_response))
     }
 
     async fn handle_post_refresh_login_ticket(

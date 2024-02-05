@@ -149,8 +149,6 @@ LoginREST.SubnetMask="255.255.255.0"
 #    WrongPass.MaxCount
 #        Description: Number of login attempts with wrong password before the account or IP will be
 #                     banned.
-#        Default:     0  - (Disabled)
-#                     1+ - (Enabled)
 #
 #    WrongPass.BanTime
 #        Description: Time (in seconds) for banning account or IP for invalid login attempts.
@@ -165,10 +163,10 @@ LoginREST.SubnetMask="255.255.255.0"
 #        Description: Additionally log attempted wrong password logging
 #        Default:     0 - (Disabled)
 #                     1 - (Enabled)
-WrongPass.MaxCount = 0
-WrongPass.BanTime = 600
-WrongPass.BanType = "BanIP"
-WrongPass.Logging = false
+# WrongPass.MaxCount = 0
+# WrongPass.BanTime = 600
+# WrongPass.BanType = "BanIP"
+# WrongPass.Logging = false
 
 #
 #    BanExpiryCheckInterval

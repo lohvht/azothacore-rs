@@ -20,6 +20,7 @@ use azothacore_common::{
 use azothacore_database::{
     database_env::{LoginDatabase, LoginPreparedStmts},
     params,
+    DbDriver,
 };
 use azothacore_server::shared::{
     bnetrpc_zcompress,
@@ -73,7 +74,7 @@ use bnet_rpc::{
 use bytes::Bytes;
 use prost::Message;
 use rand::{rngs::OsRng, RngCore};
-use sqlx::Row;
+use sqlx::{Pool, Row};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpStream,
@@ -87,15 +88,14 @@ fn handle_game_utils_service_compress_response<T>(prefix: &[u8], data: &T) -> Bn
 where
     T: ?Sized + serde::Serialize,
 {
-    let mut data = match serde_json::to_vec(&data) {
-        Err(e) => {
-            error!(target:"session", "unable to serialise {} to json, err={e}", String::from_utf8_lossy(prefix));
-            return Err(BattlenetRpcErrorCode::UtilServerFailedToSerializeResponse);
-        },
-        Ok(r) => r,
-    };
     let mut json = prefix.to_vec();
-    json.append(&mut data);
+    if let Err(e) = serde_json::to_writer(&mut json, &data) {
+        error!(target:"session", "unable to serialise {} to json, err={e}", String::from_utf8_lossy(prefix));
+        return Err(BattlenetRpcErrorCode::UtilServerFailedToSerializeResponse);
+    }
+
+    tracing::info!("JSON: {}", String::from_utf8_lossy(&json));
+
     match bnetrpc_zcompress(json) {
         Err(e) => {
             error!(target:"session", cause=%e, "unable to compress {}", String::from_utf8_lossy(prefix));
@@ -105,7 +105,7 @@ where
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, sqlx::FromRow)]
 struct AccountInfo {
     // void LoadResult(PreparedQueryResult result),
     id:                    u32,
@@ -114,52 +114,30 @@ struct AccountInfo {
     lock_country:          String,
     last_ip:               String,
     login_ticket_expiry:   u64,
-    is_banned:             bool,
-    is_permanently_banned: bool,
+    is_banned:             Option<bool>,
+    is_permanently_banned: Option<bool>,
+    #[sqlx(skip)]
     game_accounts:         BTreeMap<u32, GameAccountInfo>,
 }
 
 impl AccountInfo {
-    fn load_result<'r, R>(result: &'r [R]) -> Self
-    where
-        R: sqlx::Row,
-        usize: sqlx::ColumnIndex<R>,
-        String: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-        u8: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-        u32: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-        u64: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-    {
-        // ba.id, ba.email, ba.locked, ba.lock_country, ba.last_ip, ba.LoginTicketExpiry, bab.unbandate > UNIX_TIMESTAMP() OR bab.unbandate = bab.bandate, bab.unbandate = bab.bandate FROM battlenet_accounts ba LEFT JOIN battlenet_account_bans bab WHERE email = ?
-        let fields = &result[0];
-        let id = fields.get(0);
-        let login = fields.get(1);
-        let is_locked_to_ip = fields.get::<u8, _>(2) != 0;
-        let lock_country = fields.get(3);
-        let last_ip = fields.get(4);
-        let login_ticket_expiry = fields.get(5);
-        let is_banned = fields.get::<u64, _>(6) != 0;
-        let is_permanently_banned = fields.get::<u64, _>(7) != 0;
+    fn is_banned(&self) -> bool {
+        self.is_banned.map_or(false, |b| b)
+    }
 
-        let mut game_accounts = BTreeMap::new();
-        const GAME_ACCOUNT_FIELDS_OFFSET: usize = 8;
+    fn is_permanently_banned(&self) -> bool {
+        self.is_permanently_banned.map_or(false, |b| b)
+    }
 
-        for fields in result.iter() {
-            game_accounts
-                .entry(fields.get(GAME_ACCOUNT_FIELDS_OFFSET))
-                .or_insert_with(|| GameAccountInfo::load_result::<'r, R>(fields, GAME_ACCOUNT_FIELDS_OFFSET));
+    async fn load_result(login_db: &Pool<DbDriver>, web_credentials: &[u8]) -> sqlx::Result<Option<Self>> {
+        let Some(mut result) = LoginDatabase::sel_bnet_account_info_by_bnet_login_ticket::<_, Self>(login_db, params!(web_credentials)).await? else {
+            return Ok(None);
+        };
+        let game_account_infos = LoginDatabase::sel_game_account_info_by_bnet_login_ticket::<_, DbGameAccountInfo>(login_db, params!(web_credentials)).await?;
+        for db_gai in game_account_infos {
+            result.game_accounts.entry(db_gai.id).or_insert_with(|| GameAccountInfo::load_result(db_gai));
         }
-
-        Self {
-            id,
-            login,
-            is_locked_to_ip,
-            lock_country,
-            last_ip,
-            login_ticket_expiry,
-            is_banned,
-            is_permanently_banned,
-            game_accounts,
-        }
+        Ok(Some(result))
     }
 }
 
@@ -171,13 +149,22 @@ struct LastPlayedCharacterInfo {
     last_played_time: u32,
 }
 
+#[derive(sqlx::FromRow)]
+struct DbGameAccountInfo {
+    id:                    u32,
+    name:                  String,
+    unban_date:            Option<u64>,
+    is_permanently_banned: Option<bool>,
+    security_level:        Option<u8>,
+}
+
 #[derive(Clone, Debug)]
 struct GameAccountInfo {
     // void LoadResult(Field* fields);
     id:                     u32,
     name:                   String,
     display_name:           String,
-    unban_date:             u64,
+    unban_date:             Option<u64>,
     is_banned:              bool,
     is_permanently_banned:  bool,
     _security_level:        AccountTypes,
@@ -186,22 +173,18 @@ struct GameAccountInfo {
 }
 
 impl GameAccountInfo {
-    fn load_result<'r, R>(fields: &'r R, offset: usize) -> Self
-    where
-        R: sqlx::Row,
-        usize: sqlx::ColumnIndex<R>,
-        String: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-        u8: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-        u32: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-        u64: sqlx::Decode<'r, R::Database> + sqlx::Type<R::Database>,
-    {
-        // a.id, a.username, ab.unbandate, ab.unbandate = ab.bandate, aa.gmlevel
-        let id = fields.get(offset);
-        let name = fields.get::<String, _>(offset + 1);
-        let unban_date = fields.get(offset + 2);
-        let is_permanently_banned = fields.get::<u32, _>(offset + 3) != 0;
-        let is_banned = is_permanently_banned || unban_date > unix_now().as_secs();
-        let _security_level = fields.get::<u8, _>(offset + 4).try_into().unwrap_or(AccountTypes::SecPlayer);
+    fn load_result(db_gai: DbGameAccountInfo) -> Self {
+        let DbGameAccountInfo {
+            id,
+            name,
+            unban_date,
+            is_permanently_banned,
+            security_level,
+        } = db_gai;
+
+        let is_permanently_banned = is_permanently_banned.map_or(false, |b| b);
+        let is_banned = is_permanently_banned || unban_date.map_or(false, |ub| ub > unix_now().as_secs());
+        let _security_level = security_level.map_or(AccountTypes::SecPlayer, |l| l.try_into().unwrap_or(AccountTypes::SecPlayer));
 
         let display_name = if let Some(sub_str_pos) = name.find('#') {
             format!("WoW{}", &name[..sub_str_pos + 1])
@@ -304,15 +287,10 @@ impl Session {
             return Err(BattlenetRpcErrorCode::Denied);
         }
         let login_db = &LoginDatabase::get();
-        let result = LoginDatabase::sel_bnet_account_info(login_db, params!(web_credentials))
-            .await
-            .map_err(map_err_to_denied)?;
-
-        if result.is_empty() {
+        let Some(mut account_info) = AccountInfo::load_result(login_db, web_credentials).await.map_err(map_err_to_denied)? else {
             return Err(BattlenetRpcErrorCode::Denied);
-        }
+        };
 
-        let mut account_info = AccountInfo::load_result(&result);
         if account_info.login_ticket_expiry < unix_now().as_secs() {
             return Err(BattlenetRpcErrorCode::TimedOut);
         }
@@ -393,8 +371,8 @@ impl Session {
             };
         }
         // If the account is banned, reject the logon attempt
-        if account_info.is_banned {
-            if account_info.is_permanently_banned {
+        if account_info.is_banned() {
+            if account_info.is_permanently_banned() {
                 debug!(target:"session",
                     account = account_info.login,
                     "[Session::HandleVerifyWebCredentials] Banned account tried to login!",
@@ -491,7 +469,7 @@ impl Socket for Session {
         let login_db = &LoginDatabase::get();
         LoginDatabase::del_expired_ip_bans(login_db, params!()).await?;
         for fields in LoginDatabase::sel_ip_info(login_db, params!(ip_address)).await? {
-            let banned = fields.get::<u64, _>("banned") != 0;
+            let banned = fields.get::<u32, _>("banned") != 0;
             if banned {
                 let e = az_error!("[CheckIpCallback] Banned ip '{}' tries to login!", s.ip_or_name);
                 debug!(target:"session", cause=%e);
@@ -727,7 +705,7 @@ impl AccountService for Session {
             if let Some(ga) = game_accounts.get(&gai.low.try_into().unwrap()) {
                 gs.is_suspended = Some(ga.is_banned);
                 gs.is_banned = Some(ga.is_permanently_banned);
-                gs.suspension_expires = Some(ga.unban_date * 1000000);
+                gs.suspension_expires = ga.unban_date.map(|ud| ud * 1000000);
             }
             game_account_state.game_status = Some(gs);
             tags.game_status_tag = Some(0x98B75F99);
@@ -1052,13 +1030,22 @@ struct RealmListServerIPAddresses {
     families: Vec<RealmIPAddressFamily>,
 }
 
+fn json_from_blob(blob: &[u8]) -> Option<&[u8]> {
+    let (colon_idx, _) = blob.iter().enumerate().find(|(_, c)| **c == b':')?;
+    // Take from after the colon, and a char the end, as last char is always a NUL char i.e. "\0"
+    Some(&blob[colon_idx + 1..blob.len() - 1])
+}
+
 impl Session {
     async fn get_realm_list_ticket(&self, params: BTreeMap<String, Variant>) -> BnetRpcResult<ClientResponse> {
         let Some(accnt_info) = self.account_info.get() else {
             return Err(BattlenetRpcErrorCode::WowServicesDeniedRealmListTicket);
         };
         if let Some(identity) = params.get("Param_Identity") {
-            let json_start = identity.blob_value();
+            let blob = identity.blob_value();
+            let Some(json_start) = json_from_blob(blob) else {
+                return Err(BattlenetRpcErrorCode::InvalidArgs);
+            };
             match serde_json::from_slice(json_start) {
                 Err(e) => {
                     warn!(target:"session", cause=%e, identity_val=String::from_utf8_lossy(json_start).to_string(), current=?accnt_info, "error serialising params identity from json");
@@ -1084,7 +1071,10 @@ impl Session {
         }
 
         if let Some(client_info) = params.get("Param_ClientInfo") {
-            let json_start = client_info.blob_value();
+            let blob = client_info.blob_value();
+            let Some(json_start) = json_from_blob(blob) else {
+                return Err(BattlenetRpcErrorCode::InvalidArgs);
+            };
             match serde_json::from_slice(json_start) {
                 Err(e) => {
                     warn!(target:"session", cause=%e, val=String::from_utf8_lossy(json_start).to_string(), current=?accnt_info, "error serialising params identity from json");

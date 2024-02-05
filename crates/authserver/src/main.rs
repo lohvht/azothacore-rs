@@ -150,7 +150,7 @@ fn main() -> AzResult<()> {
     let ban_expiry_task = rt.spawn(ban_expiry_task(token.clone(), ban_expiry_check_interval));
     let _ban_expiry_handle = dropper_wrapper_fn(rt.handle(), token.clone(), async {
         ban_expiry_task.await?;
-        info!(target = "server::authserver", "Closed ban expiry handler");
+        info!(target:"server::authserver", "Closed ban expiry handler");
         Ok(())
     });
 

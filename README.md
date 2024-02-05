@@ -47,14 +47,16 @@ TODO: FILL THIS IN WITH CMAKE/C++ REQUIREMENTS AND TEST OUT BUILDS FOR WINDOWS/O
     - [ ] CI lint / format
     - [ ] compile check for windows / linux / macos
     - [ ] Tests + Coverage
+      - [x] Coverage backbone code
 - [ ] Authserver netcode
-    - [ ] Login REST service
-    - [ ] Auth session handling
+    - [x] Login REST service
+    - [x] Auth session handling
     - [ ] SSL/TLS cert patching / override
     - [ ] Test can login to login screen in UI
+      - [x] Can login and see RealmList
 - [ ] Loading game assets
 - [ ] Loading DB fixes
-- [ ] Migrations / DB reloader
+- [x] Migrations / DB reloader
 - [ ] Worldserver netcode
 - [ ] ...
 
