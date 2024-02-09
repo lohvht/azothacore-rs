@@ -7,7 +7,6 @@ use crate::game::world::{world_trait::WorldTrait, WorldError};
 pub struct World {
     exit_code:                  Option<i32>,
     db_version:                 Option<String>,
-    cancel_token:               Option<tokio_util::sync::CancellationToken>,
     /// Int Configs
     config_clientcache_version: u32,
 }
@@ -17,7 +16,6 @@ impl World {
         World {
             exit_code:                  None,
             db_version:                 None,
-            cancel_token:               None,
             config_clientcache_version: 0,
         }
     }
@@ -35,7 +33,7 @@ impl WorldTrait for World {
     }
 
     async fn load_db_version(&mut self) -> Result<(), WorldError> {
-        let row = query_as("SELECT db_version, cache_id FROM version LIMIT 1")
+        let row = query_as::<_, (String, i32)>("SELECT db_version, cache_id FROM version LIMIT 1")
             .fetch_optional(&WorldDatabase::get())
             .await?;
 
@@ -45,7 +43,7 @@ impl WorldTrait for World {
         };
 
         self.db_version = Some(db_version);
-        self.config_clientcache_version = conf_cache_version;
+        self.config_clientcache_version = conf_cache_version as u32;
 
         Ok(())
     }
@@ -55,10 +53,10 @@ impl WorldTrait for World {
             return Ok(self.exit_code.unwrap());
         }
         info!("Turning world flag to stopped");
-        if let Some(ct) = &self.cancel_token {
-            ct.cancel();
-        }
-        self.cancel_token = None;
+        // if let Some(ct) = &self.cancel_token {
+        //     ct.cancel();
+        // }
+        // self.cancel_token = None;
         self.exit_code = Some(exit_code);
         Ok(exit_code)
     }

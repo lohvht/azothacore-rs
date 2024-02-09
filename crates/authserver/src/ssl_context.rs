@@ -5,7 +5,7 @@ use std::{
     sync::OnceLock,
 };
 
-use azothacore_common::{configuration::ConfigMgr, AzResult, CONF_DIR};
+use azothacore_common::{configuration::CONFIG_MGR, AzResult, CONF_DIR};
 use tokio_native_tls::{
     native_tls::{self, Identity},
     TlsAcceptor,
@@ -17,8 +17,9 @@ pub struct SslContext;
 impl SslContext {
     pub fn initialise() -> AzResult<()> {
         fn helper() -> AzResult<TlsAcceptor> {
-            let certificate_chain_file = Path::new(CONF_DIR).join(ConfigMgr::r().get("CertificatesFile", || "bnetserver.cert.pem".to_string()));
-            let private_key_file = Path::new(CONF_DIR).join(ConfigMgr::r().get("PrivateKeyFile", || "bnetserver.key.pem".to_string()));
+            let config_mgr_r = CONFIG_MGR.blocking_read();
+            let certificate_chain_file = Path::new(CONF_DIR).join(config_mgr_r.get("CertificatesFile", || "bnetserver.cert.pem".to_string()));
+            let private_key_file = Path::new(CONF_DIR).join(config_mgr_r.get("PrivateKeyFile", || "bnetserver.key.pem".to_string()));
 
             debug!(target:"server::authserver", cert=%certificate_chain_file.display(), privkey=%private_key_file.display(), "Attempting to open cert and private key files");
             let mut cert_chain = vec![];

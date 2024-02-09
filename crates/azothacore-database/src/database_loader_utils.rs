@@ -4,10 +4,9 @@ use std::{
     path::Path,
 };
 
-use azothacore_common::utils::buffered_file_open;
+use azothacore_common::{r#async::Context, utils::buffered_file_open};
 use flate2::bufread::GzDecoder;
 use thiserror::Error;
-use tokio_util::sync::CancellationToken;
 use tracing::{error, info};
 
 use crate::DbExecutor;
@@ -36,7 +35,7 @@ fn map_open_err(file_path: &str) -> impl FnOnce(io::Error) -> DatabaseLoaderErro
 }
 
 /// Applies the file's content to the given pool.
-pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(cancel_token: CancellationToken, conn: E, f: P, is_gz: bool) -> Result<(), DatabaseLoaderError> {
+pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(ctx: Context, conn: E, f: P, is_gz: bool) -> Result<(), DatabaseLoaderError> {
     let file_path = f.as_ref().display().to_string();
     info!(">> Applying \'{file_path}\'...");
 
@@ -51,7 +50,7 @@ pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(cancel_token: Can
     };
 
     tokio::select! {
-        _ = cancel_token.cancelled() => {
+        _ = ctx.cancelled() => {
             return Err(DatabaseLoaderError::Generic{ msg: "DB apply cancelled".to_string()})
         },
         res = conn.execute(file_data.as_str()) => {
@@ -68,7 +67,7 @@ pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(cancel_token: Can
                   
                   {e}"#,
                 );
-                cancel_token.cancel();
+                ctx.cancel();
             }
             res?;
         }

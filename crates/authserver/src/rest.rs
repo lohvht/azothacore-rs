@@ -1,8 +1,4 @@
-use std::{
-    net::SocketAddr,
-    sync::{OnceLock, RwLock},
-    time::Duration,
-};
+use std::{net::SocketAddr, sync::OnceLock, time::Duration};
 
 use axum::{
     extract::{rejection::JsonRejection, State},
@@ -19,10 +15,9 @@ use axum_extra::{
 };
 use azothacore_common::{
     az_error,
-    configuration::{ConfigMgr, WrongPass, WrongPassBanType},
-    get_g,
+    configuration::{WrongPass, WrongPassBanType, CONFIG_MGR},
     hex_str,
-    mut_g,
+    r#async::Context,
     utils::{net_resolve, unix_now},
     AzResult,
 };
@@ -39,12 +34,7 @@ use hyper_util::{
 use ipnet::IpNet;
 use rand::{rngs::OsRng, Rng};
 use sqlx::Row;
-use tokio::{
-    net::{TcpListener, TcpStream},
-    runtime,
-    task::JoinHandle,
-};
-use tokio_util::sync::CancellationToken;
+use tokio::net::{TcpListener, TcpStream};
 use tower_service::Service as TowerService;
 use tracing::{debug, error, info, warn};
 
@@ -85,117 +75,68 @@ where
     }
 }
 
-pub struct LoginRESTService {
-    rt_handler:            runtime::Handle,
-    cancel_token:          CancellationToken,
+pub struct LoginRESTService;
+
+struct LoginServiceDetails {
     bind_addr:             SocketAddr,
     local_address:         SocketAddr,
     local_network:         IpNet,
     external_address:      SocketAddr,
     login_ticket_duration: Duration,
     wrong_pass:            Option<WrongPass>,
-    task:                  RwLock<OnceLock<JoinHandle<AzResult<()>>>>,
 }
 
 impl LoginRESTService {
-    pub async fn stop() -> AzResult<()> {
-        let this = Self::get();
-        this.cancel_token.cancel();
-        let task = mut_g!(this.task).take();
-        if let Some(task) = task {
-            match task.await {
-                Err(e) => {
-                    error!(target:"server::rest", cause=?e, "error when joining during on stopping login service");
-                },
-                Ok(Err(e)) => {
-                    error!(target:"server::rest", cause=?e, "error when stopping login service");
-                },
-                Ok(Ok(_)) => {},
-            }
-        }
-        Ok(())
-    }
+    pub async fn start(ctx: Context) -> AzResult<()> {
+        let login_service_details = {
+            let cfg_mgr_r = CONFIG_MGR.read().await;
+            let bind_addr = cfg_mgr_r.get("BindIP", || "0.0.0.0".to_string());
+            let port = cfg_mgr_r.get("LoginREST.Port", || 8081);
+            let external_address = cfg_mgr_r.get("LoginREST.ExternalAddress", || "127.0.0.1".to_string());
+            let local_address = cfg_mgr_r.get("LoginREST.LocalAddress", || "127.0.0.1".to_string());
+            let local_network_mask = cfg_mgr_r.get("LoginREST.SubnetMask", || "255.255.255.0".to_string());
+            let login_ticket_duration = Duration::from_secs(cfg_mgr_r.get("LoginREST.TicketDuration", || 3600));
+            let wrong_pass = cfg_mgr_r
+                .get_option("WrongPass")
+                .map_err(|e| {
+                    error!(target:"server::rest", cause=%e, "WrongPass is configured wrongly, assuming its not set. {e}");
+                    e
+                })
+                .ok();
 
-    pub fn start(rt_handler: &runtime::Handle, cancel_token: CancellationToken) -> AzResult<()> {
-        let cfg_mgr_r = ConfigMgr::r();
-        let bind_addr = cfg_mgr_r.get("BindIP", || "0.0.0.0".to_string());
-        let port = cfg_mgr_r.get("LoginREST.Port", || 8081);
-        let external_address = cfg_mgr_r.get("LoginREST.ExternalAddress", || "127.0.0.1".to_string());
-        let local_address = cfg_mgr_r.get("LoginREST.LocalAddress", || "127.0.0.1".to_string());
-        let local_network_mask = cfg_mgr_r.get("LoginREST.SubnetMask", || "255.255.255.0".to_string());
-        let login_ticket_duration = Duration::from_secs(ConfigMgr::r().get("LoginREST.TicketDuration", || 3600));
-        let wrong_pass = ConfigMgr::r()
-            .get_option("WrongPass")
-            .map_err(|e| {
-                error!(target:"server::rest", cause=%e, "WrongPass is configured wrongly, assuming its not set. {e}");
+            let external_address = net_resolve((external_address.as_str(), port)).map_err(|e| {
+                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.ExternalAddress {external_address}");
                 e
+            })?;
+            let local_address = net_resolve((local_address.as_str(), port)).map_err(|e| {
+                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.LocalAddress {local_address}");
+                e
+            })?;
+            let bind_addr = net_resolve((bind_addr.as_str(), port)).map_err(|e| {
+                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.BindAddr {bind_addr}");
+                e
+            })?;
+            let local_subnet_mask = net_resolve((local_network_mask.as_str(), port)).map_err(|e| {
+                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.SubnetMask {local_network_mask}");
+                e
+            })?;
+            let local_network = IpNet::with_netmask(local_address.ip(), local_subnet_mask.ip())?;
+
+            LOGIN_SERVICE_DETAILS.get_or_init(|| LoginServiceDetails {
+                external_address,
+                bind_addr,
+                local_address,
+                local_network,
+                wrong_pass,
+                login_ticket_duration,
             })
-            .ok();
-
-        let external_address = net_resolve((external_address.as_str(), port)).map_err(|e| {
-            error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.ExternalAddress {external_address}");
-            e
-        })?;
-        let local_address = net_resolve((local_address.as_str(), port)).map_err(|e| {
-            error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.LocalAddress {local_address}");
-            e
-        })?;
-        let bind_addr = net_resolve((bind_addr.as_str(), port)).map_err(|e| {
-            error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.BindAddr {bind_addr}");
-            e
-        })?;
-        let local_subnet_mask = net_resolve((local_network_mask.as_str(), port)).map_err(|e| {
-            error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.SubnetMask {local_network_mask}");
-            e
-        })?;
-
-        let local_network = IpNet::with_netmask(local_address.ip(), local_subnet_mask.ip())?;
-
-        let login_service = LOGIN_SERVICE.get_or_init(move || LoginRESTService {
-            external_address,
-            cancel_token,
-            bind_addr,
-            local_address,
-            local_network,
-            wrong_pass,
-            login_ticket_duration,
-            rt_handler: rt_handler.clone(),
-            task: RwLock::new(OnceLock::new()),
-        });
-        let task = login_service.rt_handler.spawn(Self::run());
-        get_g!(login_service.task).set(task).unwrap();
-        Ok(())
-    }
-
-    pub fn get() -> &'static LoginRESTService {
-        LOGIN_SERVICE.get().expect("Login rest service must be initialised first")
-    }
-
-    pub fn get_address_for_client<'a>(&'a self, address: &AddressOrName) -> &'a SocketAddr {
-        let client_address = match address {
-            // If its a name, we use local address
-            AddressOrName::Name(_) => return &self.local_address,
-            AddressOrName::Addr(a) if a.ip().is_loopback() => return &self.local_address,
-            AddressOrName::Addr(a) => a,
         };
-        if self.local_address.ip().is_loopback() {
-            return &self.external_address;
-        }
 
-        if self.local_network.contains(&client_address.ip()) {
-            &self.local_address
-        } else {
-            &self.external_address
-        }
-    }
-
-    async fn run() -> AzResult<()> {
-        let this = Self::get();
-        let acceptor = TcpListener::bind(this.bind_addr).await.map_err(|e| {
-            error!(target:"server::rest", "Couldn't bind to {}", this.bind_addr);
+        let acceptor = TcpListener::bind(&login_service_details.bind_addr).await.map_err(|e| {
+            error!(target:"server::rest", "Couldn't bind to {}", login_service_details.bind_addr);
             e
         })?;
-        info!(target:"server::rest", "Login service bound to http://{}", this.bind_addr);
+        info!(target:"server::rest", "Login service bound to http://{}", login_service_details.bind_addr);
 
         let router = Router::new()
             .route("/bnetserver/login/", get(Self::handle_get_form))
@@ -207,7 +148,7 @@ impl LoginRESTService {
 
         loop {
             let (cnx, addr) = tokio::select! {
-                _ = this.cancel_token.cancelled() => {
+                _ = ctx.cancelled() => {
                     break;
                 },
                 // Wait for new tcp connection
@@ -222,14 +163,36 @@ impl LoginRESTService {
                 },
             };
 
-            let tower_svc = router.clone().with_state(LoginServiceRequestContext { source_ip: cnx.local_addr()? });
+            let tower_svc = router.clone().with_state(LoginServiceRequestState { source_ip: addr.into() });
 
             // NOTE: Unhandled for now, if theres an error just let it pass.
-            this.rt_handler.spawn(serve_https_call(tower_svc, cnx, addr));
+            ctx.spawn(serve_https_call(tower_svc, cnx, addr));
         }
         info!(target:"server::rest", "Login service exiting...");
 
         Ok(())
+    }
+
+    fn get_details() -> &'static LoginServiceDetails {
+        LOGIN_SERVICE_DETAILS.get().expect("Expect login details to be set on startup at least")
+    }
+
+    pub fn get_address_for_client<'a>(address: &AddressOrName) -> &'a SocketAddr {
+        let client_address = match address {
+            // If its a name, we use local address
+            AddressOrName::Name(_) => return &Self::get_details().local_address,
+            AddressOrName::Addr(a) if a.ip().is_loopback() => return &Self::get_details().local_address,
+            AddressOrName::Addr(a) => a,
+        };
+        if Self::get_details().local_address.ip().is_loopback() {
+            return &Self::get_details().external_address;
+        }
+
+        if Self::get_details().local_network.contains(&client_address.ip()) {
+            &Self::get_details().local_address
+        } else {
+            &Self::get_details().external_address
+        }
     }
 
     async fn handle_404() -> impl IntoResponse {
@@ -324,13 +287,13 @@ impl LoginRESTService {
         Ok(Json(response)).into()
     }
 
-    async fn handle_get_portal(State(state): State<LoginServiceRequestContext>) -> String {
-        let endpoint = Self::get().get_address_for_client(&state.source_ip.into());
+    async fn handle_get_portal(State(state): State<LoginServiceRequestState>) -> String {
+        let endpoint = Self::get_address_for_client(&state.source_ip);
         endpoint.to_string()
     }
 
     async fn handle_post_login(
-        State(state): State<LoginServiceRequestContext>,
+        State(state): State<LoginServiceRequestState>,
         WithRejection(Json(login_form), _): WithRejection<Json<LoginForm>, PostLoginError>,
     ) -> impl IntoResponse {
         // following similar to TC's logic
@@ -353,7 +316,7 @@ impl LoginRESTService {
             }};
         }
 
-        let this = Self::get();
+        let details = Self::get_details();
 
         let mut login = None;
         let mut password = None;
@@ -420,7 +383,7 @@ impl LoginRESTService {
             if login_ticket.is_none() || login_ticket_expiry.map_or(true, |exp_ts| exp_ts < now) {
                 login_ticket = Some(format!("AZ-{}", hex_str!(OsRng.gen::<[u8; 20]>())));
             }
-            let new_expiry = now + this.login_ticket_duration.as_secs();
+            let new_expiry = now + details.login_ticket_duration.as_secs();
             let res = LoginDatabase::upd_bnet_authentication(login_db, params!(&login_ticket, new_expiry, account_id)).await;
             if res.is_ok() {
                 return (
@@ -435,12 +398,12 @@ impl LoginRESTService {
             }
             warn!(target:"server::rest", "error somehow when calling DB to update bnet auth: err={res:?}");
         } else if !is_banned {
-            let ip_address = state.source_ip.ip();
-            let Some(wrong_pass) = &this.wrong_pass else {
+            let ip_address = &state.source_ip;
+            let Some(wrong_pass) = &details.wrong_pass else {
                 return (StatusCode::OK, [("Content-Type", "application/json;charset=utf-8")], Json(error_response));
             };
             if !wrong_pass.Logging {
-                warn!(target:"server::rest", ip_address=ip_address.to_string(), login=login, account_id=account_id, "Attempted to connect with wrong password!");
+                warn!(target:"server::rest", ip_address=%ip_address, login=login, account_id=account_id, "Attempted to connect with wrong password!");
             }
             let mut trans = handle_login_err!(login_db.begin().await, "unable to open a transaction to update wrong password counts");
             handle_login_err!(
@@ -498,10 +461,10 @@ impl LoginRESTService {
             Ok(Some(fields)) => fields.get::<u64, _>(0),
         };
 
-        let this = Self::get();
+        let details = Self::get_details();
         let now = unix_now().as_secs();
         if login_ticket_expiry > now {
-            let new_expiry = now + this.login_ticket_duration.as_secs();
+            let new_expiry = now + details.login_ticket_duration.as_secs();
             match LoginDatabase::upd_bnet_existing_authentication(login_db, params!(new_expiry, basic_auth.username())).await {
                 Err(e) => {
                     error!(target:"server::rest", username=basic_auth.username(), "update bnet authentication failed: err={e}");
@@ -638,8 +601,8 @@ fn err_empty_resp<T>(status: StatusCode) -> WrappedResponseResult<T, ErrorEmptyR
 struct Empty {}
 
 #[derive(Clone)]
-struct LoginServiceRequestContext {
-    source_ip: SocketAddr,
+struct LoginServiceRequestState {
+    source_ip: AddressOrName,
 }
 
 async fn serve_https_call(router: Router<()>, stream: TcpStream, addr: SocketAddr) -> AzResult<()> {
@@ -682,4 +645,4 @@ async fn serve_https_call(router: Router<()>, stream: TcpStream, addr: SocketAdd
         })
 }
 
-static LOGIN_SERVICE: OnceLock<LoginRESTService> = OnceLock::new();
+static LOGIN_SERVICE_DETAILS: OnceLock<LoginServiceDetails> = OnceLock::new();

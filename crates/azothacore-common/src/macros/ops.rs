@@ -16,17 +16,3 @@ macro_rules! deref_boilerplate {
         }
     };
 }
-
-#[macro_export]
-macro_rules! mut_g {
-    ( $e:expr ) => {
-        $e.write().unwrap()
-    };
-}
-
-#[macro_export]
-macro_rules! get_g {
-    ( $e:expr ) => {
-        $e.read().unwrap()
-    };
-}

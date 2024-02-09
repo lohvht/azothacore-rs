@@ -24,7 +24,6 @@ serde.workspace = true
 sqlx.workspace = true
 thiserror.workspace = true
 tokio-native-tls = { version = "0", features=["vendored"] }
-tokio-util.workspace = true
 tokio.workspace = true
 tower-service = "0"
 tracing.workspace = true

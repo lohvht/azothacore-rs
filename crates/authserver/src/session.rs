@@ -12,6 +12,7 @@ use std::{
 
 use azothacore_common::{
     az_error,
+    r#async::Context,
     utils::{unix_now, SharedFromSelf, SharedFromSelfBase},
     AccountTypes,
     AzResult,
@@ -24,13 +25,11 @@ use azothacore_database::{
 };
 use azothacore_server::shared::{
     bnetrpc_zcompress,
-    dropper_wrapper_fn,
     networking::socket::{AddressOrName, Socket, SocketWrappper},
     realms::{
         realm_list::{JoinRealmError, RealmList},
         BnetRealmHandle,
     },
-    DropperWrapperFn,
 };
 use bnet_rpc::{
     bgs::protocol::{
@@ -79,7 +78,6 @@ use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpStream,
 };
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, trace, warn};
 
 use crate::{rest::LoginRESTService, ssl_context::SslContext};
@@ -93,8 +91,6 @@ where
         error!(target:"session", "unable to serialise {} to json, err={e}", String::from_utf8_lossy(prefix));
         return Err(BattlenetRpcErrorCode::UtilServerFailedToSerializeResponse);
     }
-
-    tracing::info!("JSON: {}", String::from_utf8_lossy(&json));
 
     match bnetrpc_zcompress(json) {
         Err(e) => {
@@ -207,8 +203,7 @@ impl GameAccountInfo {
 
 pub struct Session {
     // Lifetime management
-    base:             SharedFromSelfBase<Session>,
-    run_read_handler: OnceLock<DropperWrapperFn>,
+    base: SharedFromSelfBase<Session>,
 
     // Rest of Session info.
     /// Contains a mapping of tokens expecting a return from a previous client
@@ -426,23 +421,21 @@ impl SharedFromSelf<Session> for Session {
 }
 
 impl Socket for Session {
-    async fn start_from_tcp(cancel_token: CancellationToken, addr: AddressOrName, tcp_conn: TcpStream) -> AzResult<Arc<Self>>
+    async fn start_from_tcp(ctx: Context, addr: AddressOrName, tcp_conn: TcpStream) -> AzResult<Arc<Self>>
     where
         Self: std::marker::Sized,
     {
         let conn = SslContext::get().accept(tcp_conn).await?;
         let (rd, wr) = tokio::io::split(conn);
-        Self::start(cancel_token, addr, Box::new(rd), Box::new(wr)).await
+        Self::start(ctx, addr, Box::new(rd), Box::new(wr)).await
     }
 
-    async fn start<R, W>(cancel_token: CancellationToken, name: AddressOrName, rd: R, wr: W) -> AzResult<Arc<Self>>
+    async fn start<R, W>(ctx: Context, name: AddressOrName, rd: R, wr: W) -> AzResult<Arc<Self>>
     where
         R: AsyncRead + Unpin + Send + Sync + 'static,
         W: AsyncWrite + Unpin + Send + Sync + 'static,
     {
-        let rt_handler = tokio::runtime::Handle::current();
-        let ct = cancel_token.clone();
-        let inner = SocketWrappper::new(rt_handler.clone(), cancel_token, name.clone(), rd, wr);
+        let inner = SocketWrappper::new(ctx.clone(), name.clone(), rd, wr);
         let s = Arc::new(Self {
             base: SharedFromSelfBase::new(),
             response_callbacks: Mutex::new(BTreeMap::new()),
@@ -456,7 +449,6 @@ impl Socket for Session {
             client_secret: OnceLock::new(),
             ip_country: OnceLock::new(),
             request_token: AtomicU32::new(0),
-            run_read_handler: OnceLock::new(),
         });
         // accountinfo
         s.base.initialise(&s);
@@ -480,7 +472,7 @@ impl Socket for Session {
 
         // begin AsyncRead => ReadHandler routine
         let this = s.clone();
-        let jh = tokio::spawn(async move {
+        ctx.spawn(async move {
             loop {
                 tokio::select! {
                     _ = this.wait_closed() => {
@@ -497,7 +489,6 @@ impl Socket for Session {
                 };
             }
         });
-        s.run_read_handler.get_or_init(|| dropper_wrapper_fn(&rt_handler, ct, async { Ok(jh.await?) }));
 
         Ok(s)
     }
@@ -768,7 +759,7 @@ impl AuthenticationService for Session {
         }
 
         // self.ip_or_name
-        let endpoint = LoginRESTService::get().get_address_for_client(&self.ip_or_name);
+        let endpoint = LoginRESTService::get_address_for_client(&self.ip_or_name);
         let external_challenge = ChallengeExternalRequest {
             payload_type: Some("web_auth_url".to_string()),
             payload: Some(format!("https://{endpoint}/bnetserver/login/").into()),

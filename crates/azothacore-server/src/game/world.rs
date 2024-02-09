@@ -14,7 +14,7 @@ use crate::shared::realms::Realm;
 pub enum WorldError {
     #[error("World had trouble stopping")]
     StopFailed,
-    #[error("DB execution error")]
+    #[error("DB execution error: {0}")]
     DBError(#[from] sqlx::Error),
 }
 

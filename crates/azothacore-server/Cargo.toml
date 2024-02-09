@@ -31,6 +31,5 @@ sha2.workspace = true
 shlex = { version = "1" }
 sqlx.workspace = true
 thiserror.workspace = true
-tokio-util.workspace = true
 tokio.workspace = true
 tracing.workspace = true

@@ -1,14 +1,15 @@
-use std::{path::Path, sync::Arc};
+use std::{path::Path, sync::Arc, time::Duration};
 
 use azothacore_common::{
     az_error,
     banner,
     configuration::{
-        ConfigMgr,
         DatabaseType::{Character as DBFlagCharacter, Hotfix as DBFlagHotfix, Login as DBFlagLogin, World as DBFlagWorld},
         DbUpdates,
+        CONFIG_MGR,
     },
     log,
+    r#async::Context,
     utils::create_pid_file,
     AzResult,
     AZOTHA_CORE_CONFIG,
@@ -29,69 +30,33 @@ use azothacore_server::{
         scripts,
         world::{WorldTrait, WORLD},
     },
-    receive_signal_and_run_expr,
     shared::{
-        dropper_wrapper_fn,
+        panic_handler,
         realms::{realm_list::RealmList, RealmFlags},
         shared_defines::{ServerProcessType, ThisServerProcess},
+        signal_handler,
     },
-    short_curcuit_unix_signal_unwrap,
 };
 use clap::Parser;
 use flagset::FlagSet;
 use rand::{rngs::OsRng, Rng};
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
-use tracing::{error, info, info_span, instrument, Instrument};
-
-#[cfg(target_os = "windows")]
-fn signal_handler(rt: &tokio::runtime::Runtime) -> JoinHandle<Result<(), std::io::Error>> {
-    rt.spawn(
-        async {
-            use tokio::signal::windows::ctrl_break;
-            let mut sig_break = ctrl_break()?;
-            receive_signal_and_run_expr!(
-                WORLD.write().await.stop_now(1),
-                "SIGBREAK" => sig_break
-            );
-            Ok(())
-        }
-        .instrument(info_span!("signal_handler")),
-    )
-}
-
-#[cfg(target_os = "linux")]
-fn signal_handler(rt: &tokio::runtime::Runtime, cancel_token: CancellationToken) -> JoinHandle<Result<(), std::io::Error>> {
-    rt.spawn(
-        async move {
-            use tokio::signal::unix::SignalKind;
-            let mut sig_interrupt = short_curcuit_unix_signal_unwrap!(SignalKind::interrupt());
-            let mut sig_terminate = short_curcuit_unix_signal_unwrap!(SignalKind::terminate());
-            let mut sig_quit = short_curcuit_unix_signal_unwrap!(SignalKind::quit());
-            receive_signal_and_run_expr!(
-                WORLD.blocking_write().stop_now(1),
-                cancel_token,
-                "SIGINT" => sig_interrupt
-                "SIGTERM" => sig_terminate
-                "SIGQUIT" => sig_quit
-            );
-            Ok(())
-        }
-        .instrument(info_span!("signal_handler")),
-    )
-}
+use tokio::sync::oneshot;
+use tracing::{error, info, instrument};
 
 fn main() -> AzResult<()> {
+    let rt = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build()?);
+    let root_ctx = Context::new(rt.handle());
+    panic_handler(root_ctx.clone());
     ThisServerProcess::set(ServerProcessType::Worldserver);
     let vm = ConsoleArgs::parse();
     {
-        let mut cfg_mgr_w = ConfigMgr::m();
+        let mut cfg_mgr_w = CONFIG_MGR.blocking_write();
         cfg_mgr_w.configure(&vm.config, vm.dry_run);
         cfg_mgr_w.load_app_configs()?;
     };
 
     let _wg = {
-        let cfg_mgr_r = ConfigMgr::r();
+        let cfg_mgr_r = CONFIG_MGR.blocking_read();
 
         // TODO: Setup DB logging. Original code below
         // // Init all logs
@@ -103,13 +68,11 @@ fn main() -> AzResult<()> {
         )
     };
 
-    let runtime = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build()?);
-    let token = tokio_util::sync::CancellationToken::new();
     banner::azotha_banner_show("worldserver-daemon", || {
         info!(
             target:"server::worldserver",
             "> Using configuration file       {}",
-            ConfigMgr::r().get_filename().display()
+            CONFIG_MGR.blocking_read().get_filename().display()
         )
     });
     // Seed the OsRng here.
@@ -117,55 +80,41 @@ fn main() -> AzResult<()> {
     OsRng.gen::<u64>();
 
     // worldserver PID file creation
-    if let Ok(pid_file) = &ConfigMgr::r().get_option::<String>("PidFile") {
+    if let Ok(pid_file) = &CONFIG_MGR.blocking_read().get_option::<String>("PidFile") {
         let pid = create_pid_file(pid_file)?;
         error!(target:"server", "Daemon PID: {}", pid);
     }
-    let rt = runtime.clone();
-    let ct = token.clone();
-    let signal_handler = signal_handler(&rt, ct);
-
-    // // TODO: Follow thread pool based model? from the original core code
-    // // Start the Boost based thread pool
-    // int numThreads = sConfigMgr->GetOption<int32>("ThreadPool", 1);
-    // std::shared_ptr<std::vector<std::thread>> threadPool(new std::vector<std::thread>(), [ioContext](std::vector<std::thread>* del)
-    // {
-    //     ioContext->stop();
-    //     for (std::thread& thr : *del)
-    //         thr.join();
-    //     delete del;
-    // });
-    // if (numThreads < 1)
-    // {
-    //     numThreads = 1;
-    // }
-    // for (int i = 0; i < numThreads; ++i)
-    // {
-    //     threadPool->push_back(std::thread([ioContext]()
-    //     {
-    //         ioContext->run();
-    //     }));
-    // }
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(signal_handler(ctx));
 
     // // TODO: Implement process priority?
     // // Set process priority according to configuration settings
     // SetProcessPriority("server.worldserver", sConfigMgr->GetOption<int32>(CONFIG_PROCESSOR_AFFINITY, 0), sConfigMgr->GetOption<bool>(CONFIG_HIGH_PRIORITY, false));
 
-    info!(target:"server::loading", "Initializing Scripts...");
-    // Loading modules configs before scripts
-    ConfigMgr::m().load_modules_configs(false, true, |reload| SCRIPT_MGR.blocking_write().on_load_module_config(reload))?;
-    let _s_script_mgr_handle = dropper_wrapper_fn(runtime.handle(), token.clone(), async { SCRIPT_MGR.write().await.unload() });
-    scripts::add_scripts()?;
-    azothacore_modules::add_scripts()?;
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(async move {
+        if let Err(e) = load_scripts(ctx.clone()).await {
+            error!(target:"server::loading", cause=%e, "error starting load scripts, terminating!");
+            ctx.cancel();
+        }
+    });
 
-    let realm_id = ConfigMgr::r().get_option::<u32>("RealmID")?;
-    runtime.block_on(start_db(token.clone(), realm_id))?;
-    let _db_handle = dropper_wrapper_fn(runtime.handle(), token.clone(), stop_db());
+    let realm_id = CONFIG_MGR.blocking_read().get_option::<u32>("RealmID")?;
+    let (db_started_send, db_started_recv) = oneshot::channel();
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(async move {
+        if let Err(e) = start_db(ctx.clone(), db_started_send, realm_id).await {
+            error!(target:"server::loading", cause=%e, "error starting DB");
+            ctx.cancel();
+        }
+    });
+    // Enforce DB to be up before everything else
+    db_started_recv.blocking_recv().unwrap();
 
     // set server offline (not connectable)
-
-    runtime.block_on(async {
-        query_with(
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(async move {
+        let res = query_with(
             "UPDATE realmlist SET flag = (flag & ~?) | ? WHERE id = ?",
             params!(
                 FlagSet::from(RealmFlags::Offline).bits(),
@@ -174,14 +123,15 @@ fn main() -> AzResult<()> {
             ),
         )
         .execute(&LoginDatabase::get())
-        .await
-    })?;
+        .await;
+        if let Err(e) = res {
+            error!(target:"server::loading", cause=%e, "error flipping realmlist offline while world is loading, terminating");
+            ctx.cancel();
+        }
+    });
 
-    RealmList::init(
-        runtime.handle(),
-        token.clone(),
-        ConfigMgr::r().get_option("RealmsStateUpdateDelay").unwrap_or(10),
-    );
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(RealmList::init(ctx, CONFIG_MGR.blocking_read().get("RealmsStateUpdateDelay", || 10)));
 
     // // TODO: Implement metrics?
     // sMetric->Initialize(realm.Name, *ioContext, []()
@@ -206,36 +156,58 @@ fn main() -> AzResult<()> {
     // // sWorld->SetInitialWorldSettings();
     // WORLD.write().await.set_initial_world_settings().await?;
 
-    // Begin shutdown, waiting for signal handler first. Then unload everything else.
-    rt.block_on(async { signal_handler.await? })?;
+    // Wait for shutdown by seeing if the tasks above have all run its course.
+    // Tasks must perform graceful shutdown by using the Context above otherwise this
+    // program will not terminate properly.
+    root_ctx.tt.close();
+    rt.block_on(root_ctx.tt.wait());
 
     info!("TERMINATING!");
     Ok(())
 }
 
-async fn start_db(cancel_token: CancellationToken, realm_id: u32) -> AzResult<()> {
+async fn load_scripts(ctx: Context) -> AzResult<()> {
+    // Loading modules configs before scripts
+    info!(target:"server::loading", "Initializing Scripts...");
+    CONFIG_MGR
+        .write()
+        .await
+        .load_modules_configs(false, true, |reload| async move { SCRIPT_MGR.write().await.on_load_module_config(reload) })
+        .await?;
+    scripts::add_scripts()?;
+    azothacore_modules::add_scripts()?;
+
+    // Wait for cancellation
+    ctx.cancelled().await;
+    info!("Unloading scripts.");
+    SCRIPT_MGR.write().await.unload()?;
+    Ok(())
+}
+
+async fn start_db(ctx: Context, db_started_send: oneshot::Sender<()>, realm_id: u32) -> AzResult<()> {
     let updates;
     let auth_cfg;
     let world_cfg;
     let character_cfg;
     let hotfix_cfg;
     {
-        let config_mgr_r = ConfigMgr::r();
+        let config_mgr_r = CONFIG_MGR.read().await;
         updates = config_mgr_r.get_option::<DbUpdates>("Updates")?;
         auth_cfg = config_mgr_r.get_option("LoginDatabaseInfo")?;
         world_cfg = config_mgr_r.get_option("WorldDatabaseInfo")?;
         character_cfg = config_mgr_r.get_option("CharacterDatabaseInfo")?;
         hotfix_cfg = config_mgr_r.get_option("HotfixDatabaseInfo")?;
     }
-    let login_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagLogin, &auth_cfg, &updates, MODULES_LIST);
-    let world_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagWorld, &world_cfg, &updates, MODULES_LIST);
-    let chars_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagCharacter, &character_cfg, &updates, MODULES_LIST);
-    let hotfixes_db_loader = DatabaseLoader::new(cancel_token.clone(), DBFlagHotfix, &hotfix_cfg, &updates, MODULES_LIST);
+    let modules: Vec<_> = MODULES_LIST.iter().map(|s| s.to_string()).collect();
+    let login_db_loader = DatabaseLoader::new(DBFlagLogin, auth_cfg, updates.clone(), modules.clone());
+    let world_db_loader = DatabaseLoader::new(DBFlagWorld, world_cfg, updates.clone(), modules.clone());
+    let chars_db_loader = DatabaseLoader::new(DBFlagCharacter, character_cfg, updates.clone(), modules.clone());
+    let hotfixes_db_loader = DatabaseLoader::new(DBFlagHotfix, hotfix_cfg, updates.clone(), modules.clone());
 
-    LoginDatabase::set(login_db_loader.load().await?);
-    WorldDatabase::set(world_db_loader.load().await?);
-    CharacterDatabase::set(chars_db_loader.load().await?);
-    HotfixDatabase::set(hotfixes_db_loader.load().await?);
+    LoginDatabase::set(login_db_loader.load(ctx.clone()).await?);
+    WorldDatabase::set(world_db_loader.load(ctx.clone()).await?);
+    CharacterDatabase::set(chars_db_loader.load(ctx.clone()).await?);
+    HotfixDatabase::set(hotfixes_db_loader.load(ctx.clone()).await?);
 
     //- Get the realm Id from the configuration file
     if realm_id > 255 {
@@ -263,34 +235,47 @@ async fn start_db(cancel_token: CancellationToken, realm_id: u32) -> AzResult<()
     w.load_db_version().await?;
 
     info!("> Version DB world:     {}", w.get_db_version());
+    db_started_send.send(()).unwrap();
 
     SCRIPT_MGR.read().await.on_after_databases_loaded(updates.EnableDatabases);
 
-    Ok(())
-}
+    tokio::time::sleep(Duration::from_secs(30)).await;
 
-async fn stop_db() -> AzResult<()> {
+    // Wait for cancellation
+    ctx.cancelled().await;
+
+    info!(target:"server", "Stopping database connection pools.");
+
     LoginDatabase::close().await;
     WorldDatabase::close().await;
     CharacterDatabase::close().await;
     HotfixDatabase::close().await;
-
     Ok(())
 }
 
 /// Clear 'online' status for all accounts with characters in this realm
 #[instrument]
 async fn clear_online_accounts(realm_id: u32) -> AzResult<()> {
+    let login_db = LoginDatabase::get();
+    let char_db = CharacterDatabase::get();
+
     // Reset online status for all accounts with characters on the current realm
-    // pussywizard: tc query would set online=0 even if logged in on another realm >_>
-    query_with("UPDATE account SET online = ? WHERE online = ?", params!(false, realm_id))
-        .execute(&LoginDatabase::get())
-        .await?;
+    query_with(
+        "UPDATE account SET online = 0 WHERE online > 0 AND id IN (SELECT acctid FROM realmcharacters WHERE realmid = ?)",
+        params!(realm_id),
+    )
+    .execute(&login_db)
+    .await?;
+
     // Reset online status for all characters
     query_with("UPDATE characters SET online = ? WHERE online <> ?", params!(false, false))
-        .execute(&LoginDatabase::get())
+        .execute(&char_db)
         .await?;
 
+    // Battleground instance ids reset at server restart
+    query_with("UPDATE character_battleground_data SET instanceId = ?", params!(false))
+        .execute(&char_db)
+        .await?;
     Ok(())
 }
 

@@ -3,8 +3,6 @@
 pub mod database_env;
 pub mod database_loader;
 pub mod database_loader_utils;
-pub mod database_update_fetcher;
-pub mod database_updater;
 
 use std::{ops, path::PathBuf};
 
@@ -35,22 +33,22 @@ pub trait DbAcquire<'c>: sqlx::Acquire<'c, Database = DbDriver> {}
 impl<'c, T: sqlx::Acquire<'c, Database = DbDriver>> DbAcquire<'c> for T {}
 
 #[derive(Debug)]
-pub struct ExtendedDBInfo<'d, 'u> {
-    info:    &'d DatabaseInfo,
-    updates: &'u DbUpdates,
+pub struct ExtendedDBInfo {
+    info:    DatabaseInfo,
+    updates: DbUpdates,
     db_type: DatabaseType,
 }
 
-impl<'d, 'u> ops::Deref for ExtendedDBInfo<'d, 'u> {
+impl ops::Deref for ExtendedDBInfo {
     type Target = DatabaseInfo;
 
-    fn deref(&self) -> &'d Self::Target {
-        self.info
+    fn deref(&self) -> &Self::Target {
+        &self.info
     }
 }
 
-impl<'d, 'u> ExtendedDBInfo<'d, 'u> {
-    fn new((info, updates, db_type): (&'d DatabaseInfo, &'u DbUpdates, DatabaseType)) -> Self {
+impl ExtendedDBInfo {
+    fn new(info: DatabaseInfo, updates: DbUpdates, db_type: DatabaseType) -> Self {
         Self { info, updates, db_type }
     }
 

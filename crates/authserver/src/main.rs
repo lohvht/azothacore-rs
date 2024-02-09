@@ -3,8 +3,9 @@ use std::{path::Path, sync::Arc, time::Duration};
 use authserver::{rest::LoginRESTService, ssl_context::SslContext, BnetSessionManager};
 use azothacore_common::{
     banner,
-    configuration::{ConfigMgr, DatabaseType, DbUpdates},
+    configuration::{DatabaseType, DbUpdates, CONFIG_MGR},
     log,
+    r#async::Context,
     utils::create_pid_file,
     AzResult,
     AZOTHA_REALM_CONFIG,
@@ -16,72 +17,30 @@ use azothacore_database::{
     params,
 };
 use azothacore_server::shared::{
-    dropper_wrapper_fn,
+    panic_handler,
     realms::realm_list::RealmList,
     shared_defines::{ServerProcessType, ThisServerProcess},
+    signal_handler,
 };
 use clap::Parser;
 use rand::{rngs::OsRng, Rng};
-use tokio::task::JoinHandle;
-use tokio_util::sync::CancellationToken;
+use tokio::sync::oneshot;
 use tracing::{error, info};
-
-#[cfg(target_os = "windows")]
-fn signal_handler(rt: &tokio::runtime::Runtime, expression: impl Future<Output = AzResult<T>>) -> JoinHandle<Result<(), std::io::Error>> {
-    rt.spawn(
-        async {
-            use tokio::signal::windows::ctrl_break;
-            let mut sig_break = ctrl_break()?;
-            receive_signal_and_run_expr!(
-                S_WORLD.write().await.stop_now(1),
-                "SIGBREAK" => sig_break
-            );
-            Ok(())
-        }
-        .instrument(info_span!("signal_handler")),
-    )
-}
-
-#[cfg(target_os = "linux")]
-fn signal_handler(rt: &tokio::runtime::Runtime, cancel_token: CancellationToken) -> JoinHandle<Result<(), std::io::Error>> {
-    use azothacore_server::{receive_signal_and_run_expr, short_curcuit_unix_signal_unwrap};
-    use tokio::signal::unix::SignalKind;
-    use tracing::{info_span, Instrument};
-
-    fn cancel_func(cancel_token: CancellationToken) -> AzResult<()> {
-        cancel_token.cancel();
-        Ok(())
-    }
-
-    rt.spawn(
-        async move {
-            let mut sig_interrupt = short_curcuit_unix_signal_unwrap!(SignalKind::interrupt());
-            let mut sig_terminate = short_curcuit_unix_signal_unwrap!(SignalKind::terminate());
-            let mut sig_quit = short_curcuit_unix_signal_unwrap!(SignalKind::quit());
-            receive_signal_and_run_expr!(
-                cancel_func(cancel_token.clone()),
-                cancel_token,
-                "SIGINT" => sig_interrupt
-                "SIGTERM" => sig_terminate
-                "SIGQUIT" => sig_quit
-            );
-            Ok(())
-        }
-        .instrument(info_span!("signal_handler")),
-    )
-}
 
 /// Launch the auth server
 fn main() -> AzResult<()> {
+    let rt = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build()?);
+    let root_ctx = Context::new(rt.handle());
+    panic_handler(root_ctx.clone());
     ThisServerProcess::set(ServerProcessType::Authserver);
     let vm = ConsoleArgs::parse();
     {
-        let mut cfg_mgr_w = ConfigMgr::m();
+        let mut cfg_mgr_w = CONFIG_MGR.blocking_write();
         cfg_mgr_w.configure(&vm.config, vm.dry_run);
         cfg_mgr_w.load_app_configs()?;
     };
     let _wg = {
-        let cfg_mgr_r = ConfigMgr::r();
+        let cfg_mgr_r = CONFIG_MGR.blocking_read();
         // TODO: Setup DB logging. Original code below
         // // Init all logs
         // sLog->RegisterAppender<AppenderDB>();
@@ -92,13 +51,11 @@ fn main() -> AzResult<()> {
         )
     };
 
-    let rt = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build()?);
-    let token = tokio_util::sync::CancellationToken::new();
     banner::azotha_banner_show("authserver-daemon", || {
         info!(
             target:"server::authserver",
             "> Using configuration file       {}",
-            ConfigMgr::r().get_filename().display()
+            CONFIG_MGR.blocking_read().get_filename().display()
         )
     });
 
@@ -107,7 +64,7 @@ fn main() -> AzResult<()> {
     OsRng.gen::<u64>();
 
     // worldserver PID file creation
-    if let Ok(pid_file) = &ConfigMgr::r().get_option::<String>("PidFile") {
+    if let Ok(pid_file) = &CONFIG_MGR.blocking_read().get_option::<String>("PidFile") {
         let pid = create_pid_file(pid_file)?;
         error!(target:"server", "Daemon PID: {pid}");
     }
@@ -116,44 +73,55 @@ fn main() -> AzResult<()> {
     // // TODO: Impl me? Init Secret Manager
     // sSecretMgr->Initialize();
 
-    rt.block_on(start_db(token.clone()))?;
-    let _db_handle = dropper_wrapper_fn(rt.handle(), token.clone(), stop_db());
+    let (db_started_send, db_started_recv) = oneshot::channel();
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(async move {
+        if let Err(e) = start_db(ctx.clone(), db_started_send).await {
+            error!(target:"server::authserver", cause=%e, "error starting/stopping DB");
+            ctx.cancel();
+        }
+    });
+    // Enforce DB to be up first
+    db_started_recv.blocking_recv().unwrap();
 
-    LoginRESTService::start(rt.handle(), token.clone())?;
-    let _login_service_handle = dropper_wrapper_fn(rt.handle(), token.clone(), LoginRESTService::stop());
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(async move {
+        if let Err(e) = LoginRESTService::start(ctx.clone()).await {
+            error!(target:"server::authserver", cause=%e, "error starting/stopping LoginRESTService");
+            ctx.cancel();
+        }
+    });
 
     // Get the list of realms for the server
-    let realm_list_task = RealmList::init(rt.handle(), token.clone(), ConfigMgr::r().get("RealmsStateUpdateDelay", || 10));
-    let _realm_list_handle = dropper_wrapper_fn(rt.handle(), token.clone(), async { Ok(realm_list_task.await?) });
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(RealmList::init(ctx, CONFIG_MGR.blocking_read().get("RealmsStateUpdateDelay", || 10)));
 
     // Stop auth server if dry run
-    if ConfigMgr::r().is_dry_run() {
+    if CONFIG_MGR.blocking_read().is_dry_run() {
         info!(target:"server::authserver", "Dry run completed, terminating.");
+        root_ctx.cancel();
+        root_ctx.tt.close();
+        rt.block_on(root_ctx.tt.wait());
         return Ok(());
     }
 
-    let bind_ip = ConfigMgr::r().get("BindIP", || "0.0.0.0".to_string());
-    let bnport = ConfigMgr::r().get("BattlenetPort", || 1119u16);
+    let bind_ip = CONFIG_MGR.blocking_read().get("BindIP", || "0.0.0.0".to_string());
+    let bnport = CONFIG_MGR.blocking_read().get("BattlenetPort", || 1119u16);
 
-    BnetSessionManager::start_network(rt.handle(), token.clone(), (bind_ip, bnport))?;
-    let _session_mgr_handle = dropper_wrapper_fn(rt.handle(), token.clone(), async { Ok(BnetSessionManager::stop_network().await?) });
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(BnetSessionManager::start_network(ctx, (bind_ip, bnport)));
 
     // Set signal handlers
-    let ct = token.clone();
-    let _signal_handler = signal_handler(&rt, ct.clone());
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(signal_handler(ctx));
 
     // // TODO: Implement process priority?
     // // Set process priority according to configuration settings
     // SetProcessPriority("server.bnetserver", sConfigMgr->GetIntDefault(CONFIG_PROCESSOR_AFFINITY, 0), sConfigMgr->GetBoolDefault(CONFIG_HIGH_PRIORITY, false));
 
-    let ban_expiry_check_interval = Duration::from_secs(ConfigMgr::r().get("BanExpiryCheckInterval", || 60));
-    let ban_expiry_task = rt.spawn(ban_expiry_task(token.clone(), ban_expiry_check_interval));
-    let _ban_expiry_handle = dropper_wrapper_fn(rt.handle(), token.clone(), async {
-        ban_expiry_task.await?;
-        info!(target:"server::authserver", "Closed ban expiry handler");
-        Ok(())
-    });
-
+    let ban_expiry_check_interval = Duration::from_secs(CONFIG_MGR.blocking_read().get("BanExpiryCheckInterval", || 60));
+    let ctx = root_ctx.clone();
+    root_ctx.spawn(ban_expiry_task(ctx, ban_expiry_check_interval));
     // TODO: Impl me? Windows service status watcher
     // #if TRINITY_PLATFORM == TRINITY_PLATFORM_WINDOWS
     //     std::shared_ptr<boost::asio::deadline_timer> serviceStatusWatchTimer;
@@ -168,18 +136,19 @@ fn main() -> AzResult<()> {
     //     }
     // #endif
 
-    rt.block_on(async { _signal_handler.await? })?;
+    root_ctx.tt.close();
+    rt.block_on(root_ctx.tt.wait());
     info!(target:"server::authserver", "Halting process...");
 
     Ok(())
 }
 
-async fn ban_expiry_task(cancel_token: CancellationToken, ban_expiry_check_interval: Duration) {
+async fn ban_expiry_task(ctx: Context, ban_expiry_check_interval: Duration) {
     let mut interval = tokio::time::interval(ban_expiry_check_interval);
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         tokio::select! {
-            _ = cancel_token.cancelled() => {
+            _ = ctx.cancelled() => {
                 break;
             }
             i = interval.tick() => i,
@@ -195,25 +164,25 @@ async fn ban_expiry_task(cancel_token: CancellationToken, ban_expiry_check_inter
             error!(target:"bnetserver", cause=%e, "del_bnet_expired_account_banned err");
         };
     }
+    info!(target:"server::authserver", "Closed ban expiry handler");
 }
 
 /// Initialize connection to the database
-async fn start_db(cancel_token: CancellationToken) -> AzResult<()> {
+async fn start_db(ctx: Context, db_started_send: oneshot::Sender<()>) -> AzResult<()> {
     let (updates, auth_cfg) = {
-        let config_mgr_r = ConfigMgr::r();
+        let config_mgr_r = CONFIG_MGR.read().await;
         (config_mgr_r.get_option::<DbUpdates>("Updates")?, config_mgr_r.get_option("LoginDatabaseInfo")?)
     };
 
-    let login_db_loader = DatabaseLoader::new(cancel_token, DatabaseType::Login, &auth_cfg, &updates, &[]);
-    let auth_db = login_db_loader.load().await?;
+    let login_db_loader = DatabaseLoader::new(DatabaseType::Login, auth_cfg, updates, vec![]);
+    let auth_db = login_db_loader.load(ctx.clone()).await?;
     LoginDatabase::set(auth_db);
     info!("Started auth database connection pool.");
-    Ok(())
-}
+    db_started_send.send(()).unwrap();
 
-async fn stop_db() -> AzResult<()> {
+    // Wait for cancellation
+    ctx.cancelled().await;
     info!("Stopping auth database connection.");
-
     LoginDatabase::close().await;
 
     Ok(())

@@ -1,5 +1,6 @@
 #![feature(lint_reasons)]
 
+pub mod r#async;
 pub mod banner;
 pub mod collision;
 pub mod compile_options;

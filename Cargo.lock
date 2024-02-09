@@ -202,7 +202,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-native-tls",
- "tokio-util",
  "tower-service",
  "tracing",
 ]
@@ -322,6 +321,8 @@ dependencies = [
  "serde_default",
  "serde_json",
  "thiserror",
+ "tokio",
+ "tokio-util",
  "toml",
  "tracing",
  "tracing-appender",
@@ -341,7 +342,6 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio",
- "tokio-util",
  "tracing",
  "walkdir",
 ]
@@ -378,7 +378,6 @@ dependencies = [
  "sqlx",
  "thiserror",
  "tokio",
- "tokio-util",
  "tracing",
  "wow-db2",
  "wow-db2-proc-macros",
@@ -962,7 +961,6 @@ dependencies = [
  "azothacore-server",
  "clap 4.4.18",
  "tokio",
- "tokio-util",
  "tracing",
 ]
 
@@ -3411,6 +3409,8 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
+ "futures-util",
+ "hashbrown 0.14.3",
  "pin-project-lite",
  "tokio",
  "tracing",
@@ -3422,7 +3422,6 @@ version = "0.8.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a1a195ec8c9da26928f773888e0742ca3ca1040c6cd859c919c9f59c1954ab35"
 dependencies = [
- "indexmap 2.1.0",
  "serde",
  "serde_spanned",
  "toml_datetime",
@@ -3955,7 +3954,6 @@ dependencies = [
  "rand",
  "sqlx",
  "tokio",
- "tokio-util",
  "tracing",
 ]
 

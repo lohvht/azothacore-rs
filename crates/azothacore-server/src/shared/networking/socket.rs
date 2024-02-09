@@ -1,17 +1,12 @@
 use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
 
-use azothacore_common::AzResult;
+use azothacore_common::{r#async::Context, AzResult};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
     net::TcpStream,
-    runtime::Handle as TokioRuntimeHandler,
     sync::{mpsc, Mutex as AsyncMutex},
-    task::JoinHandle,
 };
-use tokio_util::sync::CancellationToken;
 use tracing::{debug, error, instrument};
-
-use crate::shared::{dropper_wrapper_fn, DropperWrapperFn};
 
 type AsyncSharedRead = Arc<AsyncMutex<Option<Pin<Box<dyn AsyncRead + Unpin + Send>>>>>;
 
@@ -19,46 +14,51 @@ pub struct SocketWrappper {
     name:                 String,
     write_sender_channel: mpsc::Sender<bytes::Bytes>,
     read_stream:          AsyncSharedRead,
-    cancel_token:         CancellationToken,
-    _task:                DropperWrapperFn,
+    ctx:                  Context,
 }
 
 /// SocketWrappper provides a socket wrapper that is cancel safe, with reads/writes not being
 /// mutable (via channels and interior mutability w/ mutexes)
 impl SocketWrappper {
-    pub fn new<R, W>(rt_handler: TokioRuntimeHandler, cancel_token: CancellationToken, name: AddressOrName, rd: R, wr: W) -> Self
+    pub fn new<R, W>(ctx: Context, name: AddressOrName, rd: R, wr: W) -> Self
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
         let read_stream: AsyncSharedRead = Arc::new(AsyncMutex::new(Some(Box::pin(rd))));
-        let (write_sender_channel, _task) = spawn_task(cancel_token.clone(), &rt_handler, &name.to_string(), read_stream.clone(), wr);
+        let (write_sender_channel, write_receiver_channel) = mpsc::channel(1024);
+        ctx.spawn(handle_socket(
+            ctx.clone(),
+            name.to_string(),
+            wr,
+            read_stream.clone(),
+            write_sender_channel.clone(),
+            write_receiver_channel,
+        ));
 
-        let _task = dropper_wrapper_fn(&rt_handler, cancel_token.clone(), async { Ok(_task.await?) });
         Self {
             name: name.to_string(),
             write_sender_channel,
             read_stream,
-            cancel_token,
-            _task,
+            ctx,
         }
     }
 
     /// Returns Ok if not closed, else Err if closed
     pub fn is_closed(&self) -> bool {
-        self.cancel_token.is_cancelled()
+        self.ctx.is_cancelled()
     }
 
     pub async fn wait_closed(&self) {
         // token has been cancelled
-        self.cancel_token.cancelled().await;
+        self.ctx.cancelled().await;
 
         // write channel must also be closed
         self.write_sender_channel.closed().await;
     }
 
     pub fn close_socket(&self) {
-        self.cancel_token.cancel();
+        self.ctx.cancel();
     }
 
     pub async fn receive(&self, num_bytes: usize) -> io::Result<bytes::Bytes> {
@@ -74,7 +74,7 @@ impl SocketWrappper {
         };
         let mut buf = vec![0u8; num_bytes];
         let res = tokio::select! {
-            _ = self.cancel_token.cancelled() => Err(io::Error::new(io::ErrorKind::ConnectionAborted, format!("{} received failed due to already cancelled connection", self.name))),
+            _ = self.ctx.cancelled() => Err(io::Error::new(io::ErrorKind::ConnectionAborted, format!("{} received failed due to already cancelled connection", self.name))),
             r = read_stream.read_exact(&mut buf) => r,
         };
 
@@ -88,7 +88,7 @@ impl SocketWrappper {
 
     pub async fn write(&self, b: impl Into<bytes::Bytes>) -> io::Result<()> {
         let res = tokio::select! {
-            _ = self.cancel_token.cancelled() => Err(io::Error::new(io::ErrorKind::ConnectionAborted, format!("{} send write failed due to already cancelled connection", self.name))),
+            _ = self.ctx.cancelled() => Err(io::Error::new(io::ErrorKind::ConnectionAborted, format!("{} send write failed due to already cancelled connection", self.name))),
             r = self.write_sender_channel.send(b.into()) => r.map_err(|e| {
                 io::Error::new(io::ErrorKind::ConnectionAborted, format!("{} send write failed due to already closed receiver, err={e}", self.name))
             }),
@@ -102,25 +102,9 @@ impl SocketWrappper {
     }
 }
 
-fn spawn_task<W>(
-    ct: CancellationToken,
-    handle: &TokioRuntimeHandler,
-    name: &str,
-    read_stream: AsyncSharedRead,
-    wr: W,
-) -> (mpsc::Sender<bytes::Bytes>, JoinHandle<()>)
-where
-    W: AsyncWrite + Unpin + Send + 'static,
-{
-    let (write_sender_channel, write_receiver_channel) = mpsc::channel(1024);
-    let name = name.to_string();
-    let task = handle.spawn(handle_socket(ct, name, wr, read_stream, write_sender_channel.clone(), write_receiver_channel));
-    (write_sender_channel, task)
-}
-
 #[instrument(skip_all, fields(target="network", name=%name))]
 async fn handle_socket<W>(
-    ct: CancellationToken,
+    ctx: Context,
     name: String,
     mut wr: W,
     read_stream: AsyncSharedRead,
@@ -133,7 +117,7 @@ async fn handle_socket<W>(
     flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
         let mut recv_bytes_to_write = tokio::select! {
-            _ = ct.cancelled() => {
+            _ = ctx.cancelled() => {
                 debug!("shutdown write socket due to token cancellation");
                 break;
             },
@@ -163,8 +147,8 @@ async fn handle_socket<W>(
     if let Err(e) = wr.shutdown().await {
         error!(cause=?e, "shutdown write socket error: {e}");
     }
-    // doesn't hurt to cancel another time anyway
-    ct.cancel();
+    // ensure that cancel is called again.
+    ctx.cancel();
     // drop receiver, this should make the sender execute immediately too
     drop(write_receiver_channel);
     // drop read stream, this should have the effect of closing the read half of the stream
@@ -219,7 +203,7 @@ impl std::fmt::Display for AddressOrName {
 }
 
 pub trait Socket {
-    fn start_from_tcp(cancel_token: CancellationToken, addr: AddressOrName, tcp_conn: TcpStream) -> impl Future<Output = AzResult<Arc<Self>>> + Send
+    fn start_from_tcp(ctx: Context, addr: AddressOrName, tcp_conn: TcpStream) -> impl Future<Output = AzResult<Arc<Self>>> + Send
     where
         Self: std::marker::Sized,
     {
@@ -227,11 +211,11 @@ pub trait Socket {
             let (rd, wr) = tcp_conn.into_split();
             let rd = tokio::io::BufReader::new(rd);
             let wr = tokio::io::BufWriter::new(wr);
-            Self::start(cancel_token, addr, rd, wr).await
+            Self::start(ctx, addr, rd, wr).await
         }
     }
 
-    fn start<R, W>(cancel_token: CancellationToken, name: AddressOrName, rd: R, wr: W) -> impl Future<Output = AzResult<Arc<Self>>> + Send
+    fn start<R, W>(ctx: Context, name: AddressOrName, rd: R, wr: W) -> impl Future<Output = AzResult<Arc<Self>>> + Send
     where
         R: AsyncRead + Unpin + Send + Sync + 'static,
         W: AsyncWrite + Unpin + Send + Sync + 'static;

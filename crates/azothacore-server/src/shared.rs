@@ -5,58 +5,12 @@ pub mod secrets;
 pub mod shared_defines;
 
 use std::{
-    future::Future,
     io::{self, Write},
-    sync::{mpsc, Mutex},
+    panic,
 };
 
-use azothacore_common::AzResult;
-use tokio_util::sync::CancellationToken;
-use tracing::debug;
-
-pub struct DropperWrapperFn {
-    cancel_token:              CancellationToken,
-    /// Need a mutex to ensure that mpsc is sync. Its pretty much the only way to bridge the
-    /// async to sync boundary
-    has_finished_cancellation: Mutex<mpsc::Receiver<()>>,
-}
-
-impl Drop for DropperWrapperFn {
-    fn drop(&mut self) {
-        self.cancel_token.cancel();
-        _ = self.has_finished_cancellation.lock().unwrap().recv();
-    }
-}
-
-/// dropper_wrapper_fn provides an easy way to properly handle async futures
-/// by awaiting any futures passed into it on drop.
-///
-/// It handles this by cancelling the given token on drop, this causes
-/// the spawned inner handler to unblock and causes the underlying future to
-/// be awaited before sending the done signal back.
-///
-pub fn dropper_wrapper_fn<Fut>(handler: &tokio::runtime::Handle, cancel_token: CancellationToken, f: Fut) -> DropperWrapperFn
-where
-    Fut: Future<Output = AzResult<()>> + Send + 'static,
-{
-    let (s, r) = mpsc::channel();
-    let ct = cancel_token.clone();
-
-    handler.spawn(async move {
-        ct.cancelled().await;
-
-        if let Err(e) = f.await {
-            debug!(cause=%e, "error when cleaning up async function");
-        }
-        _ = s.send(());
-    });
-    let has_finished_cancellation = Mutex::new(r);
-
-    DropperWrapperFn {
-        cancel_token,
-        has_finished_cancellation,
-    }
-}
+use azothacore_common::r#async::Context;
+use tracing::{error, info};
 
 pub fn bnetrpc_zcompress(mut json: Vec<u8>) -> io::Result<Vec<u8>> {
     use flate2::{write::ZlibEncoder, Compression};
@@ -69,4 +23,80 @@ pub fn bnetrpc_zcompress(mut json: Vec<u8>) -> io::Result<Vec<u8>> {
     let mut res = e.finish()?;
     compressed.append(&mut res);
     Ok(compressed)
+}
+
+pub fn panic_handler(ctx: Context) {
+    let original_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic_info| {
+        error!(target:"server", "panic received! start termination");
+        ctx.cancel();
+        original_hook(panic_info);
+    }));
+}
+
+pub async fn signal_handler(ctx: Context) -> io::Result<()> {
+    #[cfg(target_os = "windows")]
+    let mut sig_break = match tokio::signal::windows::ctrl_break::ctrl_break() {
+        Err(e) => {
+            ctx.cancel();
+            info!(cause=%e, "Unable to init signal handler: sig_break");
+            return Err(e);
+        },
+        Ok(s) => s,
+    };
+    #[cfg(target_os = "linux")]
+    let mut sig_interrupt = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt()) {
+        Err(e) => {
+            ctx.cancel();
+            info!(cause=%e, "Unable to init signal handler: sig_interrupt");
+            return Err(e);
+        },
+        Ok(s) => s,
+    };
+    #[cfg(target_os = "linux")]
+    let mut sig_terminate = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+        Err(e) => {
+            ctx.cancel();
+            info!(cause=%e, "Unable to init signal handler: sig_terminate");
+            return Err(e);
+        },
+        Ok(s) => s,
+    };
+    #[cfg(target_os = "linux")]
+    let mut sig_quit = match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::quit()) {
+        Err(e) => {
+            ctx.cancel();
+            info!(cause=%e, "Unable to init signal handler: sig_quit");
+            return Err(e);
+        },
+        Ok(s) => s,
+    };
+    #[cfg(target_os = "windows")]
+    tokio::select! {
+        _ = ctx.cancelled() => {
+            info!("Token cancelled, terminating signal handler");
+        },
+        _ = sig_break.recv() => {
+            info!("Received signal SIGBREAK");
+        },
+    };
+    #[cfg(target_os = "linux")]
+    tokio::select! {
+        _ = ctx.cancelled() => {
+            info!("Token cancelled, terminating signal handler");
+        },
+        _ = sig_interrupt.recv() => {
+            info!("Received signal SIGINT");
+        },
+        _ = sig_terminate.recv() => {
+            info!("Received signal SIGTERM");
+        },
+        _ = sig_quit.recv() => {
+            info!("Received signal SIGQUIT");
+        },
+    };
+    info!("Terminating due to receiving a stop signal");
+    ctx.cancel();
+
+    Ok(())
 }
