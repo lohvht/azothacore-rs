@@ -45,17 +45,16 @@ impl ConfigMgr {
         self.load_module_config_callback.get_or_init(|| load_module_config_callback);
     }
 
-    pub async fn reload(&mut self) -> AzResult<()> {
-        self.load_app_configs()?;
-        self.load_modules_configs(true, false).await
+    pub async fn reload<C: serde::de::DeserializeOwned>(&self) -> AzResult<C> {
+        let cfg = self.load_app_configs()?;
+        self.load_modules_configs(true, false).await?;
+        Ok(cfg)
     }
 
-    /// Loads the main app configuration. This doesnt load the module configurations
+    /// Loads the main app configuration.
     #[instrument(skip(self))]
-    pub fn load_app_configs(&mut self) -> AzResult<()> {
-        todo!()
-        // self.config = Some(toml_from_filepath(&self.filename)?);
-        // Ok(())
+    pub fn load_app_configs<C: serde::de::DeserializeOwned>(&self) -> AzResult<C> {
+        from_env_toml(&self.filename)
     }
 
     #[instrument(skip(self))]

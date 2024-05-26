@@ -515,7 +515,7 @@ impl TileBuilder {
             }
 
             let iv = IntermediateValues {
-                heightfield:         None,
+                // heightfield:         None,
                 compact_heightfield: None,
                 contours:            None,
                 poly_mesh:           Some(iv_poly_mesh_ref),

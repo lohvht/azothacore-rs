@@ -441,10 +441,8 @@ impl RealmList {
         Ok(server_secret)
     }
 
-    pub async fn init(ctx: Context, update_interval_in_seconds: u64) {
+    pub async fn init(ctx: Context, update_interval_duration: Duration) {
         // Get the content of the realmlist table in the database
-        let update_interval_duration = Duration::from_secs(update_interval_in_seconds);
-
         let mut interval = tokio::time::interval(update_interval_duration);
         interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         loop {

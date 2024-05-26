@@ -16,7 +16,7 @@ use tracing_subscriber::{
     {self as ts},
 };
 
-use crate::configuration::{LogAppender, LogFlags, LogLevel, LogLoggerConfig};
+use crate::configuration::{LogAppender, LogFlags, LogLoggerConfig};
 
 pub struct LogGuard {
     _guards: Vec<tanb::WorkerGuard>,
@@ -179,64 +179,6 @@ fn is_target_in_logger_targets(m: &tracing::Metadata, logger_target: &str) -> bo
             Some(i) => &t[..i],
         }
     }
-}
-
-fn default_server_appenders(appenders_name: &str) -> Vec<LogAppender> {
-    vec![
-        LogAppender::Console {
-            name:      String::from("Console"),
-            min_level: LogLevel::Debug,
-            max_level: LogLevel::Error,
-            flags:     LogFlags::AddLogLevel | LogFlags::AddLogFilter,
-            // colours: vec![
-            //     (Fatal, Red),
-            //     (Error, Lred),
-            //     (Warning, Brown),
-            //     (Info, Green),
-            //     (Debug, Cyan),
-            //     (Trace, Magenta),
-            // ],
-        },
-        LogAppender::File {
-            name:      String::from(appenders_name),
-            min_level: LogLevel::Debug,
-            max_level: LogLevel::Error,
-            flags:     LogFlags::AddLogLevel | LogFlags::AddLogFilter | LogFlags::AddLogTimestamps | LogFlags::TruncateFile | LogFlags::BackupBeforeOverwrite,
-            file:      format!("{appenders_name}.log"),
-        },
-    ]
-}
-
-fn default_server_loggers(appenders_name: &str) -> Vec<LogLoggerConfig> {
-    vec![LogLoggerConfig {
-        name:      String::from("root"),
-        min_level: LogLevel::Trace,
-        max_level: LogLevel::Error,
-        appenders: vec![String::from("Console"), String::from(appenders_name)],
-    }]
-}
-
-pub fn init_default<P: AsRef<Path>>(logs_dir: P, appenders_name: &str) -> LogGuard {
-    let (appenders, loggers) = (default_server_appenders(appenders_name), default_server_loggers(appenders_name));
-    init(logs_dir, &appenders, &loggers)
-}
-
-pub fn init_console() -> LogGuard {
-    init(
-        "",
-        &[LogAppender::Console {
-            name:      String::from("Console"),
-            min_level: LogLevel::Debug,
-            max_level: LogLevel::Error,
-            flags:     LogFlags::AddLogLevel | LogFlags::AddLogFilter,
-        }],
-        &[LogLoggerConfig {
-            name:      String::from("root"),
-            min_level: LogLevel::Trace,
-            max_level: LogLevel::Error,
-            appenders: vec![String::from("Console")],
-        }],
-    )
 }
 
 /// Compose multiple layers into a `tracing`'s subscriber.

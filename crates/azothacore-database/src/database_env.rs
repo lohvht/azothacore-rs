@@ -127,7 +127,6 @@ fn get_test_pool(typ: azothacore_common::configuration::DatabaseType) -> Pool<Db
         azothacore_common::configuration::DatabaseType::Hotfix => "HOTFIX_DATABASE_URL",
         azothacore_common::configuration::DatabaseType::World => "WORLD_DATABASE_URL",
         azothacore_common::configuration::DatabaseType::Login => "LOGIN_DATABASE_URL",
-        a => panic!("Not supported: {a:?}"),
     };
     let url = dotenvy::var(env_var).unwrap_or_else(|e| panic!("err={e}; env var must be set to run DB tests, check .env.test for {env_var}"));
 

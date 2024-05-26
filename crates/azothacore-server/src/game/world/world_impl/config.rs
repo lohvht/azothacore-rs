@@ -1,11 +1,12 @@
 use std::{
+    net::IpAddr,
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use azothacore_common::{
     bounded_nums::{LowerBoundedNum, RangedBoundedNum, UpperBoundedNum},
-    configuration::{from_env_toml, DatabaseInfo},
+    configuration::{from_env_toml, DatabaseInfo, DbUpdates, LogAppender, LogFlags, LogLevel, LogLoggerConfig},
     durationb,
     durationb_days,
     durationb_hours,
@@ -83,15 +84,124 @@ use crate::{
     },
 };
 
+pub fn default_worldserver_log_appenders() -> Vec<LogAppender> {
+    // use LogConsoleColours::*;
+    use LogFlags::*;
+    use LogLevel::*;
+    vec![
+        LogAppender::Console {
+            name:      String::from("Console"),
+            min_level: Info,
+            max_level: Error,
+            flags:     AddLogLevel | AddLogFilter | TruncateFile | BackupBeforeOverwrite,
+            // colours: vec![
+            //     (Fatal, Red),
+            //     (Error, Lred),
+            //     (Warning, Brown),
+            //     (Info, Green),
+            //     (Debug, Cyan),
+            //     (Trace, Magenta),
+            // ],
+        },
+        LogAppender::File {
+            name:      String::from("Server"),
+            min_level: Warning,
+            max_level: Error,
+            flags:     AddLogLevel | AddLogFilter | TruncateFile | BackupBeforeOverwrite | AddLogTimestamps,
+            file:      String::from("Server.log"),
+        },
+        LogAppender::File {
+            name:      String::from("GM"),
+            min_level: Warning,
+            max_level: Error,
+            flags:     AddLogTimestamps | AddLogLevel | AddLogFilter | AppendFileTimestamps | TruncateFile | BackupBeforeOverwrite,
+            file:      String::from("gm.log"),
+        },
+        LogAppender::File {
+            name:      String::from("DBErrors"),
+            min_level: Warning,
+            max_level: Error,
+            flags:     TruncateFile | BackupBeforeOverwrite,
+            file:      String::from("DBErrors.log"),
+        },
+    ]
+}
+
+pub fn default_worldserver_log_configs() -> Vec<LogLoggerConfig> {
+    use LogLevel::*;
+    vec![
+        LogLoggerConfig {
+            name:      String::from("root"),
+            min_level: Info,
+            max_level: Error,
+            appenders: vec![String::from("Console"), String::from("Server")],
+        },
+        LogLoggerConfig {
+            name:      String::from("module"),
+            min_level: Info,
+            max_level: Error,
+            appenders: vec![String::from("Console"), String::from("Server")],
+        },
+        LogLoggerConfig {
+            name:      String::from("commands::gm"),
+            min_level: Info,
+            max_level: Error,
+            appenders: vec![String::from("Console"), String::from("GM")],
+        },
+        LogLoggerConfig {
+            name:      String::from("diff"),
+            min_level: Warning,
+            max_level: Error,
+            appenders: vec![String::from("Console"), String::from("Server")],
+        },
+        LogLoggerConfig {
+            name:      String::from("mmaps"),
+            min_level: Info,
+            max_level: Error,
+            appenders: vec![String::from("Server")],
+        },
+        LogLoggerConfig {
+            name:      String::from("server"),
+            min_level: Info,
+            max_level: Error,
+            appenders: vec![String::from("Console"), String::from("Server")],
+        },
+        LogLoggerConfig {
+            name:      String::from("sql::sql"),
+            min_level: Warning,
+            max_level: Error,
+            appenders: vec![String::from("Console"), String::from("DBErrors")],
+        },
+        LogLoggerConfig {
+            name:      String::from("sql"),
+            min_level: Info,
+            max_level: Error,
+            appenders: vec![String::from("Console"), String::from("Server")],
+        },
+        LogLoggerConfig {
+            name:      String::from("time::update"),
+            min_level: Info,
+            max_level: Error,
+            appenders: vec![String::from("Console"), String::from("Server")],
+        },
+    ]
+}
+
 structstruck::strike! {
 #[strikethrough[serde_inline_default]]
 #[strikethrough[derive(DefaultFromSerde, Deserialize, Serialize, Clone, Debug, PartialEq)]]
 pub struct WorldConfig {
-    #[serde_inline_default(DatabaseInfo::default_with_info("azcore_auth"))] LoginDatabaseInfo: DatabaseInfo,
-    #[serde_inline_default(DatabaseInfo::default_with_info("azcore_world"))] WorldDatabaseInfo: DatabaseInfo,
-    #[serde_inline_default(DatabaseInfo::default_with_info("azcore_characters"))] CharacterDatabaseInfo: DatabaseInfo,
-    #[serde_inline_default(DatabaseInfo::default_with_info("azcore_hotfixes"))] HotfixDatabaseInfo: DatabaseInfo,
+    #[serde_inline_default(DatabaseInfo::default_with_info("azcore_auth"))] pub LoginDatabaseInfo: DatabaseInfo,
+    #[serde_inline_default(DatabaseInfo::default_with_info("azcore_world"))] pub WorldDatabaseInfo: DatabaseInfo,
+    #[serde_inline_default(DatabaseInfo::default_with_info("azcore_characters"))] pub CharacterDatabaseInfo: DatabaseInfo,
+    #[serde_inline_default(DatabaseInfo::default_with_info("azcore_hotfixes"))] pub HotfixDatabaseInfo: DatabaseInfo,
+    #[serde(default)] pub Updates: DbUpdates,
     #[serde_inline_default("data".into())] pub DataDir: PathBuf,
+    #[serde_inline_default("logs".into())] pub LogsDir: PathBuf,
+    #[serde(default="default_worldserver_log_appenders")] pub Appender: Vec<LogAppender>,
+    #[serde(default="default_worldserver_log_configs")] pub Logger: Vec<LogLoggerConfig>,
+    #[serde_inline_default("0.0.0.0".parse().unwrap())] pub BindIP: IpAddr,
+    #[serde(default)] pub PidFile: Option<PathBuf>,
     #[serde(default)] pub ClientCacheVersion: Option<u32>,
     #[serde(default)] pub HotfixCacheVersion: Option<u32>,
     #[serde_inline_default(Locale::enUS)] pub DBCLocale: Locale,
@@ -644,8 +754,8 @@ pub struct WorldConfig {
         #[serde(default)] pub Timer: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(1) }>,
         #[serde(default)] pub MinDisableLevel: RangedBoundedNum<u32, 0, { LEVEL_LIMIT_MAX as i128 }, 0>,
     },
-    /// MaxPingTime in TC/AC
-    #[serde(default)] pub DBPingInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(30) }>,
+    // /// MaxPingTime in TC/AC
+    // #[serde(default)] pub DBPingInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(30) }>,
     #[serde(default)] pub PlayerDump: pub struct WorldConfigPlayerDump {
         #[serde_inline_default(true)] pub DisallowPaths: bool,
         #[serde_inline_default(true)] pub DisallowOverwrite: bool,

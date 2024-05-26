@@ -1,11 +1,11 @@
 use std::{
     fs::File,
     io::{BufReader, Read},
-    path::Path,
+    path::{Path, PathBuf},
     sync::OnceLock,
 };
 
-use azothacore_common::{configuration::CONFIG_MGR, AzResult, CONF_DIR};
+use azothacore_common::{AzResult, CONF_DIR};
 use tokio_native_tls::{
     native_tls::{self, Identity},
     TlsAcceptor,
@@ -15,11 +15,10 @@ use tracing::{debug, error};
 pub struct SslContext;
 
 impl SslContext {
-    pub fn initialise() -> AzResult<()> {
-        fn helper() -> AzResult<TlsAcceptor> {
-            let config_mgr_r = CONFIG_MGR.blocking_read();
-            let certificate_chain_file = Path::new(CONF_DIR).join(config_mgr_r.get("CertificatesFile", || "bnetserver.cert.pem".to_string()));
-            let private_key_file = Path::new(CONF_DIR).join(config_mgr_r.get("PrivateKeyFile", || "bnetserver.key.pem".to_string()));
+    pub fn initialise(certificates_file: PathBuf, private_key_file: PathBuf) -> AzResult<()> {
+        fn helper(cert_file: PathBuf, priv_key_file: PathBuf) -> AzResult<TlsAcceptor> {
+            let certificate_chain_file = Path::new(CONF_DIR).join(cert_file);
+            let private_key_file = Path::new(CONF_DIR).join(priv_key_file);
 
             debug!(target:"server::authserver", cert=%certificate_chain_file.display(), privkey=%private_key_file.display(), "Attempting to open cert and private key files");
             let mut cert_chain = vec![];
@@ -30,7 +29,7 @@ impl SslContext {
             Ok(TlsAcceptor::from(native_tls::TlsAcceptor::new(Identity::from_pkcs8(&cert_chain, &key_der)?)?))
         }
 
-        let acceptor = helper().map_err(|e| {
+        let acceptor = helper(certificates_file, private_key_file).map_err(|e| {
             error!(target:"server::authserver", cause=%e, "Failed to initialise SSL context");
             e
         })?;

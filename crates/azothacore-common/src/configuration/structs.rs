@@ -7,6 +7,7 @@ use std::{
 use figment::{
     providers::{Env, Format, Toml},
     Figment,
+    Profile,
 };
 use flagset::{flags, FlagSet};
 use serde::{Deserialize, Serialize};
@@ -23,7 +24,14 @@ pub fn from_env_toml<C: serde::de::DeserializeOwned, P: AsRef<Path>>(filepath: P
         .merge(Toml::file(filepath))
         .admerge(Env::prefixed("AZ__").split("__").lowercase(false));
 
-    Ok(fig.extract()?)
+    Ok(fig.extract().map_err(|mut e| {
+        // Replace the figment profile here b/c the error message produced
+        //
+        // and thus default to the default config, but the error message printed will
+        // contain the "default" prefix if deserialised via toml.
+        e.profile = Some(Profile::new(""));
+        e
+    })?)
 }
 
 #[derive(Deserialize, Serialize, Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
@@ -72,26 +80,6 @@ impl Debug for DatabaseInfo {
     }
 }
 
-#[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
-pub enum WrongPassBanType {
-    BanIP,
-    BanAccount,
-}
-
-#[serde_inline_default]
-#[derive(Deserialize, Serialize, DefaultFromSerde, Clone, Debug, PartialEq)]
-#[expect(non_snake_case)]
-pub struct WrongPass {
-    #[serde_inline_default(5)]
-    pub MaxCount: u64,
-    #[serde_inline_default(600)]
-    pub BanTime:  u64,
-    #[serde_inline_default(WrongPassBanType::BanIP)]
-    pub BanType:  WrongPassBanType,
-    #[serde_inline_default(false)]
-    pub Logging:  bool,
-}
-
 impl DatabaseInfo {
     pub fn default_with_info(database: &str) -> Self {
         Self {
@@ -117,14 +105,12 @@ flags! {
     Character   = 0b0010,
     World       = 0b0100,
     Hotfix      = 0b1000,
-    All = (DatabaseType::Login | DatabaseType::Character | DatabaseType::World | DatabaseType::Hotfix).bits(),
   }
 }
 
 impl DatabaseType {
     pub fn db_module_name(&self) -> Option<&'static str> {
         match *self {
-            Self::All => None,
             Self::Character => Some("db-characters"),
             Self::Hotfix => Some("db-hotfixes"),
             Self::Login => Some("db-auth"),
@@ -140,7 +126,7 @@ impl DatabaseType {
 #[serde_inline_default]
 #[derive(Deserialize, DefaultFromSerde, Serialize, Clone, Debug, PartialEq)]
 pub struct DbUpdates {
-    #[serde_inline_default(DatabaseType::All.into())]
+    #[serde_inline_default(FlagSet::full())]
     pub EnableDatabases:      FlagSet<DatabaseType>,
     #[serde_inline_default(true)]
     pub AutoSetup:            bool,
@@ -150,8 +136,8 @@ pub struct DbUpdates {
     pub ArchivedRedundancy:   bool,
     #[serde_inline_default(true)]
     pub AllowRehash:          bool,
-    #[serde_inline_default(Some(3))]
-    pub CleanDeadRefMaxCount: Option<isize>,
+    #[serde_inline_default(3)]
+    pub CleanDeadRefMaxCount: isize,
 }
 
 impl DbUpdates {
@@ -160,8 +146,10 @@ impl DbUpdates {
     }
 
     pub fn should_cleanup(&self, applied_count: usize) -> bool {
-        let Some(c) = &self.CleanDeadRefMaxCount else { return false };
-        *c < 0 || applied_count <= usize::try_from(*c).unwrap()
+        if self.CleanDeadRefMaxCount == 0 {
+            return false;
+        }
+        self.CleanDeadRefMaxCount < 0 || applied_count <= usize::try_from(self.CleanDeadRefMaxCount).unwrap()
     }
 }
 
@@ -230,115 +218,12 @@ pub enum LogAppender {
     // Db {},
 }
 
-pub fn default_worldserver_log_appenders() -> Vec<LogAppender> {
-    // use LogConsoleColours::*;
-    use LogFlags::*;
-    use LogLevel::*;
-    vec![
-        LogAppender::Console {
-            name:      String::from("Console"),
-            min_level: Info,
-            max_level: Error,
-            flags:     AddLogLevel | AddLogFilter,
-            // colours: vec![
-            //     (Fatal, Red),
-            //     (Error, Lred),
-            //     (Warning, Brown),
-            //     (Info, Green),
-            //     (Debug, Cyan),
-            //     (Trace, Magenta),
-            // ],
-        },
-        LogAppender::File {
-            name:      String::from("Server"),
-            min_level: Warning,
-            max_level: Error,
-            flags:     AddLogLevel | AddLogFilter | AddLogTimestamps, // TruncateFile.into(),
-            file:      String::from("Server.log"),
-        },
-        LogAppender::File {
-            name:      String::from("GM"),
-            min_level: Warning,
-            max_level: Error,
-            flags:     AddLogTimestamps | AddLogLevel | AddLogFilter | AppendFileTimestamps,
-            file:      String::from("gm.log"),
-        },
-        LogAppender::File {
-            name:      String::from("DBErrors"),
-            min_level: Warning,
-            max_level: Error,
-            flags:     None.into(),
-            file:      String::from("DBErrors.log"),
-        },
-    ]
-}
-
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub struct LogLoggerConfig {
     pub name:      String,
     pub min_level: LogLevel,
     pub max_level: LogLevel,
     pub appenders: Vec<String>,
-}
-
-pub fn default_worldserver_log_configs() -> Vec<LogLoggerConfig> {
-    use LogLevel::*;
-    vec![
-        LogLoggerConfig {
-            name:      String::from("root"),
-            min_level: Info,
-            max_level: Error,
-            appenders: vec![String::from("Console"), String::from("Server")],
-        },
-        LogLoggerConfig {
-            name:      String::from("module"),
-            min_level: Info,
-            max_level: Error,
-            appenders: vec![String::from("Console"), String::from("Server")],
-        },
-        LogLoggerConfig {
-            name:      String::from("commands::gm"),
-            min_level: Info,
-            max_level: Error,
-            appenders: vec![String::from("Console"), String::from("GM")],
-        },
-        LogLoggerConfig {
-            name:      String::from("diff"),
-            min_level: Warning,
-            max_level: Error,
-            appenders: vec![String::from("Console"), String::from("Server")],
-        },
-        LogLoggerConfig {
-            name:      String::from("mmaps"),
-            min_level: Info,
-            max_level: Error,
-            appenders: vec![String::from("Server")],
-        },
-        LogLoggerConfig {
-            name:      String::from("server"),
-            min_level: Info,
-            max_level: Error,
-            appenders: vec![String::from("Console"), String::from("Server")],
-        },
-        LogLoggerConfig {
-            name:      String::from("sql::sql"),
-            min_level: Warning,
-            max_level: Error,
-            appenders: vec![String::from("Console"), String::from("DBErrors")],
-        },
-        LogLoggerConfig {
-            name:      String::from("sql"),
-            min_level: Info,
-            max_level: Error,
-            appenders: vec![String::from("Console"), String::from("Server")],
-        },
-        LogLoggerConfig {
-            name:      String::from("time::update"),
-            min_level: Info,
-            max_level: Error,
-            appenders: vec![String::from("Console"), String::from("Server")],
-        },
-    ]
 }
 
 #[cfg(test)]
@@ -578,7 +463,7 @@ mod tests {
         assert_eq!(FlagSet::from(Character).bits(), 2);
         assert_eq!(FlagSet::from(World).bits(), 4);
         assert_eq!(FlagSet::from(Hotfix).bits(), 8);
-        assert_eq!(FlagSet::from(All).bits(), 15);
+        assert_eq!(FlagSet::<DatabaseType>::full().bits(), 15);
     }
 
     #[test]
@@ -591,26 +476,26 @@ mod tests {
         assert!(!u.update_enabled(Login));
         assert!(!u.update_enabled(Character));
         assert!(!u.update_enabled(World));
-        assert!(!u.update_enabled(All));
+        assert!(!u.update_enabled(FlagSet::full()));
         u.EnableDatabases = FlagSet::from(Login);
         assert!(u.update_enabled(Login));
         assert!(!u.update_enabled(Character));
         assert!(!u.update_enabled(World));
-        assert!(u.update_enabled(All));
+        assert!(u.update_enabled(FlagSet::full()));
         u.EnableDatabases = FlagSet::from(Character);
         assert!(!u.update_enabled(Login));
         assert!(u.update_enabled(Character));
         assert!(!u.update_enabled(World));
-        assert!(u.update_enabled(All));
+        assert!(u.update_enabled(FlagSet::full()));
         u.EnableDatabases = FlagSet::from(World);
         assert!(!u.update_enabled(Login));
         assert!(!u.update_enabled(Character));
         assert!(u.update_enabled(World));
-        assert!(u.update_enabled(All));
-        u.EnableDatabases = FlagSet::from(All);
+        assert!(u.update_enabled(FlagSet::full()));
+        u.EnableDatabases = FlagSet::<DatabaseType>::full();
         assert!(u.update_enabled(Login));
         assert!(u.update_enabled(Character));
         assert!(u.update_enabled(World));
-        assert!(u.update_enabled(All));
+        assert!(u.update_enabled(FlagSet::full()));
     }
 }

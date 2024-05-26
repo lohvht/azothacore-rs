@@ -1,9 +1,9 @@
 use std::{path::Path, sync::Arc, time::Duration};
 
-use authserver::{rest::LoginRESTService, ssl_context::SslContext, BnetSessionManager};
+use authserver::{config::AuthserverConfig, rest::LoginRESTService, ssl_context::SslContext, BnetSessionManager};
 use azothacore_common::{
     banner,
-    configuration::{DatabaseType, DbUpdates, CONFIG_MGR},
+    configuration::{DatabaseInfo, DatabaseType, DbUpdates, CONFIG_MGR},
     log,
     r#async::Context,
     utils::create_pid_file,
@@ -34,21 +34,16 @@ fn main() -> AzResult<()> {
     panic_handler(root_ctx.clone());
     ThisServerProcess::set(ServerProcessType::Authserver);
     let vm = ConsoleArgs::parse();
-    {
+    let cfg: AuthserverConfig = {
         let mut cfg_mgr_w = CONFIG_MGR.blocking_write();
         cfg_mgr_w.configure(&vm.config, vm.dry_run, Box::new(|_| Box::pin(async move { Ok(vec![]) })));
-        cfg_mgr_w.load_app_configs()?;
+        cfg_mgr_w.load_app_configs()?
     };
     let _wg = {
-        let cfg_mgr_r = CONFIG_MGR.blocking_read();
         // TODO: Setup DB logging. Original code below
         // // Init all logs
         // sLog->RegisterAppender<AppenderDB>();
-        log::init(
-            cfg_mgr_r.get_option::<String>("LogsDir")?,
-            &cfg_mgr_r.get_option::<Vec<_>>("Appender")?,
-            &cfg_mgr_r.get_option::<Vec<_>>("Logger")?,
-        )
+        log::init(&cfg.LogsDir, &cfg.Appender, &cfg.Logger)
     };
 
     banner::azotha_banner_show("authserver-daemon", || {
@@ -64,19 +59,19 @@ fn main() -> AzResult<()> {
     OsRng.gen::<u64>();
 
     // worldserver PID file creation
-    if let Ok(pid_file) = &CONFIG_MGR.blocking_read().get_option::<String>("PidFile") {
+    if let Some(pid_file) = cfg.PidFile {
         let pid = create_pid_file(pid_file)?;
         error!(target:"server", "Daemon PID: {pid}");
     }
 
-    SslContext::initialise()?;
+    SslContext::initialise(cfg.CertificatesFile, cfg.PrivateKeyFile)?;
     // // TODO: Impl me? Init Secret Manager
     // sSecretMgr->Initialize();
 
     let (db_started_send, db_started_recv) = oneshot::channel();
     let ctx = root_ctx.clone();
     root_ctx.spawn(async move {
-        if let Err(e) = start_db(ctx.clone(), db_started_send).await {
+        if let Err(e) = start_db(ctx.clone(), cfg.Updates, cfg.LoginDatabaseInfo, db_started_send).await {
             error!(target:"server::authserver", cause=%e, "error starting/stopping DB");
             ctx.cancel();
         }
@@ -86,7 +81,7 @@ fn main() -> AzResult<()> {
 
     let ctx = root_ctx.clone();
     root_ctx.spawn(async move {
-        if let Err(e) = LoginRESTService::start(ctx.clone()).await {
+        if let Err(e) = LoginRESTService::start(ctx.clone(), cfg.BindIP, cfg.LoginREST, cfg.WrongPass).await {
             error!(target:"server::authserver", cause=%e, "error starting/stopping LoginRESTService");
             ctx.cancel();
         }
@@ -94,7 +89,7 @@ fn main() -> AzResult<()> {
 
     // Get the list of realms for the server
     let ctx = root_ctx.clone();
-    root_ctx.spawn(RealmList::init(ctx, CONFIG_MGR.blocking_read().get("RealmsStateUpdateDelay", || 10)));
+    root_ctx.spawn(RealmList::init(ctx, *cfg.RealmsStateUpdateDelay));
 
     // Stop auth server if dry run
     if CONFIG_MGR.blocking_read().is_dry_run() {
@@ -105,19 +100,15 @@ fn main() -> AzResult<()> {
         return Ok(());
     }
 
-    let bind_ip = CONFIG_MGR.blocking_read().get("BindIP", || "0.0.0.0".to_string());
-    let bnport = CONFIG_MGR.blocking_read().get("BattlenetPort", || 1119u16);
-
     let ctx = root_ctx.clone();
-    root_ctx.spawn(BnetSessionManager::start_network(ctx, (bind_ip, bnport)));
+    root_ctx.spawn(BnetSessionManager::start_network(ctx, (cfg.BindIP, cfg.BattlenetPort)));
 
     // Set signal handlers
     let ctx = root_ctx.clone();
     root_ctx.spawn(signal_handler(ctx));
 
-    let ban_expiry_check_interval = Duration::from_secs(CONFIG_MGR.blocking_read().get("BanExpiryCheckInterval", || 60));
     let ctx = root_ctx.clone();
-    root_ctx.spawn(ban_expiry_task(ctx, ban_expiry_check_interval));
+    root_ctx.spawn(ban_expiry_task(ctx, *cfg.BanExpiryCheckInterval));
 
     root_ctx.tt.close();
     rt.block_on(root_ctx.tt.wait());
@@ -151,12 +142,7 @@ async fn ban_expiry_task(ctx: Context, ban_expiry_check_interval: Duration) {
 }
 
 /// Initialize connection to the database
-async fn start_db(ctx: Context, db_started_send: oneshot::Sender<()>) -> AzResult<()> {
-    let (updates, auth_cfg) = {
-        let config_mgr_r = CONFIG_MGR.read().await;
-        (config_mgr_r.get_option::<DbUpdates>("Updates")?, config_mgr_r.get_option("LoginDatabaseInfo")?)
-    };
-
+async fn start_db(ctx: Context, updates: DbUpdates, auth_cfg: DatabaseInfo, db_started_send: oneshot::Sender<()>) -> AzResult<()> {
     let login_db_loader = DatabaseLoader::new(DatabaseType::Login, auth_cfg, updates, vec![]);
     let auth_db = login_db_loader.load(ctx.clone()).await?;
     LoginDatabase::set(auth_db);

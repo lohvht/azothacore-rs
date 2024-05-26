@@ -1,4 +1,8 @@
-use std::{net::SocketAddr, sync::OnceLock, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr},
+    sync::OnceLock,
+    time::Duration,
+};
 
 use axum::{
     extract::{rejection::JsonRejection, State},
@@ -15,7 +19,6 @@ use axum_extra::{
 };
 use azothacore_common::{
     az_error,
-    configuration::{WrongPass, WrongPassBanType, CONFIG_MGR},
     hex_str,
     r#async::Context,
     utils::{net_resolve, unix_now},
@@ -38,7 +41,10 @@ use tokio::net::{TcpListener, TcpStream};
 use tower_service::Service as TowerService;
 use tracing::{debug, error, info, warn};
 
-use crate::ssl_context::SslContext;
+use crate::{
+    config::{AuthserverConfigLoginREST, AuthserverConfigWrongPass, WrongPassBanType},
+    ssl_context::SslContext,
+};
 
 struct WrappedResponseResult<T, E>(Result<T, E>);
 
@@ -83,41 +89,26 @@ struct LoginServiceDetails {
     local_network:         IpNet,
     external_address:      SocketAddr,
     login_ticket_duration: Duration,
-    wrong_pass:            Option<WrongPass>,
+    wrong_pass:            AuthserverConfigWrongPass,
 }
 
 impl LoginRESTService {
-    pub async fn start(ctx: Context) -> AzResult<()> {
+    pub async fn start(ctx: Context, bind_ip: IpAddr, login_rest: AuthserverConfigLoginREST, wrong_pass: AuthserverConfigWrongPass) -> AzResult<()> {
         let login_service_details = {
-            let cfg_mgr_r = CONFIG_MGR.read().await;
-            let bind_addr = cfg_mgr_r.get("BindIP", || "0.0.0.0".to_string());
-            let port = cfg_mgr_r.get("LoginREST.Port", || 8081);
-            let external_address = cfg_mgr_r.get("LoginREST.ExternalAddress", || "127.0.0.1".to_string());
-            let local_address = cfg_mgr_r.get("LoginREST.LocalAddress", || "127.0.0.1".to_string());
-            let local_network_mask = cfg_mgr_r.get("LoginREST.SubnetMask", || "255.255.255.0".to_string());
-            let login_ticket_duration = Duration::from_secs(cfg_mgr_r.get("LoginREST.TicketDuration", || 3600));
-            let wrong_pass = cfg_mgr_r
-                .get_option("WrongPass")
-                .map_err(|e| {
-                    error!(target:"server::rest", cause=%e, "WrongPass is configured wrongly, assuming its not set. {e}");
-                    e
-                })
-                .ok();
-
-            let external_address = net_resolve((external_address.as_str(), port)).map_err(|e| {
-                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.ExternalAddress {external_address}");
+            let external_address = net_resolve((login_rest.ExternalAddress, login_rest.Port)).map_err(|e| {
+                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.ExternalAddress {}", login_rest.ExternalAddress);
                 e
             })?;
-            let local_address = net_resolve((local_address.as_str(), port)).map_err(|e| {
-                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.LocalAddress {local_address}");
+            let local_address = net_resolve((login_rest.LocalAddress, login_rest.Port)).map_err(|e| {
+                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.LocalAddress {}", login_rest.LocalAddress);
                 e
             })?;
-            let bind_addr = net_resolve((bind_addr.as_str(), port)).map_err(|e| {
-                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.BindAddr {bind_addr}");
+            let bind_addr = net_resolve((bind_ip, login_rest.Port)).map_err(|e| {
+                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.BindAddr {}", bind_ip);
                 e
             })?;
-            let local_subnet_mask = net_resolve((local_network_mask.as_str(), port)).map_err(|e| {
-                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.SubnetMask {local_network_mask}");
+            let local_subnet_mask = net_resolve((login_rest.SubnetMask, login_rest.Port)).map_err(|e| {
+                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.SubnetMask {}", login_rest.SubnetMask);
                 e
             })?;
             let local_network = IpNet::with_netmask(local_address.ip(), local_subnet_mask.ip())?;
@@ -128,7 +119,7 @@ impl LoginRESTService {
                 local_address,
                 local_network,
                 wrong_pass,
-                login_ticket_duration,
+                login_ticket_duration: *login_rest.TicketDuration,
             })
         };
 
@@ -399,10 +390,10 @@ impl LoginRESTService {
             warn!(target:"server::rest", "error somehow when calling DB to update bnet auth: err={res:?}");
         } else if !is_banned {
             let ip_address = &state.source_ip;
-            let Some(wrong_pass) = &details.wrong_pass else {
+            if !details.wrong_pass.Enabled {
                 return (StatusCode::OK, [("Content-Type", "application/json;charset=utf-8")], Json(error_response));
-            };
-            if !wrong_pass.Logging {
+            }
+            if !details.wrong_pass.Logging {
                 warn!(target:"server::rest", ip_address=%ip_address, login=login, account_id=account_id, "Attempted to connect with wrong password!");
             }
             let mut trans = handle_login_err!(login_db.begin().await, "unable to open a transaction to update wrong password counts");
@@ -412,12 +403,12 @@ impl LoginRESTService {
             );
 
             failed_logins += 1;
-            debug!(target:"server::rest", MaxWrongPass=wrong_pass.MaxCount,  account_id=account_id);
-            if failed_logins < wrong_pass.MaxCount {
+            debug!(target:"server::rest", MaxWrongPass=details.wrong_pass.MaxCount,  account_id=account_id);
+            if failed_logins < details.wrong_pass.MaxCount {
                 return (StatusCode::OK, [("Content-Type", "application/json;charset=utf-8")], Json(error_response));
             }
-            let ban_time = wrong_pass.BanTime;
-            if matches!(wrong_pass.BanType, WrongPassBanType::BanAccount) {
+            let ban_time = details.wrong_pass.BanTime.as_secs();
+            if matches!(details.wrong_pass.BanType, WrongPassBanType::BanAccount) {
                 handle_login_err!(
                     LoginDatabase::ins_bnet_account_auto_banned(&mut *trans, params!(account_id, ban_time)).await,
                     "unable to insert bnet auto ban"

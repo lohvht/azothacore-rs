@@ -8,6 +8,7 @@ use bnet_rpc::BnetRpcService;
 use tokio::{net::ToSocketAddrs, sync::Mutex as AsyncMutex};
 use tracing::{debug, error, info};
 
+pub mod config;
 pub mod rest;
 pub mod session;
 pub mod ssl_context;
