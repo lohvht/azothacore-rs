@@ -24,9 +24,15 @@ impl MoveSpeed {
             turn_rate: 3.141594,
             flight: 7.0,
             flight_back: 4.5,
-            #[allow(clippy::approx_constant)]
+            #[expect(clippy::approx_constant)]
             pitch_rate: 3.14,
         }
+    }
+}
+
+impl Default for MoveSpeed {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

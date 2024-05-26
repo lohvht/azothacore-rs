@@ -868,7 +868,7 @@ impl RbacData {
     /// @endcode
     ///
     pub fn has_permission(&self, permission: RbacPermId) -> bool {
-        self.global_perms.get(&Ok(permission)).is_some()
+        self.global_perms.contains(&Ok(permission))
     }
 
     /// @name grant_permission
@@ -1112,12 +1112,12 @@ impl RbacData {
 
     /// Checks if a permission is granted
     fn has_granted_permission(&self, permission_id: RawRbacPermId) -> bool {
-        self.granted_perms.get(&permission_id).is_some()
+        self.granted_perms.contains(&permission_id)
     }
 
     /// Checks if a permission is denied
     fn has_denied_permission(&self, permission_id: RawRbacPermId) -> bool {
-        self.denied_perms.get(&permission_id).is_some()
+        self.denied_perms.contains(&permission_id)
     }
 
     /// Adds a new granted permission

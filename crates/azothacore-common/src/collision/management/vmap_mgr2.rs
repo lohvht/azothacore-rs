@@ -35,7 +35,6 @@ pub struct VMapMgr2<'liq, 'vd> {
     child_map_data:     HashMap<u32, Vec<u32>>,
     /// Parent map data, containings map_ids to their parent ID.
     parent_map_data:    Arc<HashMap<u32, u32>>,
-    ///
     instance_map_trees: Arc<RwLock<VmapInstanceMapTrees>>,
 }
 
@@ -224,55 +223,55 @@ impl<'liq, 'vd> VMapMgrTrait for VMapMgr2<'liq, 'vd> {
         self.enable_height_calc = enable_height_calc;
     }
 
-    fn load_map_tile(&self, p_base_path: &Path, p_map_id: u32, x: u16, y: u16) -> super::VmapFactoryLoadResult<()> {
+    fn load_map_tile(&self, _p_base_path: &Path, _p_map_id: u32, _x: u16, _y: u16) -> super::VmapFactoryLoadResult<()> {
         todo!()
     }
 
-    fn exists_map_tile(&self, p_base_path: &Path, p_map_id: u32, x: u16, y: u16) -> super::VmapLoadResult<()> {
+    fn exists_map_tile(&self, _p_base_path: &Path, _p_map_id: u32, _x: u16, _y: u16) -> super::VmapLoadResult<()> {
         todo!()
     }
 
-    fn unload_map_tile(&self, p_map_id: u32, x: u16, y: u16) {
+    fn unload_map_tile(&self, _p_map_id: u32, _x: u16, _y: u16) {
         todo!()
     }
 
-    fn unload_map(&self, p_map_id: u32) {
+    fn unload_map(&self, _p_map_id: u32) {
         todo!()
     }
 
     fn is_in_line_of_sight(
         &self,
-        p_map_id: u32,
-        x1: f32,
-        y1: f32,
-        z1: f32,
-        x2: f32,
-        y2: f32,
-        z2: f32,
-        ignore_flags: flagset::FlagSet<crate::collision::models::ModelIgnoreFlags>,
+        _p_map_id: u32,
+        _x1: f32,
+        _y1: f32,
+        _z1: f32,
+        _x2: f32,
+        _y2: f32,
+        _z2: f32,
+        _ignore_flags: flagset::FlagSet<crate::collision::models::ModelIgnoreFlags>,
     ) -> bool {
         todo!()
     }
 
-    fn get_height(&self, p_map_id: u32, x: f32, y: f32, z: f32, max_search_dist: f32) -> f32 {
+    fn get_height(&self, _p_map_id: u32, _x: f32, _y: f32, _z: f32, _max_search_dist: f32) -> f32 {
         todo!()
     }
 
     fn get_object_hit_pos(
         &self,
-        p_map_id: u32,
-        x1: f32,
-        y1: f32,
-        z1: f32,
-        x2: f32,
-        y2: f32,
-        z2: f32,
-        rx: &mut f32,
-        ry: &mut f32,
-        rz: &mut f32,
-        p_modify_dist: f32,
+        _p_map_id: u32,
+        _x1: f32,
+        _y1: f32,
+        _z1: f32,
+        _x2: f32,
+        _y2: f32,
+        _z2: f32,
+        _rx: &mut f32,
+        _ry: &mut f32,
+        _rz: &mut f32,
+        _p_modify_dist: f32,
     ) -> bool {
-        let a = (self.get_liquid_flags)(3);
+        let _a = (self.get_liquid_flags)(3);
         todo!()
     }
 
@@ -284,11 +283,21 @@ impl<'liq, 'vd> VMapMgrTrait for VMapMgr2<'liq, 'vd> {
         todo!()
     }
 
-    fn get_area_info(&self, p_map_id: u32, x: f32, y: f32, z: &mut f32, flags: &mut u32, adt_id: &mut u16, root_id: &mut u32, group_id: &mut u32) -> bool {
+    fn get_area_info(
+        &self,
+        _p_map_id: u32,
+        _x: f32,
+        _y: f32,
+        _z: &mut f32,
+        _flags: &mut u32,
+        _adt_id: &mut u16,
+        _root_id: &mut u32,
+        _group_id: &mut u32,
+    ) -> bool {
         todo!()
     }
 
-    fn get_liquid_level(&self, p_map_id: u32, x: f32, y: f32, z: f32, req_liquid_type: u8, level: &mut f32, floor: &mut f32, typ: &mut u32) -> bool {
+    fn get_liquid_level(&self, _p_map_id: u32, _x: f32, _y: f32, _z: f32, _req_liquid_type: u8, _level: &mut f32, _floor: &mut f32, _typ: &mut u32) -> bool {
         todo!()
     }
 }

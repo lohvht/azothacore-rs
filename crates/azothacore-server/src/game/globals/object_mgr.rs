@@ -21,4 +21,10 @@ impl ObjectMgr {
     }
 }
 
+impl Default for ObjectMgr {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub static OBJECT_MGR: AsyncRwLock<ObjectMgr> = AsyncRwLock::const_new(ObjectMgr::new());

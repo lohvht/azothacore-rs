@@ -2,13 +2,13 @@ use std::{io, io::Write, path::Path, slice};
 
 use azothacore_common::{utils::buffered_file_create, AzResult};
 use byteorder::{NativeEndian, WriteBytesExt};
-use recastnavigation_sys::{rcCompactHeightfield, rcContourSet, rcHeightfield, rcPolyMesh, rcPolyMeshDetail};
+use recastnavigation_sys::{rcCompactHeightfield, rcContourSet, rcPolyMesh, rcPolyMeshDetail};
 use tracing::info;
 
 use crate::mmap_generator::common::MeshData;
 // this class gathers all debug info holding and output
 pub struct IntermediateValues<'a> {
-    pub heightfield:         Option<&'a rcHeightfield>,
+    // pub heightfield:         Option<&'a rcHeightfield>,
     pub compact_heightfield: Option<&'a rcCompactHeightfield>,
     pub contours:            Option<&'a rcContourSet>,
     pub poly_mesh:           Option<&'a rcPolyMesh>,

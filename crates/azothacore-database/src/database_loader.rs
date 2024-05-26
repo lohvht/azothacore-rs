@@ -1,5 +1,6 @@
 use std::{
     collections::BTreeMap,
+    fmt::Display,
     fs,
     path::{Path, PathBuf},
     str::FromStr,
@@ -62,14 +63,15 @@ impl FromStr for FetcherState {
     }
 }
 
-impl ToString for FetcherState {
-    fn to_string(&self) -> String {
-        match *self {
-            FetcherState::Archived => "ARCHIVED".into(),
-            FetcherState::Custom => "CUSTOM".into(),
-            FetcherState::Module => "MODULE".into(),
-            FetcherState::Released => "RELEASED".into(),
-        }
+impl Display for FetcherState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match *self {
+            FetcherState::Archived => "ARCHIVED",
+            FetcherState::Custom => "CUSTOM",
+            FetcherState::Module => "MODULE",
+            FetcherState::Released => "RELEASED",
+        };
+        write!(f, "{s}")
     }
 }
 

@@ -329,6 +329,13 @@ pub struct RealmList {
     realms:      RwLock<BTreeMap<BnetRealmHandle, Realm>>,
     sub_regions: RwLock<BTreeSet<String>>,
 }
+
+impl Default for RealmList {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RealmList {
     pub fn get() -> &'static RealmList {
         &REALM_LIST

@@ -198,7 +198,7 @@ impl BattlenetAccountMgr {
 
     pub async fn get_max_index_inner<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32) -> AccountOpResult<Option<u8>> {
         let max_index = LoginDatabase::sel_bnet_max_account_index::<_, (Option<u8>,)>(login_db, params!(account_id)).await?;
-        Ok(max_index.map(|v| if let Some(i) = v.0 { i } else { 0 }))
+        Ok(max_index.map(|v| v.0.unwrap_or_default()))
     }
 
     pub fn calculate_sha_pass_hash(name: &str, password: &str) -> String {

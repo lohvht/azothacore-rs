@@ -1,9 +1,6 @@
 use std::{
     collections::BTreeMap,
-    sync::{
-        atomic::{AtomicI32, AtomicI64},
-        Arc,
-    },
+    sync::{atomic::AtomicI64, Arc},
 };
 
 use azothacore_common::{configuration::DatabaseType, AzResult};
@@ -114,19 +111,27 @@ pub trait AccountScript: ScriptObject {
 }
 
 pub struct ScriptMgr {
-    scheduled_scripts: AtomicI32,
-    world:             ScriptRegistry<dyn WorldScript>,
-    database:          ScriptRegistry<dyn DatabaseScript>,
-    account:           ScriptRegistry<dyn AccountScript>,
+    // scheduled_scripts: AtomicI32,
+    world:    ScriptRegistry<dyn WorldScript>,
+    database: ScriptRegistry<dyn DatabaseScript>,
+    account:  ScriptRegistry<dyn AccountScript>,
+    command:  ScriptRegistry<dyn CommandScript>,
+}
+
+impl Default for ScriptMgr {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ScriptMgr {
     pub const fn new() -> Self {
         Self {
-            scheduled_scripts: AtomicI32::new(0),
-            world:             ScriptRegistry::new(),
-            database:          ScriptRegistry::new(),
-            account:           ScriptRegistry::new(),
+            // scheduled_scripts: AtomicI32::new(0),
+            world:    ScriptRegistry::new(),
+            database: ScriptRegistry::new(),
+            account:  ScriptRegistry::new(),
+            command:  ScriptRegistry::new(),
         }
     }
 
@@ -354,6 +359,12 @@ pub struct ScriptRegistry<T: ScriptObject + ?Sized> {
     al_scripts:          Vec<Arc<T>>,
     /// Counter used for code-only scripts.
     script_id_counter:   AtomicI64,
+}
+
+impl<T: ScriptObject + ?Sized> Default for ScriptRegistry<T> {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl<T: ScriptObject + ?Sized> ScriptRegistry<T> {

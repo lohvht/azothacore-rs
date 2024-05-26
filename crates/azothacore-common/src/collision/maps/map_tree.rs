@@ -44,7 +44,7 @@ fn file_stem_if_ext_matched<P: AsRef<Path>>(p: P, extension_to_match: &str) -> A
 
 pub struct StaticMapTree {
     map_id:        u32,
-    tree:          Qbvh<usize>,
+    _tree:         Qbvh<usize>,
     /// the tree entries
     tree_values:   HashMap<usize, Arc<ModelInstance>>,
     /// mapping between spawn IDs and BH indices
@@ -70,11 +70,11 @@ impl StaticMapTree {
 
     fn init_from_reader<P: AsRef<Path>, R: io::Read>(base_path: P, map_id: u32, r: &mut R) -> AzResult<Self> {
         let mut r = r;
-        let (tree, spawn_indices) = Self::read_map_tree(&mut r)?;
+        let (_tree, spawn_indices) = Self::read_map_tree(&mut r)?;
         Ok(Self {
             base_path: base_path.as_ref().to_owned(),
             map_id,
-            tree,
+            _tree,
             tree_values: HashMap::new(),
             spawn_indices,
             loaded_tiles: HashMap::new(),

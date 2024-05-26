@@ -32,7 +32,7 @@ pub const DEFAULT_VISIBILITY_INSTANCE: f32 = 170.0;
 pub const DEFAULT_VISIBILITY_BGARENAS: f32 = SIZE_OF_GRIDS;
 
 /// player size, also currently used (correctly?) for any non Unit world objects
-pub const DEFAULT_WORLD_OBJECT_SIZE: f32 = 0.388999998569489;
+pub const DEFAULT_WORLD_OBJECT_SIZE: f64 = 0.388999998569489;
 pub const DEFAULT_COMBAT_REACH: f32 = 1.5;
 pub const MIN_MELEE_REACH: f32 = 2.0;
 pub const NOMINAL_MELEE_RANGE: f32 = 5.0;
@@ -41,7 +41,7 @@ pub const MELEE_RANGE: f32 = NOMINAL_MELEE_RANGE - MIN_MELEE_REACH * 2.0;
 /// Most common value in dbc
 pub const DEFAULT_COLLISION_HEIGHT: f32 = 2.03128;
 
-enum TempSummonType {
+pub enum TempSummonType {
     /// despawns after a specified time OR when the creature disappears
     TimedOrDeadDespawn = 1,
     /// despawns after a specified time OR when the creature dies

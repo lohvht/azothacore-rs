@@ -173,20 +173,20 @@ impl GroupModel {
 
 #[derive(serde::Deserialize, serde::Serialize, PartialEq, Debug)]
 pub struct WmoLiquid {
-    ///!< liquid type
+    /// liquid type
     pub i_type:  u32,
     pub heights: Result<WmoLiquidVertexHeightAndFlags, f32>,
 }
 
 #[derive(serde::Deserialize, serde::Serialize, PartialEq, Debug)]
 pub struct WmoLiquidVertexHeightAndFlags {
-    ///!< the lower corner
+    /// the lower corner
     pub i_corner: Vector3<f32>,
     /// height values in a matrix. indexed via (y, x)
     ///     => the y axis is the number of rows (i.e. height)
     ///     => the x axis is the number of cols (i.e. width)
     pub i_height: DMatrix<f32>,
-    ///!< info if liquid tile is used
+    /// info if liquid tile is used
     pub i_flags:  DMatrix<u8>,
 }
 
