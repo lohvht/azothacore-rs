@@ -595,7 +595,7 @@ pub enum RbacPermId {
     CommandReloadSpellTargetPosition = 701,
     CommandReloadSpellThreats = 702,
     CommandReloadSpellGroupStackRules = 703,
-    CommandReloadTrinityString = 704,
+    CommandReloadAzothaString = 704,
     CommandReloadWardenAction = 705,
     CommandReloadWaypointScripts = 706,
     CommandReloadWaypointData = 707,

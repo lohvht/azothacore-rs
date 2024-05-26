@@ -1,7 +1,7 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
 use azothacore_common::{recastnavigation_handles::DetourNavMeshParams, AzResult};
-use azothacore_server::game::map::{ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE};
+use azothacore_server::game::grid::grid_defines::{ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE, SIZE_OF_GRIDS};
 use nalgebra::Vector6;
 use recastnavigation_sys::rcCalcBounds;
 
@@ -9,7 +9,7 @@ pub const V9_SIZE: usize = ADT_GRID_SIZE_PLUS_ONE;
 pub const V9_SIZE_SQ: usize = V9_SIZE * V9_SIZE;
 pub const V8_SIZE: usize = ADT_GRID_SIZE;
 pub const V8_SIZE_SQ: usize = V8_SIZE * V8_SIZE;
-pub const GRID_SIZE: f32 = 1600.0 / 3.0;
+pub const GRID_SIZE: f32 = SIZE_OF_GRIDS;
 pub const GRID_PART_SIZE: f32 = GRID_SIZE / V8_SIZE as f32;
 
 // // see extractor.toml, db2_and_map_extract.use_min_height
@@ -95,7 +95,7 @@ pub fn clean_vertices(verts: &mut Vec<f32>, tris: &mut [i32]) {
     let mut cleaned_verts = vec![];
     let mut count = 0i32;
     for t in tris.iter() {
-        if vert_map.get(t).is_some() {
+        if vert_map.contains_key(t) {
             continue;
         }
         vert_map.insert(*t, count);

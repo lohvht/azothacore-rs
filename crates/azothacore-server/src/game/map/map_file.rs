@@ -8,7 +8,10 @@ use azothacore_common::{
 };
 use nalgebra::{Matrix3, SMatrix};
 
-use crate::game::map::{MapLiquidData, ADT_CELLS_PER_GRID, ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE};
+use crate::game::{
+    grid::grid_defines::{ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
+    map::{MapLiquidData, ADT_CELLS_PER_GRID},
+};
 
 #[derive(Debug, serde::Deserialize, serde::Serialize)]
 pub struct MapFile {

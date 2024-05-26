@@ -36,7 +36,7 @@ fn main() -> AzResult<()> {
     let vm = ConsoleArgs::parse();
     {
         let mut cfg_mgr_w = CONFIG_MGR.blocking_write();
-        cfg_mgr_w.configure(&vm.config, vm.dry_run);
+        cfg_mgr_w.configure(&vm.config, vm.dry_run, Box::new(|_| Box::pin(async move { Ok(vec![]) })));
         cfg_mgr_w.load_app_configs()?;
     };
     let _wg = {
@@ -115,26 +115,9 @@ fn main() -> AzResult<()> {
     let ctx = root_ctx.clone();
     root_ctx.spawn(signal_handler(ctx));
 
-    // // TODO: Implement process priority?
-    // // Set process priority according to configuration settings
-    // SetProcessPriority("server.bnetserver", sConfigMgr->GetIntDefault(CONFIG_PROCESSOR_AFFINITY, 0), sConfigMgr->GetBoolDefault(CONFIG_HIGH_PRIORITY, false));
-
     let ban_expiry_check_interval = Duration::from_secs(CONFIG_MGR.blocking_read().get("BanExpiryCheckInterval", || 60));
     let ctx = root_ctx.clone();
     root_ctx.spawn(ban_expiry_task(ctx, ban_expiry_check_interval));
-    // TODO: Impl me? Windows service status watcher
-    // #if TRINITY_PLATFORM == TRINITY_PLATFORM_WINDOWS
-    //     std::shared_ptr<boost::asio::deadline_timer> serviceStatusWatchTimer;
-    //     if (m_ServiceStatus != -1)
-    //     {
-    //         serviceStatusWatchTimer = std::make_shared<boost::asio::deadline_timer>(*ioContext);
-    //         serviceStatusWatchTimer->expires_from_now(boost::posix_time::seconds(1));
-    //         serviceStatusWatchTimer->async_wait(std::bind(&ServiceStatusWatcher,
-    //             std::weak_ptr<boost::asio::deadline_timer>(serviceStatusWatchTimer),
-    //             std::weak_ptr<Trinity::Asio::IoContext>(ioContext),
-    //             std::placeholders::_1));
-    //     }
-    // #endif
 
     root_ctx.tt.close();
     rt.block_on(root_ctx.tt.wait());

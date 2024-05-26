@@ -8,10 +8,7 @@ use flagset::FlagSet;
 use nalgebra::DMatrix;
 use num::Num;
 
-pub const ADT_CELLS_PER_GRID: usize = 16;
-pub const ADT_CELL_SIZE: usize = 8;
-pub const ADT_GRID_SIZE: usize = ADT_CELLS_PER_GRID * ADT_CELL_SIZE;
-pub const ADT_GRID_SIZE_PLUS_ONE: usize = ADT_GRID_SIZE + 1;
+use super::grid::grid_defines::ADT_CELLS_PER_GRID;
 
 pub mod map_file;
 

@@ -1,7 +1,9 @@
 #![feature(lint_reasons)]
+#![feature(const_float_bits_conv)]
 
 pub mod r#async;
 pub mod banner;
+pub mod bounded_nums;
 pub mod collision;
 pub mod compile_options;
 pub mod configuration;
@@ -27,7 +29,7 @@ use num_derive::{FromPrimitive, ToPrimitive};
 use thiserror::Error;
 use tracing::warn;
 
-#[derive(Copy, Clone, Debug, ToPrimitive, FromPrimitive, PartialEq, PartialOrd, Ord, Eq)]
+#[derive(Copy, Clone, serde::Deserialize, serde::Serialize, Debug, ToPrimitive, FromPrimitive, PartialEq, PartialOrd, Ord, Eq)]
 pub enum AccountTypes {
     SecPlayer = 0,
     SecModerator = 1,
@@ -72,6 +74,7 @@ impl TryFrom<u8> for AccountTypes {
 
 flags! {
     #[allow(non_camel_case_types)]
+    #[derive(serde::Serialize, serde::Deserialize)]
     pub enum Locale: u32 {
         enUS = 0,
         koKR = 1,

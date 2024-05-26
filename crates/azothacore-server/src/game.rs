@@ -1,6 +1,8 @@
 pub mod accounts;
+pub mod battleground;
 pub mod entities;
 pub mod globals;
+pub mod grid;
 pub mod map;
 pub mod scripting;
 pub mod scripts;

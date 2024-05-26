@@ -334,6 +334,10 @@ impl RealmList {
         &REALM_LIST
     }
 
+    pub fn realms(&self) -> RwLockReadGuard<'_, BTreeMap<BnetRealmHandle, Realm>> {
+        self.realms.read().unwrap()
+    }
+
     pub fn get_sub_regions(&self) -> RwLockReadGuard<'_, BTreeSet<String>> {
         self.sub_regions.read().unwrap()
     }
@@ -474,9 +478,9 @@ impl RealmList {
                 };
                 let name = realm.name.as_str();
                 if existing_realms.remove(&realm.id).is_some() {
-                    info!(target:"realmlist", "Updating realm \"{name}\" at {}.", realm.external_address);
+                    info!(target:"realmlist", "Updating realm \"{name}\" at {} ({:?}).", realm.external_address, realm.id);
                 } else {
-                    info!(target:"realmlist", "Added realm \"{name}\" at {}.", realm.external_address);
+                    info!(target:"realmlist", "Added realm \"{name}\" at {} ({:?}).", realm.external_address, realm.id);
                 }
                 new_sub_regions.insert(BnetRealmHandle::new(realm.id.region, realm.id.site, 0).get_address_string());
                 new_realms.insert(realm.id, realm);

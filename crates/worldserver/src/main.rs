@@ -28,11 +28,11 @@ use azothacore_server::{
     game::{
         scripting::script_mgr::SCRIPT_MGR,
         scripts,
-        world::{WorldTrait, WORLD},
+        world::{SWorld, WorldTrait},
     },
     shared::{
         panic_handler,
-        realms::{realm_list::RealmList, RealmFlags},
+        realms::{realm_list::RealmList, Realm, RealmFlags},
         shared_defines::{ServerProcessType, ThisServerProcess},
         signal_handler,
     },
@@ -51,7 +51,11 @@ fn main() -> AzResult<()> {
     let vm = ConsoleArgs::parse();
     {
         let mut cfg_mgr_w = CONFIG_MGR.blocking_write();
-        cfg_mgr_w.configure(&vm.config, vm.dry_run);
+        cfg_mgr_w.configure(
+            &vm.config,
+            vm.dry_run,
+            Box::new(|reload| Box::pin(async move { SCRIPT_MGR.write().await.on_load_module_config(reload) })),
+        );
         cfg_mgr_w.load_app_configs()?;
     };
 
@@ -87,10 +91,6 @@ fn main() -> AzResult<()> {
     let ctx = root_ctx.clone();
     root_ctx.spawn(signal_handler(ctx));
 
-    // // TODO: Implement process priority?
-    // // Set process priority according to configuration settings
-    // SetProcessPriority("server.worldserver", sConfigMgr->GetOption<int32>(CONFIG_PROCESSOR_AFFINITY, 0), sConfigMgr->GetOption<bool>(CONFIG_HIGH_PRIORITY, false));
-
     let ctx = root_ctx.clone();
     root_ctx.spawn(async move {
         if let Err(e) = load_scripts(ctx.clone()).await {
@@ -113,14 +113,11 @@ fn main() -> AzResult<()> {
 
     // set server offline (not connectable)
     let ctx = root_ctx.clone();
+    let (send, recv) = oneshot::channel();
     root_ctx.spawn(async move {
         let res = query_with(
-            "UPDATE realmlist SET flag = (flag & ~?) | ? WHERE id = ?",
-            params!(
-                FlagSet::from(RealmFlags::Offline).bits(),
-                FlagSet::from(RealmFlags::VersionMismatch).bits(),
-                realm_id
-            ),
+            "UPDATE realmlist SET flag = flag | ? WHERE id = ?",
+            params!(FlagSet::from(RealmFlags::Offline).bits(), realm_id),
         )
         .execute(&LoginDatabase::get())
         .await;
@@ -128,10 +125,21 @@ fn main() -> AzResult<()> {
             error!(target:"server::loading", cause=%e, "error flipping realmlist offline while world is loading, terminating");
             ctx.cancel();
         }
+        send.send(()).unwrap();
     });
+    // Enforce realm status to be offline before everything else
+    recv.blocking_recv().unwrap();
 
     let ctx = root_ctx.clone();
     root_ctx.spawn(RealmList::init(ctx, CONFIG_MGR.blocking_read().get("RealmsStateUpdateDelay", || 10)));
+
+    let Some(realm) = load_realm_info(realm_id) else {
+        error!(target:"server::loading", "Unable to find realm with ID: {realm_id}");
+        root_ctx.cancel();
+        root_ctx.tt.close();
+        rt.block_on(root_ctx.tt.wait());
+        return Err(az_error!("Unable to find realm with ID: {realm_id}"));
+    };
 
     // // TODO: Implement metrics?
     // sMetric->Initialize(realm.Name, *ioContext, []()
@@ -152,9 +160,9 @@ fn main() -> AzResult<()> {
     // //- Initialize the World
     // sSecretMgr->Initialize();
 
-    // // // TODO: hirogoro@29/03/2023: Implement set initial world settings
+    // // TODO: hirogoro@29/03/2023: Implement set initial world settings
     // // sWorld->SetInitialWorldSettings();
-    // WORLD.write().await.set_initial_world_settings().await?;
+    // SWorld::get().write().await.set_initial_world_settings().await?;
 
     // Wait for shutdown by seeing if the tasks above have all run its course.
     // Tasks must perform graceful shutdown by using the Context above otherwise this
@@ -167,15 +175,12 @@ fn main() -> AzResult<()> {
 }
 
 async fn load_scripts(ctx: Context) -> AzResult<()> {
-    // Loading modules configs before scripts
     info!(target:"server::loading", "Initializing Scripts...");
-    CONFIG_MGR
-        .write()
-        .await
-        .load_modules_configs(false, true, |reload| async move { SCRIPT_MGR.write().await.on_load_module_config(reload) })
-        .await?;
+    // Adding scripts first, then they can load modules
     scripts::add_scripts()?;
     azothacore_modules::add_scripts()?;
+
+    CONFIG_MGR.write().await.load_modules_configs(false, true).await?;
 
     // Wait for cancellation
     ctx.cancelled().await;
@@ -231,15 +236,13 @@ async fn start_db(ctx: Context, db_started_send: oneshot::Sender<()>, realm_id: 
         .execute(&WorldDatabase::get())
         .await?;
 
-    let mut w = WORLD.write().await;
+    let mut w = SWorld::write().await;
     w.load_db_version().await?;
 
     info!("> Version DB world:     {}", w.get_db_version());
     db_started_send.send(()).unwrap();
 
     SCRIPT_MGR.read().await.on_after_databases_loaded(updates.EnableDatabases);
-
-    tokio::time::sleep(Duration::from_secs(30)).await;
 
     // Wait for cancellation
     ctx.cancelled().await;
@@ -277,6 +280,10 @@ async fn clear_online_accounts(realm_id: u32) -> AzResult<()> {
         .execute(&char_db)
         .await?;
     Ok(())
+}
+
+fn load_realm_info(realm_id: u32) -> Option<Realm> {
+    RealmList::get().realms().iter().find(|(r, _)| r.realm == realm_id).map(|(_, r)| r.to_owned())
 }
 
 #[derive(Parser, Debug)]

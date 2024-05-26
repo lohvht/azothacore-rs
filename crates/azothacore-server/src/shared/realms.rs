@@ -12,7 +12,7 @@ use thiserror::Error;
 use super::networking::socket::AddressOrName;
 
 /// Type of server, this is values from second column of Cfg_Configs.dbc
-#[derive(Debug, FromPrimitive, ToPrimitive)]
+#[derive(PartialEq, serde::Deserialize, serde::Serialize, Debug, Clone, FromPrimitive, ToPrimitive)]
 pub enum RealmType {
     Normal = 0,
     Pvp = 1,
@@ -55,7 +55,7 @@ flags! {
   }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Realm {
     pub id:                     BnetRealmHandle,
     pub build:                  u32,

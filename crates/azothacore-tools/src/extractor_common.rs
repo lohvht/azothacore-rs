@@ -88,7 +88,7 @@ structstruck::strike! {
         pub output_path: String,
         #[serde_inline_default(format!("{}/logs", env::current_dir().unwrap().to_string_lossy().to_string()))]
         pub logs_dir: String,
-        #[serde(default)]
+        #[serde_inline_default(FlagSet::<RunStagesFlag>::full())]
         pub run_stage_flags: FlagSet<RunStagesFlag>,
         #[serde_inline_default(FlagSet::full())]
         pub locales: FlagSet<Locale>,
@@ -107,7 +107,7 @@ structstruck::strike! {
         pub vmap_extract_and_generate: struct {
             #[serde_inline_default(false)]
             pub precise_vector_data: bool,
-            #[serde_inline_default(false)]
+            #[serde_inline_default(true)]
             pub override_cached: bool,
         },
         #[serde_inline_default(MmapPathGenerator::default())]
@@ -134,15 +134,6 @@ structstruck::strike! {
             #[serde(default)]
             pub off_mesh_file_path: Option<String>,
         }
-    }
-}
-
-impl ExtractorConfig {
-    pub fn from_toml<R: io::Read>(rdr: &mut R) -> AzResult<Self> {
-        let mut buf = String::new();
-        rdr.read_to_string(&mut buf)?;
-        let res = toml::from_str(&buf).map_err(|e| az_error!(e))?;
-        Ok(res)
     }
 }
 

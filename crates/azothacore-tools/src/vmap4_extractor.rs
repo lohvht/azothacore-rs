@@ -19,7 +19,10 @@ use azothacore_common::{
     AzResult,
     Locale,
 };
-use azothacore_server::shared::data_stores::db2_structure::{GameObjectDisplayInfo, Map};
+use azothacore_server::{
+    game::grid::grid_defines::SIZE_OF_GRIDS,
+    shared::data_stores::db2_structure::{GameObjectDisplayInfo, Map},
+};
 use nalgebra::{Quaternion, Rotation, UnitQuaternion, Vector3};
 use tracing::{error, info, instrument, warn};
 use wow_db2::wdc1;
@@ -576,9 +579,9 @@ impl VmapExtractor {
         let mut position = fix_coords(&map_obj_def.position);
         let mut bounds = [fix_coords(&map_obj_def.bounds[0]), fix_coords(&map_obj_def.bounds[1])];
         if is_global_wmo {
-            position += Vector3::new((1600.0 / 3.0) * 32.0, (1600.0 / 3.0) * 32.0, 0.0);
-            bounds[0] += Vector3::new((1600.0 / 3.0) * 32.0, (1600.0 / 3.0) * 32.0, 0.0);
-            bounds[1] += Vector3::new((1600.0 / 3.0) * 32.0, (1600.0 / 3.0) * 32.0, 0.0);
+            position += Vector3::new(SIZE_OF_GRIDS * 32.0, SIZE_OF_GRIDS * 32.0, 0.0);
+            bounds[0] += Vector3::new(SIZE_OF_GRIDS * 32.0, SIZE_OF_GRIDS * 32.0, 0.0);
+            bounds[1] += Vector3::new(SIZE_OF_GRIDS * 32.0, SIZE_OF_GRIDS * 32.0, 0.0);
         }
 
         let mut scale = 1.0;
@@ -638,7 +641,7 @@ impl VmapExtractor {
         let mut wmo_position = Vector3::new(wmo.position.z, wmo.position.x, wmo.position.y);
         let wmo_rotation = Rotation::from_euler_angles(wmo.rotation.z.to_radians(), wmo.rotation.x.to_radians(), wmo.rotation.y.to_radians());
         if is_global_wmo {
-            wmo_position += Vector3::new((1600.0 / 3.0) * 32.0, (1600.0 / 3.0) * 32.0, 0.0);
+            wmo_position += Vector3::new(SIZE_OF_GRIDS * 32.0, SIZE_OF_GRIDS * 32.0, 0.0);
         }
 
         let mut doodad_id = 0u16;

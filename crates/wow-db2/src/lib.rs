@@ -51,7 +51,7 @@ impl LocalisedString {
     }
 
     pub fn def_str(&self) -> String {
-        let idx = if let Some(idx) = self.default_locale { idx } else { 0 };
+        let idx = self.default_locale.unwrap_or_default();
         self.str(idx)
     }
 

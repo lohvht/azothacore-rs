@@ -6,7 +6,7 @@ use std::{
 
 use azothacore_common::{read_le_unwrap, AzResult};
 use azothacore_server::{
-    game::map::{ADT_CELLS_PER_GRID, ADT_CELL_SIZE},
+    game::grid::grid_defines::{ADT_CELLS_PER_GRID, ADT_CELL_SIZE},
     shared::data_stores::db2_structure::{LiquidMaterial, LiquidType},
 };
 use nalgebra::{Matrix3, Vector3};

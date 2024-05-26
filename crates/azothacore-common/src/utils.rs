@@ -63,6 +63,12 @@ pub struct SharedFromSelfBase<T> {
     weak: OnceLock<Weak<T>>,
 }
 
+impl<T> Default for SharedFromSelfBase<T> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl<T> SharedFromSelfBase<T> {
     pub const fn new() -> SharedFromSelfBase<T> {
         SharedFromSelfBase { weak: OnceLock::new() }

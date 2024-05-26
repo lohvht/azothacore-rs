@@ -2,9 +2,8 @@ use std::{io, path::Path};
 
 use azothacore_common::{
     banner,
-    configuration::{LogAppender, LogFlags, LogLevel, LogLoggerConfig},
+    configuration::{from_env_toml, LogAppender, LogFlags, LogLevel, LogLoggerConfig},
     log,
-    utils::buffered_file_open,
     AzResult,
     Locale,
     AZOTHA_FULL_EXTRACTOR_CONFIG,
@@ -49,8 +48,7 @@ fn full_extractor_log_cfg() -> (Vec<LogAppender>, Vec<LogLoggerConfig>) {
 
 fn main() -> AzResult<()> {
     let (las, lcfgs) = full_extractor_log_cfg();
-    let mut f = buffered_file_open(Path::new(CONF_DIR).join(AZOTHA_FULL_EXTRACTOR_CONFIG))?;
-    let args = ExtractorConfig::from_toml(&mut f)?;
+    let args: ExtractorConfig = from_env_toml(Path::new(CONF_DIR).join(AZOTHA_FULL_EXTRACTOR_CONFIG))?;
     let _wg = log::init(&args.logs_dir, &las, &lcfgs);
 
     banner::azotha_banner_show("Azothacore Full Extractor", || {

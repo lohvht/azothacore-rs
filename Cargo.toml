@@ -2,6 +2,14 @@
 resolver = "2"
 members = ["crates/*", "azothacore-script-modules/*", "xtask"]
 
+# Enable a small amount of optimization in debug mode
+[profile.dev]
+opt-level = 1
+
+# Enable high optimizations for dependencies (incl. Bevy), but not for our code:
+[profile.dev.package."*"]
+opt-level = 3
+
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [workspace.dependencies]
@@ -16,6 +24,7 @@ casclib-sys = { path = "crates/casclib-sys" }
 wow-db2 = { path = "crates/wow-db2" }
 wow-db2-proc-macros = { path = "crates/wow-db2-proc-macros" }
 # External crates
+bevy = { version = "0", features = ["bevy_asset", "trace", "multi-threaded"], default-features = false }
 axum = { version = "0" }
 axum-extra = { version = "0", features = ["typed-header"] }
 bytes = { version = "1" }
@@ -26,6 +35,7 @@ flate2 = { version = "1", features = ["zlib-ng-compat"], default-features = fals
 futures = "0"
 futures-core = "0"
 hugsqlx = { version = "0", features = [ "mysql" ] }
+humantime = { version = "2" }
 ipnet = { version = "2" }
 nalgebra = { version = "0", features = [ "serde-serialize" ] }
 num = { version = "0" }
@@ -41,9 +51,10 @@ serde_json = "1"
 serde-inline-default = "0"
 sha2 = "0"
 sqlx = { version = "0", features = [ "runtime-tokio-rustls", "mysql", "chrono" ] }
+structstruck = "0"
 thiserror = { version = "1" }
 tokio = { version = "1", features = ["full"] }
 tokio-util = { version = "0", features = ["rt"] }
-toml = { version = "0" }
+figment = { version = "0", features = ["toml", "env"] }
 tracing = { version = "0" }
 walkdir = { version = "2" }

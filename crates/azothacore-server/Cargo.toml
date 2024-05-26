@@ -5,12 +5,12 @@ edition = "2021"
 
 [dev-dependencies]
 # Local crates
-azothacore-database = { path = "../azothacore-database", features = ["test-utils"] }
+azothacore-database = { workspace = true, features = ["test-utils"] }
 
 [dependencies]
 # Local crates
 azothacore-common.workspace = true
-azothacore-database = { path = "../azothacore-database" }
+azothacore-database.workspace = true
 wow-db2-proc-macros.workspace = true
 wow-db2.workspace = true
 # External crates
@@ -25,11 +25,14 @@ num-derive.workspace = true
 num-traits.workspace = true
 num.workspace = true
 rand.workspace = true
+serde_default.workspace = true
 serde_json.workspace = true
+serde-inline-default.workspace = true
 serde.workspace = true
 sha2.workspace = true
 shlex = { version = "1" }
 sqlx.workspace = true
+structstruck.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true

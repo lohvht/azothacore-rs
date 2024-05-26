@@ -30,7 +30,7 @@ fn main() -> AzResult<()> {
     let vm = ConsoleArgs::parse();
     {
         let mut cfg_mgr_w = CONFIG_MGR.blocking_write();
-        cfg_mgr_w.configure(&vm.config, vm.dry_run);
+        cfg_mgr_w.configure(&vm.config, vm.dry_run, Box::new(|_| Box::pin(async move { Ok(vec![]) })));
         cfg_mgr_w.load_app_configs()?;
     };
     let _wg = {

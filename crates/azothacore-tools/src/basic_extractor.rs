@@ -25,17 +25,16 @@ const FLAT_LIQUID_DELTA_LIMIT: f32 = 0.001;
 
 use azothacore_common::{az_error, utils::buffered_file_create, AzResult, Locale};
 use azothacore_server::{
-    game::map::{
-        map_file::{MapFile, MapFilev9v8, MapHeightData, MapHeightFlightBox},
-        GridMap,
-        MapLiquidData,
-        MapLiquidDataEntryFlags,
-        MapLiquidDataGlobalEntryFlags,
-        MapLiquidTypeFlag,
-        ADT_CELLS_PER_GRID,
-        ADT_CELL_SIZE,
-        ADT_GRID_SIZE,
-        ADT_GRID_SIZE_PLUS_ONE,
+    game::{
+        grid::grid_defines::{ADT_CELLS_PER_GRID, ADT_CELL_SIZE, ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
+        map::{
+            map_file::{MapFile, MapFilev9v8, MapHeightData, MapHeightFlightBox},
+            GridMap,
+            MapLiquidData,
+            MapLiquidDataEntryFlags,
+            MapLiquidDataGlobalEntryFlags,
+            MapLiquidTypeFlag,
+        },
     },
     shared::data_stores::db2_structure::{CinematicCamera, LiquidMaterial, LiquidType, Map as MapDb2},
 };
