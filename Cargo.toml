@@ -24,7 +24,7 @@ casclib-sys = { path = "crates/casclib-sys" }
 wow-db2 = { path = "crates/wow-db2" }
 wow-db2-proc-macros = { path = "crates/wow-db2-proc-macros" }
 # External crates
-bevy = { version = "0", features = ["bevy_asset", "trace", "multi-threaded"], default-features = false }
+bevy = { version = "0", features = ["multi-threaded"], default-features = false }
 axum = { version = "0" }
 axum-extra = { version = "0", features = ["typed-header"] }
 bytes = { version = "1" }

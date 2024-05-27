@@ -3,6 +3,7 @@
 
 pub mod r#async;
 pub mod banner;
+pub mod bevy_app;
 pub mod bounded_nums;
 pub mod collision;
 pub mod compile_options;

@@ -14,6 +14,7 @@ azothacore-database.workspace = true
 wow-db2-proc-macros.workspace = true
 wow-db2.workspace = true
 # External crates
+bevy.workspace = true
 bytes.workspace = true
 clap.workspace = true
 flagset.workspace = true

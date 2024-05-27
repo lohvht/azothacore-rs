@@ -97,7 +97,7 @@ pub fn default_authserver_log_appenders() -> Vec<LogAppender> {
     vec![
         LogAppender::Console {
             name:      String::from("Console"),
-            min_level: Info,
+            min_level: Debug,
             max_level: Error,
             flags:     AddLogLevel | AddLogFilter | TruncateFile | BackupBeforeOverwrite,
             // colours: vec![
@@ -123,7 +123,7 @@ pub fn default_authserver_log_configs() -> Vec<LogLoggerConfig> {
     use LogLevel::*;
     vec![LogLoggerConfig {
         name:      String::from("root"),
-        min_level: Info,
+        min_level: Debug,
         max_level: Error,
         appenders: vec![String::from("Console"), String::from("Auth")],
     }]

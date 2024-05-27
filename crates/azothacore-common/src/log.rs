@@ -16,7 +16,7 @@ use tracing_subscriber::{
     {self as ts},
 };
 
-use crate::configuration::{LogAppender, LogFlags, LogLoggerConfig};
+use crate::configuration::{LogAppender, LogFlags, LogLevel, LogLoggerConfig};
 
 pub struct LogGuard {
     _guards: Vec<tanb::WorkerGuard>,
@@ -179,6 +179,27 @@ fn is_target_in_logger_targets(m: &tracing::Metadata, logger_target: &str) -> bo
             Some(i) => &t[..i],
         }
     }
+}
+
+pub fn init_console() -> LogGuard {
+    use LogFlags::*;
+    use LogLevel::*;
+
+    init(
+        "logs",
+        &[LogAppender::Console {
+            name:      String::from("Console"),
+            min_level: Debug,
+            max_level: Error,
+            flags:     AddLogLevel | AddLogFilter | TruncateFile | BackupBeforeOverwrite,
+        }],
+        &[LogLoggerConfig {
+            name:      String::from("root"),
+            min_level: Debug,
+            max_level: Error,
+            appenders: vec![String::from("Console")],
+        }],
+    )
 }
 
 /// Compose multiple layers into a `tracing`'s subscriber.

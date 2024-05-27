@@ -11,6 +11,7 @@ figment = { workspace = true, features = ["test"] }
 # Local crates
 # External crates
 anyhow = { version = "1" }
+bevy.workspace = true
 bincode = { version = "1" }
 chrono.workspace = true
 const_format = { version = "0" }

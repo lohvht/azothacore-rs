@@ -105,7 +105,7 @@ fn main() -> AzResult<()> {
 
     // Set signal handlers
     let ctx = root_ctx.clone();
-    root_ctx.spawn(signal_handler(ctx));
+    root_ctx.spawn(signal_handler());
 
     let ctx = root_ctx.clone();
     root_ctx.spawn(ban_expiry_task(ctx, *cfg.BanExpiryCheckInterval));
