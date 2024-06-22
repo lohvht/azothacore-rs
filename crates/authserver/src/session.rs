@@ -1,10 +1,10 @@
 use std::{
     collections::BTreeMap,
     io::{self, Write},
+    ops::{Deref, DerefMut},
     process,
     sync::{
         atomic::{AtomicU32, Ordering},
-        Arc,
         Mutex,
         OnceLock,
     },
@@ -12,8 +12,10 @@ use std::{
 
 use azothacore_common::{
     az_error,
-    r#async::Context,
-    utils::{unix_now, SharedFromSelf, SharedFromSelfBase},
+    bevy_app::{az_startup_succeeded, TokioRuntime},
+    configuration::ConfigMgr,
+    deref_boilerplate,
+    utils::{unix_now, BufferDecodeError, BufferResult, DecodeValueFromBytes, MessageBuffer},
     AccountTypes,
     AzResult,
     Locale,
@@ -25,12 +27,16 @@ use azothacore_database::{
 };
 use azothacore_server::shared::{
     bnetrpc_zcompress,
-    networking::socket::{AddressOrName, Socket, SocketWrappper},
+    networking::{
+        socket::{AddressOrName, Socket},
+        socket_mgr::{ConnectionComponent, NewTcpConnection, RunStartTcpSocketTask, SocketReceiver},
+    },
     realms::{
         realm_list::{JoinRealmError, RealmList},
         BnetRealmHandle,
     },
 };
+use bevy::{ecs::system::CommandQueue, prelude::*};
 use bnet_rpc::{
     bgs::protocol::{
         account::v1::{
@@ -70,17 +76,19 @@ use bnet_rpc::{
     BnetRpcService,
     BnetServiceWrapper,
 };
-use bytes::Bytes;
+use bytes::{Buf, Bytes};
 use prost::Message;
 use rand::{rngs::OsRng, RngCore};
 use sqlx::{Pool, Row};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
     net::TcpStream,
+    runtime::Handle,
+    sync::OwnedSemaphorePermit,
 };
-use tracing::{debug, error, trace, warn};
+use tracing::{debug, error, warn};
 
-use crate::{rest::LoginRESTService, ssl_context::SslContext};
+use crate::{config::AuthserverConfig, ssl_context::SslContext};
 
 fn handle_game_utils_service_compress_response<T>(prefix: &[u8], data: &T) -> BnetRpcResult<Vec<u8>>
 where
@@ -201,25 +209,189 @@ impl GameAccountInfo {
     }
 }
 
-pub struct Session {
-    // Lifetime management
-    base: SharedFromSelfBase<Session>,
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct AddBnetSessionSet;
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct BnetSessionReadPacketsSet;
+
+pub fn bnet_session_handling_plugin(app: &mut App) {
+    app.add_systems(
+        FixedUpdate,
+        handle_bnet_authserver_socket.run_if(az_startup_succeeded()).in_set(AddBnetSessionSet),
+    )
+    .add_systems(Update, read_handler.run_if(az_startup_succeeded()).in_set(BnetSessionReadPacketsSet));
+}
+
+fn handle_bnet_authserver_socket(
+    mut commands: Commands,
+    login_db: Res<LoginDatabase>,
+    rt: Res<TokioRuntime>,
+    ssl_ctx: Res<SslContext>,
+    mut sock_recv: ResMut<SocketReceiver<SessionInner>>,
+) {
+    let ssl_ctx = ssl_ctx.clone();
+    let login_db = login_db.clone();
+    while let Ok(NewTcpConnection { permit, name, conn }) = sock_recv.0.try_recv() {
+        let entity = commands.spawn_empty().id();
+        let ssl_ctx = ssl_ctx.clone();
+        let login_db = login_db.clone();
+
+        let task = rt.spawn(async move {
+            let sess = match SessionInner::start_from_tcp(login_db, ssl_ctx, permit, name, conn).await {
+                Err(e) => {
+                    error!(cause=%e, "error starting session from new TCP connections");
+                    return CommandQueue::default();
+                },
+                Ok(s) => s,
+            };
+
+            let mut command_queue = CommandQueue::default();
+            command_queue.push(move |world: &mut World| {
+                world.entity_mut(entity).insert(sess).remove::<RunStartTcpSocketTask<SessionInner>>();
+            });
+            command_queue
+        });
+        commands.entity(entity).insert(RunStartTcpSocketTask::<SessionInner>::new(task));
+    }
+}
+
+fn read_handler(
+    mut commands: Commands,
+    rt: Res<TokioRuntime>,
+    cfg: Res<ConfigMgr<AuthserverConfig>>,
+    login_db: Res<LoginDatabase>,
+    realm_list: Res<RealmList>,
+    mut sessions: Query<(Entity, &mut SessionInner)>,
+) {
+    for (e, mut inner) in &mut sessions {
+        let packets = match inner.receive(None) {
+            Err(err) => {
+                error!(cause=%err, "error receiving packets");
+                inner.close();
+                commands.entity(e).remove::<SessionInner>();
+                return;
+            },
+            Ok(p) => p,
+        };
+        let mut sess = Session {
+            cfg:        &cfg,
+            login_db:   &login_db,
+            realm_list: &realm_list,
+            inner:      &mut inner,
+        };
+
+        for AuthserverPacket { header, packet_buffer } in packets {
+            let res: io::Result<()> = rt.block_on(async {
+                if header.service_id != 0xFE {
+                    sess.dispatch(header.service_hash(), header.token, header.method_id(), packet_buffer).await?;
+                } else {
+                    sess.receive(header.service_hash(), header.token, header.method_id(), packet_buffer).await?;
+                }
+                Ok(())
+            });
+            if let Err(err) = res {
+                error!(cause=%err, caller_info=%sess.caller_info(), "session dispatch packets/receive packets err, terminating socket");
+                sess.close();
+                commands.entity(e).remove::<SessionInner>();
+            }
+        }
+    }
+}
+
+pub struct AuthserverPacket {
+    header:        Header,
+    packet_buffer: Bytes,
+}
+
+impl DecodeValueFromBytes for AuthserverPacket {
+    fn decode_from_bytes(buffer: &mut MessageBuffer) -> BufferResult<Self>
+    where
+        Self: std::marker::Sized,
+    {
+        // // ReadHeaderLengthHandler
+        // let header_length = u16::from_be_bytes(self.inner.receive(2).await?.to_vec().try_into().unwrap());
+        // // ReadHeaderHandler
+        // let header = Header::decode(self.inner.receive(header_length.into()).await?)?;
+        // // ReadDataHandler
+        // let packet_buffer = self.inner.receive(header.size().try_into().unwrap()).await?;
+        let mut previous_section_size = 0;
+        let mut expected_packet_size = 2;
+        let current_len = buffer.len();
+        if current_len < expected_packet_size {
+            return Err(BufferDecodeError::InsufficientBytes {
+                have:   current_len,
+                wanted: expected_packet_size,
+            });
+        }
+        // ReadHeaderLengthHandler
+        let header_length = u16::from_be_bytes(buffer[previous_section_size..expected_packet_size].try_into().unwrap());
+        previous_section_size = expected_packet_size;
+        expected_packet_size += <_ as Into<usize>>::into(header_length);
+        if current_len < expected_packet_size {
+            return Err(BufferDecodeError::InsufficientBytes {
+                have:   current_len,
+                wanted: expected_packet_size,
+            });
+        }
+        // ReadHeaderHandler
+        let header = match Header::decode(&buffer[previous_section_size..expected_packet_size]) {
+            Err(e) => {
+                return Err(BufferDecodeError::UnexpectedDecode(e.to_string()));
+            },
+            Ok(h) => h,
+        };
+        // ReadDataHandler
+        previous_section_size = expected_packet_size;
+        let packet_buffer_size = header.size().try_into().unwrap();
+        expected_packet_size += packet_buffer_size;
+        if current_len < expected_packet_size {
+            return Err(BufferDecodeError::InsufficientBytes {
+                have:   current_len,
+                wanted: expected_packet_size,
+            });
+        }
+        // Shift buffer forward.
+        buffer.advance(previous_section_size);
+        let packet_buffer = buffer.split_to(packet_buffer_size).freeze();
+        Ok(AuthserverPacket { header, packet_buffer })
+    }
+}
+
+pub struct Session<'a> {
+    login_db:   &'a LoginDatabase,
+    cfg:        &'a AuthserverConfig,
+    realm_list: &'a RealmList,
+    inner:      &'a mut SessionInner,
+}
+
+impl Deref for Session<'_> {
+    type Target = SessionInner;
+
+    fn deref(&self) -> &Self::Target {
+        &*self.inner
+    }
+}
+impl DerefMut for Session<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        self.inner
+    }
+}
+
+#[derive(Component)]
+pub struct SessionInner {
     // Rest of Session info.
     /// Contains a mapping of tokens expecting a return from a previous client
     /// call to service hash and method_id
     ///
     response_callbacks: Mutex<BTreeMap<u32, (u32, u32)>>,
-    /// Replaces GetRemoteIpAddress in TC/AC
-    ip_or_name:         AddressOrName,
-    inner:              SocketWrappper,
+    _permit:            Option<OwnedSemaphorePermit>,
+    socket:             Socket<AuthserverPacket>,
     /// the current session's account information. If this is set, then we can treat it as _authed=True
     /// like in TC/AC
     account_info:       OnceLock<AccountInfo>,
     /// Game account info, saved during Command_RealmListTicketRequest_v1_b9
     /// for now its a cloned value from `account_info`
-    ///  
-    /// TODO: Should this be rwlock instead?
     game_account_info:  OnceLock<GameAccountInfo>,
     locale:             OnceLock<Locale>,
     os:                 OnceLock<String>,
@@ -228,6 +400,10 @@ pub struct Session {
     client_secret:      OnceLock<[u8; 32]>,
     request_token:      AtomicU32,
 }
+
+deref_boilerplate!(SessionInner, Socket<AuthserverPacket>, socket);
+
+impl ConnectionComponent for SessionInner {}
 
 fn map_err_to_denied<E: std::error::Error>(e: E) -> BattlenetRpcErrorCode {
     error!(target:"session::rpc", cause=%e, "error when making sql queries in bnet session. mapped to denied");
@@ -239,8 +415,8 @@ fn map_err_to_internal<E: std::error::Error>(e: E) -> BattlenetRpcErrorCode {
     BattlenetRpcErrorCode::Internal
 }
 
-impl Session {
-    async fn receive(&self, service_hash: u32, token: u32, method_id: u32, _packet_buffer: Bytes) -> io::Result<()> {
+impl Session<'_> {
+    async fn receive(&mut self, service_hash: u32, token: u32, method_id: u32, _packet_buffer: Bytes) -> io::Result<()> {
         let (stored_service_hash, stored_method_id) = match self.response_callbacks.lock().unwrap().remove(&token) {
             None => return Ok(()),
             Some(d) => d,
@@ -281,15 +457,14 @@ impl Session {
         if web_credentials.is_empty() {
             return Err(BattlenetRpcErrorCode::Denied);
         }
-        let login_db = &LoginDatabase::get();
-        let Some(mut account_info) = AccountInfo::load_result(login_db, web_credentials).await.map_err(map_err_to_denied)? else {
+        let Some(mut account_info) = AccountInfo::load_result(self.login_db, web_credentials).await.map_err(map_err_to_denied)? else {
             return Err(BattlenetRpcErrorCode::Denied);
         };
 
         if account_info.login_ticket_expiry < unix_now().as_secs() {
             return Err(BattlenetRpcErrorCode::TimedOut);
         }
-        let character_counts_result = LoginDatabase::sel_bnet_character_counts_by_bnet_id(login_db, params!(account_info.id))
+        let character_counts_result = LoginDatabase::sel_bnet_character_counts_by_bnet_id(&**self.login_db, params!(account_info.id))
             .await
             .map_err(map_err_to_internal)?;
         for fields in character_counts_result {
@@ -304,7 +479,7 @@ impl Session {
                 .entry(BnetRealmHandle::new(fields.get(3), fields.get(4), fields.get(2)).get_address())
                 .or_insert(fields.get(1));
         }
-        let last_player_characters_result = LoginDatabase::sel_bnet_last_player_characters(login_db, params!(account_info.id))
+        let last_player_characters_result = LoginDatabase::sel_bnet_last_player_characters(&**self.login_db, params!(account_info.id))
             .await
             .map_err(map_err_to_internal)?;
         for fields in last_player_characters_result {
@@ -323,7 +498,7 @@ impl Session {
                     last_played_time: fields.get(6),
                 });
         }
-        let ip_address = self.ip_or_name.ip_str_or_name();
+        let ip_address = self.remote_name().ip_str_or_name();
 
         // If the IP is 'locked', check that the player comes indeed from the correct IP address
         if account_info.is_locked_to_ip {
@@ -414,33 +589,47 @@ impl Session {
     }
 }
 
-impl SharedFromSelf<Session> for Session {
-    fn get_base(&self) -> &SharedFromSelfBase<Session> {
-        &self.base
-    }
-}
-
-impl Socket for Session {
-    async fn start_from_tcp(ctx: Context, addr: AddressOrName, tcp_conn: TcpStream) -> AzResult<Arc<Self>>
+impl SessionInner {
+    async fn start_from_tcp(
+        login_db: LoginDatabase,
+        ssl_ctx: SslContext,
+        permit: Option<OwnedSemaphorePermit>,
+        addr: AddressOrName,
+        tcp_conn: TcpStream,
+    ) -> AzResult<Self>
     where
         Self: std::marker::Sized,
     {
-        let conn = SslContext::get().accept(tcp_conn).await?;
+        let conn = ssl_ctx.accept(tcp_conn).await?;
         let (rd, wr) = tokio::io::split(conn);
-        Self::start(ctx, addr, Box::new(rd), Box::new(wr)).await
+        Self::start(login_db, permit, addr, rd, wr).await
     }
 
-    async fn start<R, W>(ctx: Context, name: AddressOrName, rd: R, wr: W) -> AzResult<Arc<Self>>
+    async fn start<R, W>(login_db: LoginDatabase, _permit: Option<OwnedSemaphorePermit>, name: AddressOrName, rd: R, wr: W) -> AzResult<Self>
     where
         R: AsyncRead + Unpin + Send + Sync + 'static,
         W: AsyncWrite + Unpin + Send + Sync + 'static,
     {
-        let inner = SocketWrappper::new(ctx.clone(), name.clone(), rd, wr);
-        let s = Arc::new(Self {
-            base: SharedFromSelfBase::new(),
+        // CheckIpCallback routine
+        let ip_address = name.ip_str_or_name();
+        // Verify that this IP is not in the ip_banned table
+        LoginDatabase::del_expired_ip_bans(&*login_db, params!()).await?;
+        for fields in LoginDatabase::sel_ip_info(&*login_db, params!(ip_address)).await? {
+            let banned = fields.get::<u32, _>("banned") != 0;
+            if banned {
+                let e = az_error!("[CheckIpCallback] Banned ip '{}' tries to login!", name);
+                debug!(target:"session", cause=%e);
+                return Err(e);
+            }
+        }
+        // begin AsyncRead => ReadHandler routine
+        let socket = Socket::<AuthserverPacket>::new(&Handle::current(), name, rd, wr);
+
+        let s = SessionInner {
+            socket,
+            _permit,
             response_callbacks: Mutex::new(BTreeMap::new()),
-            ip_or_name: name,
-            inner,
+            // socket.remote_name(): name,
             account_info: OnceLock::new(),
             game_account_info: OnceLock::new(),
             build: AtomicU32::new(0),
@@ -449,83 +638,15 @@ impl Socket for Session {
             client_secret: OnceLock::new(),
             ip_country: OnceLock::new(),
             request_token: AtomicU32::new(0),
-        });
-        // accountinfo
-        s.base.initialise(&s);
-
-        // CheckIpCallback routine
-        let ip_address = s.ip_or_name.ip_str_or_name();
-        trace!(target:"session", caller = s.caller_info(), "Accepted connection");
-
-        // Verify that this IP is not in the ip_banned table
-        let login_db = &LoginDatabase::get();
-        LoginDatabase::del_expired_ip_bans(login_db, params!()).await?;
-        for fields in LoginDatabase::sel_ip_info(login_db, params!(ip_address)).await? {
-            let banned = fields.get::<u32, _>("banned") != 0;
-            if banned {
-                let e = az_error!("[CheckIpCallback] Banned ip '{}' tries to login!", s.ip_or_name);
-                debug!(target:"session", cause=%e);
-                s.close();
-                return Err(e);
-            }
-        }
-
-        // begin AsyncRead => ReadHandler routine
-        let this = s.clone();
-        ctx.spawn(async move {
-            loop {
-                tokio::select! {
-                    _ = this.wait_closed() => {
-                        break;
-                    },
-                    res = this.read_handler() => {
-                        if let Err(e) = res {
-                            error!(target:"session", cause=%e, caller = this.caller_info(), "error handling reads, terminating");
-                            this.close();
-                            this.wait_closed().await;
-                            break;
-                        }
-                    },
-                };
-            }
-        });
-
+        };
+        debug!(target:"session", caller=%s.remote_name(), "Accepted connection");
         Ok(s)
     }
-
-    fn close(&self) {
-        self.inner.close_socket();
-    }
-
-    fn is_closed(&self) -> bool {
-        self.inner.is_closed()
-    }
-
-    async fn wait_closed(&self) {
-        self.inner.wait_closed().await
-    }
 }
 
-impl Session {
-    async fn read_handler(&self) -> AzResult<()> {
-        // ReadHeaderLengthHandler
-        let header_length = u16::from_be_bytes(self.inner.receive(2).await?.to_vec().try_into().unwrap());
-        // ReadHeaderHandler
-        let header = Header::decode(self.inner.receive(header_length.into()).await?)?;
-        // ReadDataHandler
-        let packet_buffer = self.inner.receive(header.size().try_into().unwrap()).await?;
-        if header.service_id != 0xFE {
-            self.dispatch(header.service_hash(), header.token, header.method_id(), packet_buffer).await?;
-        } else {
-            self.receive(header.service_hash(), header.token, header.method_id(), packet_buffer).await?;
-        }
-        Ok(())
-    }
-}
-
-impl BnetRpcService for Session {
+impl BnetRpcService for Session<'_> {
     fn caller_info(&self) -> String {
-        let mut stream = format!("[{}", self.ip_or_name);
+        let mut stream = format!("[{}", self.remote_name());
         {
             if let Some(ai) = self.account_info.get() {
                 stream.push_str(&format!(", Account: {}", ai.login));
@@ -572,7 +693,7 @@ impl BnetRpcService for Session {
             r.encode(&mut packet)?;
         }
         // AsyncWrite
-        self.inner.write(packet).await?;
+        self.write(packet)?;
 
         Ok(())
     }
@@ -605,7 +726,7 @@ impl BnetRpcService for Session {
         header.encode(&mut packet)?;
         request.encode(&mut packet)?;
         // AsyncWrite
-        self.inner.write(packet).await?;
+        self.write(packet)?;
 
         Ok(())
     }
@@ -625,15 +746,15 @@ impl BnetRpcService for Session {
     }
 }
 
-impl AuthenticationListener for Session {
+impl AuthenticationListener for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 }
 
-impl ChallengeListener for Session {
+impl ChallengeListener for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 }
 
-impl AccountService for Session {
+impl AccountService for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 
     async fn handle_srv_req_get_account_state(&self, request: GetAccountStateRequest) -> BnetRpcResult<GetAccountStateResponse>
@@ -708,7 +829,7 @@ impl AccountService for Session {
     }
 }
 
-impl AuthenticationService for Session {
+impl AuthenticationService for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 
     #[tracing::instrument(
@@ -758,8 +879,7 @@ impl AuthenticationService for Session {
             return self.verify_web_credentials(web_creds.as_ref()).await;
         }
 
-        // self.ip_or_name
-        let endpoint = LoginRESTService::get_address_for_client(&self.ip_or_name);
+        let endpoint = self.cfg.login_rest_get_address_for_client(self.remote_name());
         let external_challenge = ChallengeExternalRequest {
             payload_type: Some("web_auth_url".to_string()),
             payload: Some(format!("https://{endpoint}/bnetserver/login/").into()),
@@ -784,11 +904,11 @@ impl AuthenticationService for Session {
 //     const USE_ORIGINAL_HASH: bool = true;
 // }
 
-impl ChannelService for Session {
+impl ChannelService for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 }
 
-impl ConnectionService for Session {
+impl ConnectionService for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 
     async fn handle_srv_req_connect(&self, request: ConnectRequest) -> BnetRpcResult<ConnectResponse>
@@ -824,17 +944,17 @@ impl ConnectionService for Session {
             ..Default::default()
         };
         _ = self.force_disconnect(disconnect_notification).await;
-        self.close();
+        self.inner.close();
         debug!(target:"session", "closed session due to request to be disconnected");
         Ok(NoResponse {})
     }
 }
 
-impl FriendsService for Session {
+impl FriendsService for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 }
 
-impl GameUtilitiesService for Session {
+impl GameUtilitiesService for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 
     async fn handle_srv_req_process_client_request(&self, request: ClientRequest) -> BnetRpcResult<ClientResponse>
@@ -885,8 +1005,9 @@ impl GameUtilitiesService for Session {
 
         if request.attribute_key() == "Command_RealmListRequest_v1_b9" {
             let response = GetAllValuesForAttributeResponse {
-                attribute_value: RealmList::get()
-                    .get_sub_regions()
+                attribute_value: self
+                    .realm_list
+                    .sub_regions
                     .iter()
                     .map(|sub_region| Variant {
                         string_value: Some(sub_region.clone()),
@@ -900,19 +1021,19 @@ impl GameUtilitiesService for Session {
     }
 }
 
-impl PresenceService for Session {
+impl PresenceService for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 }
 
-impl ReportService for Session {
+impl ReportService for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 }
 
-impl ResourcesService for Session {
+impl ResourcesService for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 }
 
-impl UserManagerService for Session {
+impl UserManagerService for Session<'_> {
     const USE_ORIGINAL_HASH: bool = true;
 }
 
@@ -977,35 +1098,7 @@ struct RealmCharacterCountEntry {
 struct RealmCharacterCountList {
     counts: Vec<RealmCharacterCountEntry>,
 }
-#[derive(serde::Serialize, serde::Deserialize)]
-struct RealmEntry {
-    #[serde(rename = "wowRealmAddress")]
-    wow_realm_address: u32,
-    #[serde(rename = "cfgTimezonesID")]
-    cfg_timezones_id:  u32,
-    #[serde(rename = "populationState")]
-    population_state:  u32,
-    #[serde(rename = "cfgCategoriesID")]
-    cfg_categories_id: u32,
-    version:           ClientVersion,
-    #[serde(rename = "cfgRealmsID")]
-    cfg_realms_id:     u32,
-    flags:             u32,
-    name:              String,
-    #[serde(rename = "cfgConfigsID")]
-    cfg_configs_id:    u32,
-    #[serde(rename = "cfgLanguagesID")]
-    cfg_languages_id:  u32,
-}
-#[derive(serde::Serialize, serde::Deserialize)]
-struct RealmState {
-    update:   Option<RealmEntry>,
-    deleting: bool,
-}
-#[derive(serde::Serialize, serde::Deserialize)]
-struct RealmListUpdates {
-    updates: Vec<RealmState>,
-}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 struct IPAddress {
     ip:   String,
@@ -1027,7 +1120,7 @@ fn json_from_blob(blob: &[u8]) -> Option<&[u8]> {
     Some(&blob[colon_idx + 1..blob.len() - 1])
 }
 
-impl Session {
+impl Session<'_> {
     async fn get_realm_list_ticket(&self, params: BTreeMap<String, Variant>) -> BnetRpcResult<ClientResponse> {
         let Some(accnt_info) = self.account_info.get() else {
             return Err(BattlenetRpcErrorCode::WowServicesDeniedRealmListTicket);
@@ -1084,11 +1177,10 @@ impl Session {
             return Err(BattlenetRpcErrorCode::WowServicesDeniedRealmListTicket);
         }
 
-        let login_db = &LoginDatabase::get();
         LoginDatabase::upd_bnet_last_login_info(
-            login_db,
+            &**self.login_db,
             params!(
-                self.ip_or_name.ip_str_or_name(),
+                self.remote_name().ip_str_or_name(),
                 self.locale.get().map_or(Locale::enUS as u32, |l| *l as u32),
                 self.os.get(),
                 accnt_info.id
@@ -1116,7 +1208,10 @@ impl Session {
         let Some(gai) = self.game_account_info.get() else { return Ok(response) };
 
         if let Some(last_player_char) = gai.last_played_characters.get(sub_region.string_value()) {
-            let Some(realm_entry) = RealmList::get().get_realm_entry_json(&last_player_char.realm_id, self.build.load(Ordering::SeqCst)) else {
+            let Some(realm_entry) = self
+                .realm_list
+                .get_realm_entry_json(&last_player_char.realm_id, self.build.load(Ordering::SeqCst))
+            else {
                 return Err(BattlenetRpcErrorCode::UtilServerFailedToSerializeResponse);
             };
             let compressed = handle_game_utils_service_compress_response(b"JamJSONRealmEntry:", &realm_entry)?;
@@ -1165,7 +1260,7 @@ impl Session {
             "".to_string()
         };
 
-        let realm_list = RealmList::get().get_realm_list(self.build.load(Ordering::SeqCst), &sub_region_id);
+        let realm_list = self.realm_list.get_realm_list(self.build.load(Ordering::SeqCst), &sub_region_id);
         let realm_list_compressed = handle_game_utils_service_compress_response(b"JSONRealmListUpdates:", &realm_list)?;
 
         let realm_character_counts = RealmCharacterCountList {
@@ -1217,20 +1312,21 @@ impl Session {
                 JoinRealmError::General => BattlenetRpcErrorCode::UtilServerFailedToSerializeResponse,
             }
         }
-        let server_addresses = RealmList::get()
-            .retrieve_realm_list_server_ip_addresses(realm_address.uint_value() as u32, &self.ip_or_name, self.build.load(Ordering::SeqCst))
+        let server_addresses = self
+            .realm_list
+            .retrieve_realm_list_server_ip_addresses(realm_address.uint_value() as u32, self.remote_name(), self.build.load(Ordering::SeqCst))
             .map_err(map_join_realm_err)?;
         let server_addresses = handle_game_utils_service_compress_response(b"JSONRealmListServerIPAddresses:", &server_addresses)?;
-        let server_secret = RealmList::get()
-            .join_realm(
-                &self.ip_or_name,
-                client_secret,
-                self.locale.get().cloned().unwrap_or(Locale::enUS),
-                self.os.get().unwrap(),
-                &game_account_info.name,
-            )
-            .await
-            .map_err(map_join_realm_err)?;
+        let server_secret = RealmList::join_realm(
+            (**self.login_db).clone(),
+            self.remote_name(),
+            client_secret,
+            self.locale.get().cloned().unwrap_or(Locale::enUS),
+            self.os.get().unwrap(),
+            &game_account_info.name,
+        )
+        .await
+        .map_err(map_join_realm_err)?;
         Ok(ClientResponse {
             attribute: vec![
                 Attribute {

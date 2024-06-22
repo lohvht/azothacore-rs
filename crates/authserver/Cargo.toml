@@ -12,6 +12,7 @@ bnet-rpc.workspace=true
 # External crates
 axum-extra.workspace = true
 axum.workspace = true
+bevy.workspace = true
 bytes.workspace = true
 clap.workspace = true
 hyper = { version = "1" }

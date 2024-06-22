@@ -1,15 +1,28 @@
-use std::{net::IpAddr, path::PathBuf, time::Duration};
+use std::{
+    net::{IpAddr, SocketAddr},
+    path::PathBuf,
+    time::Duration,
+};
 
 use azothacore_common::{
     bounded_nums::LowerBoundedNum,
-    configuration::{DatabaseInfo, DbUpdates, LogAppender, LogFlags, LogLevel, LogLoggerConfig},
+    configuration::{Config, DatabaseInfo, DbUpdates, LogAppender, LogFlags, LogLevel, LogLoggerConfig},
     durationb_hours,
     durationb_mins,
     durationb_s,
+    log::LoggingConfig,
 };
+use azothacore_server::shared::{
+    networking::{socket::AddressOrName, socket_mgr::SocketMgrConfig},
+    realms::realm_list::RealmListConfig,
+};
+use ipnet::IpNet;
 use serde::{Deserialize, Serialize};
 use serde_default::DefaultFromSerde;
 use serde_inline_default::serde_inline_default;
+use tokio::net::ToSocketAddrs;
+
+use crate::{session::SessionInner, ssl_context::SslContextConfig};
 
 #[derive(Deserialize, Serialize, Clone, Debug, PartialEq)]
 pub enum WrongPassBanType {
@@ -127,4 +140,81 @@ pub fn default_authserver_log_configs() -> Vec<LogLoggerConfig> {
         max_level: Error,
         appenders: vec![String::from("Console"), String::from("Auth")],
     }]
+}
+
+impl Config for AuthserverConfig {}
+
+impl SocketMgrConfig<SessionInner> for AuthserverConfig {
+    fn retrieve_bind_addr(&self) -> impl ToSocketAddrs {
+        (self.BindIP, self.BattlenetPort)
+    }
+}
+
+impl LoggingConfig for AuthserverConfig {
+    fn retrieve_appenders(&self) -> &[LogAppender] {
+        &self.Appender
+    }
+
+    fn retrieve_loggers(&self) -> &[LogLoggerConfig] {
+        &self.Logger
+    }
+
+    fn retrieve_logs_dir(&self) -> PathBuf {
+        self.LogsDir.clone()
+    }
+}
+
+impl SslContextConfig for AuthserverConfig {
+    fn certs_file(&self) -> PathBuf {
+        self.CertificatesFile.clone()
+    }
+
+    fn privkey_file(&self) -> PathBuf {
+        self.PrivateKeyFile.clone()
+    }
+}
+
+impl RealmListConfig for AuthserverConfig {
+    fn realms_state_update_delay(&self) -> Duration {
+        *self.RealmsStateUpdateDelay
+    }
+}
+
+impl AuthserverConfig {
+    pub fn login_rest_bind_addr(&self) -> SocketAddr {
+        SocketAddr::new(self.BindIP, self.LoginREST.Port)
+    }
+
+    pub fn login_rest_local_network(&self) -> IpNet {
+        let login_rest = &self.LoginREST;
+        IpNet::with_netmask(login_rest.LocalAddress, login_rest.SubnetMask).expect("expect local addr and subnet mask to always be correct")
+    }
+
+    pub fn login_rest_local_address(&self) -> SocketAddr {
+        let login_rest = &self.LoginREST;
+        SocketAddr::new(login_rest.LocalAddress, login_rest.Port)
+    }
+
+    pub fn login_rest_external_address(&self) -> SocketAddr {
+        let login_rest = &self.LoginREST;
+        SocketAddr::new(login_rest.ExternalAddress, login_rest.Port)
+    }
+
+    pub fn login_rest_get_address_for_client(&self, address: &AddressOrName) -> SocketAddr {
+        let client_address = match address {
+            // If its a name, we use local address
+            AddressOrName::Name(_) => return self.login_rest_local_address(),
+            AddressOrName::Addr(a) if a.ip().is_loopback() => return self.login_rest_local_address(),
+            AddressOrName::Addr(a) => a,
+        };
+        if self.login_rest_local_address().ip().is_loopback() {
+            return self.login_rest_external_address();
+        }
+
+        if self.login_rest_local_network().contains(&client_address.ip()) {
+            self.login_rest_local_address()
+        } else {
+            self.login_rest_external_address()
+        }
+    }
 }

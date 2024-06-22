@@ -54,7 +54,6 @@ sqlx = { version = "0", features = [ "runtime-tokio-rustls", "mysql", "chrono" ]
 structstruck = "0"
 thiserror = { version = "1" }
 tokio = { version = "1", features = ["full"] }
-tokio-util = { version = "0", features = ["rt"] }
 figment = { version = "0", features = ["toml", "env"] }
 tracing = { version = "0" }
 walkdir = { version = "2" }

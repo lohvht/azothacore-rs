@@ -1,18 +1,29 @@
 use std::{
     collections::{BTreeMap, BTreeSet},
-    sync::{RwLock, RwLockReadGuard},
     time::Duration,
 };
 
-use azothacore_common::{az_error, hex_str, r#async::Context, utils::net_resolve, AccountTypes, AzError, Locale};
+use azothacore_common::{
+    az_error,
+    bevy_app::{az_startup_succeeded, TokioRuntime},
+    configuration::ConfigMgr,
+    hex_str,
+    utils::net_resolve,
+    AccountTypes,
+    AzError,
+    Locale,
+};
 use azothacore_database::{
     database_env::{LoginDatabase, LoginPreparedStmts},
     params,
+    DbDriver,
 };
+use bevy::prelude::*;
 use flagset::FlagSet;
 use futures::StreamExt;
 use ipnet::IpNet;
 use rand::{rngs::OsRng, RngCore};
+use sqlx::Pool;
 use tracing::{error, info};
 
 use crate::shared::{
@@ -20,7 +31,7 @@ use crate::shared::{
     realms::{BnetRealmHandle, Realm, RealmFlags, RealmType},
 };
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 struct ClientVersion {
     #[serde(rename = "versionMajor")]
     version_major:    u32,
@@ -31,7 +42,7 @@ struct ClientVersion {
     #[serde(rename = "versionBuild")]
     version_build:    u32,
 }
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, serde::Deserialize)]
 pub struct RealmEntry {
     #[serde(rename = "wowRealmAddress")]
     wow_realm_address: u32,
@@ -325,40 +336,61 @@ impl TryFrom<LoginDbRealm> for Realm {
     }
 }
 
-pub struct RealmList {
-    realms:      RwLock<BTreeMap<BnetRealmHandle, Realm>>,
-    sub_regions: RwLock<BTreeSet<String>>,
+pub trait RealmListConfig: Send + Sync + 'static {
+    fn realms_state_update_delay(&self) -> Duration;
 }
 
-impl Default for RealmList {
-    fn default() -> Self {
-        Self::new()
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RealmListStartSet;
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RealmListUpdateSet;
+
+pub fn realm_list_plugin<C: RealmListConfig>(app: &mut App) {
+    app.add_systems(Startup, init_realm_list::<C>.run_if(resource_exists::<ConfigMgr<C>>).in_set(RealmListStartSet))
+        .add_systems(Update, update_realmlists.run_if(az_startup_succeeded()).in_set(RealmListUpdateSet));
+}
+
+fn init_realm_list<C: RealmListConfig>(mut commands: Commands, cfg: Res<ConfigMgr<C>>) {
+    commands.insert_resource(RealmList::new(cfg.realms_state_update_delay()));
+}
+
+fn update_realmlists(
+    mut has_run_once: Local<bool>,
+    time: Res<Time<Real>>,
+    rt: Res<TokioRuntime>,
+    login_db: Res<LoginDatabase>,
+    mut realm_list: ResMut<RealmList>,
+) {
+    realm_list.update_timer.tick(time.delta());
+    if !*has_run_once {
+        *has_run_once = true;
+        rt.block_on(realm_list.update(login_db.clone()));
     }
+    if !realm_list.update_timer.finished() {
+        return;
+    }
+    rt.block_on(realm_list.update(login_db.clone()));
+}
+
+#[derive(Resource)]
+pub struct RealmList {
+    pub realms:      BTreeMap<BnetRealmHandle, Realm>,
+    pub sub_regions: BTreeSet<String>,
+    update_timer:    Timer,
 }
 
 impl RealmList {
-    pub fn get() -> &'static RealmList {
-        &REALM_LIST
-    }
-
-    pub fn realms(&self) -> RwLockReadGuard<'_, BTreeMap<BnetRealmHandle, Realm>> {
-        self.realms.read().unwrap()
-    }
-
-    pub fn get_sub_regions(&self) -> RwLockReadGuard<'_, BTreeSet<String>> {
-        self.sub_regions.read().unwrap()
-    }
-
-    pub const fn new() -> Self {
+    pub fn new(update_delay: Duration) -> Self {
         Self {
-            realms:      RwLock::new(BTreeMap::new()),
-            sub_regions: RwLock::new(BTreeSet::new()),
+            realms:       BTreeMap::new(),
+            sub_regions:  BTreeSet::new(),
+            update_timer: Timer::new(update_delay, TimerMode::Repeating),
         }
     }
 
     pub fn get_realm_entry_json(&self, id: &BnetRealmHandle, build: u32) -> Option<RealmEntry> {
-        let realms_r = self.realms.read().unwrap();
-        let realm = realms_r.get(id)?;
+        let realm = self.realms.get(id)?;
         if realm.flag.contains(RealmFlags::Offline) && realm.build == build {
             return None;
         }
@@ -366,9 +398,9 @@ impl RealmList {
     }
 
     pub fn get_realm_list(&self, build: u32, sub_region: &str) -> RealmListUpdates {
-        let realms_r = self.realms.read().unwrap();
         RealmListUpdates {
-            updates: realms_r
+            updates: self
+                .realms
                 .iter()
                 .filter_map(|(_, realm)| {
                     if realm.id.get_sub_region_address() != sub_region {
@@ -395,8 +427,7 @@ impl RealmList {
         client_address: &AddressOrName,
         build: u32,
     ) -> Result<RealmListServerIPAddresses, JoinRealmError> {
-        let realms_r = self.realms.read().unwrap();
-        let Some(realm) = realms_r.get(&BnetRealmHandle::from_realm_address(realm_address)) else {
+        let Some(realm) = self.realms.get(&BnetRealmHandle::from_realm_address(realm_address)) else {
             return Err(JoinRealmError::UnknownRealm);
         };
         if realm.flag.contains(RealmFlags::Offline) || realm.build != build {
@@ -415,7 +446,7 @@ impl RealmList {
     }
 
     pub async fn join_realm(
-        &self,
+        login_db: Pool<DbDriver>,
         client_address: &AddressOrName,
         client_secret: &[u8; 32],
         locale: Locale,
@@ -430,7 +461,7 @@ impl RealmList {
         key_data[32..].clone_from_slice(&server_secret);
 
         if let Err(e) = LoginDatabase::upd_bnet_game_account_login_info(
-            &LoginDatabase::get(),
+            &login_db,
             params!(hex_str!(&key_data), client_address.ip_str_or_name(), locale as u8, os, account_name),
         )
         .await
@@ -441,64 +472,46 @@ impl RealmList {
         Ok(server_secret)
     }
 
-    pub async fn init(ctx: Context, update_interval_duration: Duration) {
-        // Get the content of the realmlist table in the database
-        let mut interval = tokio::time::interval(update_interval_duration);
-        interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-        loop {
-            let _t = tokio::select! {
-                _ = ctx.cancelled() => {
-                    break;
-                }
-                i = interval.tick() => i,
-            };
-            info!(target:"realmlist", "Updating Realm List...");
+    pub async fn update(&mut self, login_db: LoginDatabase) {
+        info!(target:"realmlist", "Updating Realm List...");
 
-            let mut existing_realms = BTreeMap::new();
-            for p in Self::get().realms.read().unwrap().iter() {
-                existing_realms.insert(*p.0, p.1.name.clone());
-            }
-            let mut new_sub_regions = BTreeSet::new();
-            let mut new_realms = BTreeMap::new();
-
-            let login_db = &LoginDatabase::get();
-            let mut result = LoginDatabase::sel_realmlist::<_, LoginDbRealm>(login_db, params!()).await;
-
-            while let Some(res) = result.next().await {
-                let realm = match res {
-                    Err(e) => {
-                        ctx.cancel();
-                        error!(target: "realmlist", cause=%e, "DB error when getting realm list, aborting program");
-                        break;
-                    },
-                    Ok(r) => r,
-                };
-
-                let realm: Realm = match realm.try_into() {
-                    Err(e) => {
-                        error!(target:"realmlist", cause=%e, "error converting Realm info from DB entry");
-                        continue;
-                    },
-                    Ok(r) => r,
-                };
-                let name = realm.name.as_str();
-                if existing_realms.remove(&realm.id).is_some() {
-                    info!(target:"realmlist", "Updating realm \"{name}\" at {} ({:?}).", realm.external_address, realm.id);
-                } else {
-                    info!(target:"realmlist", "Added realm \"{name}\" at {} ({:?}).", realm.external_address, realm.id);
-                }
-                new_sub_regions.insert(BnetRealmHandle::new(realm.id.region, realm.id.site, 0).get_address_string());
-                new_realms.insert(realm.id, realm);
-            }
-            for r in existing_realms.values() {
-                info!(target:"realmlist", "Removed realm \"{r}\".");
-            }
-            *Self::get().sub_regions.write().unwrap() = new_sub_regions;
-            *Self::get().realms.write().unwrap() = new_realms;
+        let mut existing_realms = BTreeMap::new();
+        for p in self.realms.iter() {
+            existing_realms.insert(*p.0, p.1.name.clone());
         }
-        info!(target:"realmlist", "Terminating realmlist updater");
-        ctx.cancel();
+        let mut new_sub_regions = BTreeSet::new();
+        let mut new_realms = BTreeMap::new();
+
+        let mut result = LoginDatabase::sel_realmlist::<_, LoginDbRealm>(&*login_db, params!()).await;
+        while let Some(res) = result.next().await {
+            let realm = match res {
+                Err(e) => {
+                    error!(target: "realmlist", cause=%e, "DB error when getting realm list, aborting program");
+                    break;
+                },
+                Ok(r) => r,
+            };
+
+            let realm: Realm = match realm.try_into() {
+                Err(e) => {
+                    error!(target:"realmlist", cause=%e, "error converting Realm info from DB entry");
+                    continue;
+                },
+                Ok(r) => r,
+            };
+            let name = realm.name.as_str();
+            if existing_realms.remove(&realm.id).is_some() {
+                info!(target:"realmlist", "Updating realm \"{name}\" at {} ({:?}).", realm.external_address, realm.id);
+            } else {
+                info!(target:"realmlist", "Added realm \"{name}\" at {} ({:?}).", realm.external_address, realm.id);
+            }
+            new_sub_regions.insert(BnetRealmHandle::new(realm.id.region, realm.id.site, 0).get_address_string());
+            new_realms.insert(realm.id, realm);
+        }
+        for r in existing_realms.values() {
+            info!(target:"realmlist", "Removed realm \"{r}\".");
+        }
+        self.sub_regions = new_sub_regions;
+        self.realms = new_realms;
     }
 }
-
-static REALM_LIST: RealmList = RealmList::new();

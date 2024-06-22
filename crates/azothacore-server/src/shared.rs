@@ -9,7 +9,7 @@ use std::{
     panic,
 };
 
-use azothacore_common::{bevy_app::TokioRuntime, r#async::Context};
+use azothacore_common::bevy_app::TokioRuntime;
 use bevy::{app::AppExit, prelude::*, tasks::poll_once};
 use thiserror::Error;
 use tokio::task::JoinHandle;
@@ -26,15 +26,6 @@ pub fn bnetrpc_zcompress(mut json: Vec<u8>) -> io::Result<Vec<u8>> {
     let mut res = e.finish()?;
     compressed.append(&mut res);
     Ok(compressed)
-}
-
-pub fn panic_handler(ctx: Context) {
-    let original_hook = panic::take_hook();
-    panic::set_hook(Box::new(move |panic_info| {
-        error!(target:"server", "panic received! start termination");
-        ctx.cancel();
-        original_hook(panic_info);
-    }));
 }
 
 #[derive(Error, Debug)]
@@ -104,7 +95,8 @@ pub async fn signal_handler() -> Result<String, SignalError> {
 }
 
 pub fn tokio_signal_handling_bevy_plugin(app: &mut App) {
-    app.add_systems(Startup, overwrite_signal_handlers).add_systems(FixedUpdate, try_receive_signal);
+    app.add_systems(PreStartup, overwrite_signal_handlers)
+        .add_systems(FixedUpdate, try_receive_signal);
 }
 
 #[derive(Component)]

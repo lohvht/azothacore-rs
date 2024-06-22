@@ -359,6 +359,7 @@ dependencies = [
  "azothacore-common",
  "azothacore-database",
  "azothacore-server",
+ "bevy",
  "bnet-rpc",
  "bytes",
  "clap 4.5.4",
@@ -480,6 +481,7 @@ dependencies = [
  "anyhow",
  "bevy",
  "bincode",
+ "bytes",
  "chrono",
  "const_format",
  "figment",
@@ -501,7 +503,6 @@ dependencies = [
  "structstruck",
  "thiserror",
  "tokio",
- "tokio-util",
  "tracing",
  "tracing-appender",
  "tracing-subscriber",
@@ -512,6 +513,7 @@ name = "azothacore-database"
 version = "0.1.0"
 dependencies = [
  "azothacore-common",
+ "bevy",
  "dotenvy",
  "flate2",
  "futures-core",
@@ -1541,11 +1543,6 @@ dependencies = [
 [[package]]
 name = "connection-patcher"
 version = "0.1.0"
-dependencies = [
- "azothacore-common",
- "azothacore-server",
- "bevy",
-]
 
 [[package]]
 name = "console"
@@ -5131,21 +5128,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "267ac89e0bec6e691e5813911606935d77c476ff49024f98abcea3e7b15e37af"
 dependencies = [
  "futures-core",
- "pin-project-lite",
- "tokio",
-]
-
-[[package]]
-name = "tokio-util"
-version = "0.7.11"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9cf6b47b3771c49ac75ad09a6162f53ad4b8088b76ac60e8ec1455b31a189fe1"
-dependencies = [
- "bytes",
- "futures-core",
- "futures-sink",
- "futures-util",
- "hashbrown 0.14.5",
  "pin-project-lite",
  "tokio",
 ]

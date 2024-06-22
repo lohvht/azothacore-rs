@@ -1,8 +1,4 @@
-use std::{
-    net::{IpAddr, SocketAddr},
-    sync::OnceLock,
-    time::Duration,
-};
+use std::sync::Arc;
 
 use axum::{
     extract::{rejection::JsonRejection, State},
@@ -18,34 +14,35 @@ use axum_extra::{
     TypedHeader,
 };
 use azothacore_common::{
-    az_error,
+    bevy_app::{az_startup_succeeded, AzStartupFailedEvent, TokioRuntime},
+    configuration::ConfigMgr,
     hex_str,
-    r#async::Context,
-    utils::{net_resolve, unix_now},
-    AzResult,
+    utils::unix_now,
 };
 use azothacore_database::{
     database_env::{LoginDatabase, LoginPreparedStmts},
     params,
 };
 use azothacore_server::{game::accounts::battlenet_account_mgr::BattlenetAccountMgr, shared::networking::socket::AddressOrName};
+use bevy::{app::AppExit, prelude::*};
 use hyper::{body::Incoming, service::service_fn, StatusCode};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder as HyperServerConnBuilder,
 };
-use ipnet::IpNet;
 use rand::{rngs::OsRng, Rng};
 use sqlx::Row;
-use tokio::net::{TcpListener, TcpStream};
+use tokio::{
+    net::TcpListener,
+    sync::mpsc::{unbounded_channel, UnboundedSender},
+};
 use tower_service::Service as TowerService;
 use tracing::{debug, error, info, warn};
 
 use crate::{
-    config::{AuthserverConfigLoginREST, AuthserverConfigWrongPass, WrongPassBanType},
+    config::{AuthserverConfig, WrongPassBanType},
     ssl_context::SslContext,
 };
-
 struct WrappedResponseResult<T, E>(Result<T, E>);
 
 impl<T, E> ::std::ops::Deref for WrappedResponseResult<T, E> {
@@ -81,108 +78,147 @@ where
     }
 }
 
-pub struct LoginRESTService;
-
-struct LoginServiceDetails {
-    bind_addr:             SocketAddr,
-    local_address:         SocketAddr,
-    local_network:         IpNet,
-    external_address:      SocketAddr,
-    login_ticket_duration: Duration,
-    wrong_pass:            AuthserverConfigWrongPass,
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum LoginRESTServiceSystemSets {
+    Start,
+    Terminate,
 }
 
+pub fn login_rest_service_plugin(app: &mut App) {
+    app.add_systems(
+        Startup,
+        LoginRESTService::start
+            .run_if(resource_exists::<ConfigMgr<AuthserverConfig>>)
+            .run_if(resource_exists::<LoginDatabase>)
+            .run_if(resource_exists::<SslContext>)
+            .in_set(LoginRESTServiceSystemSets::Start),
+    )
+    .add_systems(
+        PostUpdate,
+        LoginRESTService::terminate
+            .run_if(az_startup_succeeded())
+            .in_set(LoginRESTServiceSystemSets::Terminate),
+    );
+}
+
+#[derive(Resource)]
+struct LoginRestTermSender(UnboundedSender<()>);
+
+struct LoginRESTService;
+
 impl LoginRESTService {
-    pub async fn start(ctx: Context, bind_ip: IpAddr, login_rest: AuthserverConfigLoginREST, wrong_pass: AuthserverConfigWrongPass) -> AzResult<()> {
-        let login_service_details = {
-            let external_address = net_resolve((login_rest.ExternalAddress, login_rest.Port)).map_err(|e| {
-                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.ExternalAddress {}", login_rest.ExternalAddress);
-                e
-            })?;
-            let local_address = net_resolve((login_rest.LocalAddress, login_rest.Port)).map_err(|e| {
-                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.LocalAddress {}", login_rest.LocalAddress);
-                e
-            })?;
-            let bind_addr = net_resolve((bind_ip, login_rest.Port)).map_err(|e| {
-                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.BindAddr {}", bind_ip);
-                e
-            })?;
-            let local_subnet_mask = net_resolve((login_rest.SubnetMask, login_rest.Port)).map_err(|e| {
-                error!(target:"server::rest", cause=%e, "Could not resolve LoginREST.SubnetMask {}", login_rest.SubnetMask);
-                e
-            })?;
-            let local_network = IpNet::with_netmask(local_address.ip(), local_subnet_mask.ip())?;
-
-            LOGIN_SERVICE_DETAILS.get_or_init(|| LoginServiceDetails {
-                external_address,
-                bind_addr,
-                local_address,
-                local_network,
-                wrong_pass,
-                login_ticket_duration: *login_rest.TicketDuration,
-            })
+    fn start(
+        mut commands: Commands,
+        cfg: Res<ConfigMgr<AuthserverConfig>>,
+        rt: Res<TokioRuntime>,
+        ssl_ctx: Res<SslContext>,
+        login_db: Res<LoginDatabase>,
+        mut ev_startup_failed: EventWriter<AzStartupFailedEvent>,
+    ) {
+        let (term_snd, mut term_rcv) = unbounded_channel();
+        commands.insert_resource(LoginRestTermSender(term_snd));
+        let acceptor = match rt.block_on(TcpListener::bind(cfg.login_rest_bind_addr())) {
+            Ok(a) => a,
+            Err(e) => {
+                error!(target:"server::rest", cause=%e, "Couldn't bind to {}", cfg.login_rest_bind_addr());
+                ev_startup_failed.send_default();
+                return;
+            },
         };
+        info!(target:"server::rest", "Login service bound to http://{}", cfg.login_rest_bind_addr());
 
-        let acceptor = TcpListener::bind(&login_service_details.bind_addr).await.map_err(|e| {
-            error!(target:"server::rest", "Couldn't bind to {}", login_service_details.bind_addr);
-            e
-        })?;
-        info!(target:"server::rest", "Login service bound to http://{}", login_service_details.bind_addr);
+        let cfg = Arc::new((**cfg).clone());
+        let ssl_ctx = ssl_ctx.clone();
+        let login_db = Arc::new(login_db.clone());
 
-        let router = Router::new()
-            .route("/bnetserver/login/", get(Self::handle_get_form))
-            .route("/bnetserver/gameAccounts/", get(Self::handle_get_game_accounts))
-            .route("/bnetserver/portal/", get(Self::handle_get_portal))
-            .route("/bnetserver/login/", post(Self::handle_post_login))
-            .route("/bnetserver/refreshLoginTicket/", post(Self::handle_post_refresh_login_ticket))
-            .fallback(Self::handle_404);
+        let handler = rt.handle().clone();
+        rt.spawn(async move {
+            let router = Router::new()
+                .route("/bnetserver/login/", get(Self::handle_get_form))
+                .route("/bnetserver/gameAccounts/", get(Self::handle_get_game_accounts))
+                .route("/bnetserver/portal/", get(Self::handle_get_portal))
+                .route("/bnetserver/login/", post(Self::handle_post_login))
+                .route("/bnetserver/refreshLoginTicket/", post(Self::handle_post_refresh_login_ticket))
+                .fallback(Self::handle_404);
 
-        loop {
-            let (cnx, addr) = tokio::select! {
-                _ = ctx.cancelled() => {
-                    break;
-                },
-                // Wait for new tcp connection
-                a = acceptor.accept() => {
-                    match a {
-                        Ok(r) => r,
+            loop {
+                let (cnx, remote_addr) = tokio::select! {
+                    _ = term_rcv.recv() => {
+                        debug!("termination triggered, quitting login rest service loop");
+                        break
+                    }
+                    // Wait for new tcp connection
+                    accepted = acceptor.accept() => match accepted {
+                        Ok(a) => a,
                         Err(e) => {
                             error!(target:"server::rest", "error encountered when accepting request: {e}");
                             continue;
-                        }
+                        },
                     }
-                },
-            };
+                };
 
-            let tower_svc = router.clone().with_state(LoginServiceRequestState { source_ip: addr.into() });
+                debug!(target:"server::rest", "Accepted connection from Addr {remote_addr}");
 
-            // NOTE: Unhandled for now, if theres an error just let it pass.
-            ctx.spawn(serve_https_call(tower_svc, cnx, addr));
-        }
-        info!(target:"server::rest", "Login service exiting...");
+                // Wait for tls handshake to happen
+                let stream = match ssl_ctx.accept(cnx).await {
+                    Ok(s) => s,
+                    Err(e) => {
+                        error!(target:"server::rest", "Failed SSL handshake from Addr {remote_addr}, err: {e}");
+                        continue;
+                    },
+                };
 
-        Ok(())
+                // Hyper has its own `AsyncRead` and `AsyncWrite` traits and doesn't use tokio.
+                // `TokioIo` converts between them.
+                let stream = TokioIo::new(stream);
+                let state = LoginServiceRequestState {
+                    source_ip: remote_addr.into(),
+                    login_db:  login_db.clone(),
+                    cfg:       cfg.clone(),
+                };
+
+                let router = router.clone();
+                // Hyper has also its own `Service` trait and doesn't use tower. We can use
+                // `hyper::service::service_fn` to create a hyper `Service` that calls our app through
+                // `tower::Service::call`.
+                let hyper_svc = service_fn(move |request: Request<Incoming>| {
+                    // We have to clone `tower_svc` because hyper's `Service` uses `&self` whereas
+                    // tower's `Service` requires `&mut self`.
+                    //
+                    // We don't need to call `poll_ready` since `Router` is always ready.
+                    router.clone().with_state(state.clone()).call(request)
+                });
+
+                handler.spawn(async {
+                    let mut builder = HyperServerConnBuilder::new(TokioExecutor::new());
+                    builder.http1().title_case_headers(true);
+
+                    let _ = builder
+                        // .serve_connection(stream, hyper_svc)
+                        .serve_connection_with_upgrades(stream, hyper_svc)
+                        .await;
+                });
+            }
+            info!(target:"server::rest", "Login service exiting...");
+        });
     }
 
-    fn get_details() -> &'static LoginServiceDetails {
-        LOGIN_SERVICE_DETAILS.get().expect("Expect login details to be set on startup at least")
-    }
-
-    pub fn get_address_for_client<'a>(address: &AddressOrName) -> &'a SocketAddr {
-        let client_address = match address {
-            // If its a name, we use local address
-            AddressOrName::Name(_) => return &Self::get_details().local_address,
-            AddressOrName::Addr(a) if a.ip().is_loopback() => return &Self::get_details().local_address,
-            AddressOrName::Addr(a) => a,
-        };
-        if Self::get_details().local_address.ip().is_loopback() {
-            return &Self::get_details().external_address;
-        }
-
-        if Self::get_details().local_network.contains(&client_address.ip()) {
-            &Self::get_details().local_address
-        } else {
-            &Self::get_details().external_address
+    fn terminate(mut app_exit_events: EventReader<AppExit>, term_snds: Res<LoginRestTermSender>) {
+        let mut sent_exit = false;
+        for _ev in app_exit_events.read() {
+            if !sent_exit {
+                // NOTE: run asynchronously w/out needing for error handling (For now)
+                // this should be short so it seems fairly okay to do
+                //
+                // This is just an attempt to terminate the accept loop, the program
+                // may go ahead and exit anyway via a tokio runtime cancellation.
+                if let Err(e) = term_snds.0.send(()) {
+                    debug!(cause=?e, "send terminate error, terminate network receiving channel half may be dropped or closed");
+                }
+                sent_exit = true;
+            }
+            // We still wanna at least process the rest of the exits anyway, if any.
+            // so no break.
         }
     }
 
@@ -219,11 +255,11 @@ impl LoginRESTService {
 
     async fn handle_get_game_accounts(
         TypedHeader(basic_auth): TypedHeader<Authorization<Basic>>,
+        State(LoginServiceRequestState { login_db, .. }): State<LoginServiceRequestState>,
     ) -> WrappedResponseResult<Json<GameAccountList>, ErrorEmptyResponse> {
         if basic_auth.username().is_empty() {
             return err_empty_resp(StatusCode::UNAUTHORIZED);
         }
-
         macro_rules! handle_resp_error {
             ( $err:expr, $status_code:expr ) => {{
                 match $err {
@@ -236,9 +272,8 @@ impl LoginRESTService {
             }};
         }
 
-        let login_db = &LoginDatabase::get();
         let result = handle_resp_error!(
-            LoginDatabase::sel_bnet_game_account_list(login_db, params!(basic_auth.username())).await,
+            LoginDatabase::sel_bnet_game_account_list(&**login_db, params!(basic_auth.username())).await,
             StatusCode::INTERNAL_SERVER_ERROR
         );
 
@@ -278,13 +313,13 @@ impl LoginRESTService {
         Ok(Json(response)).into()
     }
 
-    async fn handle_get_portal(State(state): State<LoginServiceRequestState>) -> String {
-        let endpoint = Self::get_address_for_client(&state.source_ip);
+    async fn handle_get_portal(State(LoginServiceRequestState { source_ip, cfg, .. }): State<LoginServiceRequestState>) -> String {
+        let endpoint = cfg.login_rest_get_address_for_client(&source_ip);
         endpoint.to_string()
     }
 
     async fn handle_post_login(
-        State(state): State<LoginServiceRequestState>,
+        State(LoginServiceRequestState { login_db, source_ip, cfg, .. }): State<LoginServiceRequestState>,
         WithRejection(Json(login_form), _): WithRejection<Json<LoginForm>, PostLoginError>,
     ) -> impl IntoResponse {
         // following similar to TC's logic
@@ -306,8 +341,6 @@ impl LoginRESTService {
                 }
             }};
         }
-
-        let details = Self::get_details();
 
         let mut login = None;
         let mut password = None;
@@ -346,9 +379,8 @@ impl LoginRESTService {
             is_banned:           Option<bool>,
         }
 
-        let login_db = &LoginDatabase::get();
         let fields = match handle_login_err!(
-            LoginDatabase::sel_bnet_authentication(login_db, params!(&login)).await,
+            LoginDatabase::sel_bnet_authentication(&**login_db, params!(&login)).await,
             "DB error for post login"
         ) {
             None => {
@@ -374,8 +406,8 @@ impl LoginRESTService {
             if login_ticket.is_none() || login_ticket_expiry.map_or(true, |exp_ts| exp_ts < now) {
                 login_ticket = Some(format!("AZ-{}", hex_str!(OsRng.gen::<[u8; 20]>())));
             }
-            let new_expiry = now + details.login_ticket_duration.as_secs();
-            let res = LoginDatabase::upd_bnet_authentication(login_db, params!(&login_ticket, new_expiry, account_id)).await;
+            let new_expiry = now + cfg.LoginREST.TicketDuration.as_secs();
+            let res = LoginDatabase::upd_bnet_authentication(&**login_db, params!(&login_ticket, new_expiry, account_id)).await;
             if res.is_ok() {
                 return (
                     StatusCode::OK,
@@ -389,12 +421,11 @@ impl LoginRESTService {
             }
             warn!(target:"server::rest", "error somehow when calling DB to update bnet auth: err={res:?}");
         } else if !is_banned {
-            let ip_address = &state.source_ip;
-            if !details.wrong_pass.Enabled {
+            if !cfg.WrongPass.Enabled {
                 return (StatusCode::OK, [("Content-Type", "application/json;charset=utf-8")], Json(error_response));
             }
-            if !details.wrong_pass.Logging {
-                warn!(target:"server::rest", ip_address=%ip_address, login=login, account_id=account_id, "Attempted to connect with wrong password!");
+            if !cfg.WrongPass.Logging {
+                warn!(target:"server::rest", ip_address=%&source_ip, login=login, account_id=account_id, "Attempted to connect with wrong password!");
             }
             let mut trans = handle_login_err!(login_db.begin().await, "unable to open a transaction to update wrong password counts");
             handle_login_err!(
@@ -403,19 +434,19 @@ impl LoginRESTService {
             );
 
             failed_logins += 1;
-            debug!(target:"server::rest", MaxWrongPass=details.wrong_pass.MaxCount,  account_id=account_id);
-            if failed_logins < details.wrong_pass.MaxCount {
+            debug!(target:"server::rest", MaxWrongPass=cfg.WrongPass.MaxCount,  account_id=account_id);
+            if failed_logins < cfg.WrongPass.MaxCount {
                 return (StatusCode::OK, [("Content-Type", "application/json;charset=utf-8")], Json(error_response));
             }
-            let ban_time = details.wrong_pass.BanTime.as_secs();
-            if matches!(details.wrong_pass.BanType, WrongPassBanType::BanAccount) {
+            let ban_time = cfg.WrongPass.BanTime.as_secs();
+            if matches!(cfg.WrongPass.BanType, WrongPassBanType::BanAccount) {
                 handle_login_err!(
                     LoginDatabase::ins_bnet_account_auto_banned(&mut *trans, params!(account_id, ban_time)).await,
                     "unable to insert bnet auto ban"
                 );
             } else {
                 handle_login_err!(
-                    LoginDatabase::ins_ip_auto_banned(&mut *trans, params!(ip_address.to_string(), ban_time)).await,
+                    LoginDatabase::ins_ip_auto_banned(&mut *trans, params!(source_ip.to_string(), ban_time)).await,
                     "unable to insert IP ban"
                 );
             }
@@ -432,13 +463,14 @@ impl LoginRESTService {
 
     async fn handle_post_refresh_login_ticket(
         TypedHeader(basic_auth): TypedHeader<Authorization<Basic>>,
+        State(LoginServiceRequestState { login_db, cfg, .. }): State<LoginServiceRequestState>,
     ) -> WrappedResponseResult<Json<LoginRefreshResult>, ErrorEmptyResponse> {
         if basic_auth.username().is_empty() {
             return err_empty_resp(StatusCode::UNAUTHORIZED);
         }
+
         let mut login_refresh_result = LoginRefreshResult::default();
-        let login_db = &LoginDatabase::get();
-        let login_ticket_expiry = match LoginDatabase::sel_bnet_existing_authentication(login_db, params!(basic_auth.username())).await {
+        let login_ticket_expiry = match LoginDatabase::sel_bnet_existing_authentication(&**login_db, params!(basic_auth.username())).await {
             Err(e) => {
                 error!(target:"server::rest", username=basic_auth.username(), "unable to select existing bnet authentications; err={e}");
                 login_refresh_result.is_expired = Some(true);
@@ -452,11 +484,10 @@ impl LoginRESTService {
             Ok(Some(fields)) => fields.get::<u64, _>(0),
         };
 
-        let details = Self::get_details();
         let now = unix_now().as_secs();
         if login_ticket_expiry > now {
-            let new_expiry = now + details.login_ticket_duration.as_secs();
-            match LoginDatabase::upd_bnet_existing_authentication(login_db, params!(new_expiry, basic_auth.username())).await {
+            let new_expiry = now + cfg.LoginREST.TicketDuration.as_secs();
+            match LoginDatabase::upd_bnet_existing_authentication(&**login_db, params!(new_expiry, basic_auth.username())).await {
                 Err(e) => {
                     error!(target:"server::rest", username=basic_auth.username(), "update bnet authentication failed: err={e}");
                     login_refresh_result.is_expired = Some(true);
@@ -594,46 +625,6 @@ struct Empty {}
 #[derive(Clone)]
 struct LoginServiceRequestState {
     source_ip: AddressOrName,
+    login_db:  Arc<LoginDatabase>,
+    cfg:       Arc<AuthserverConfig>,
 }
-
-async fn serve_https_call(router: Router<()>, stream: TcpStream, addr: SocketAddr) -> AzResult<()> {
-    // Wait for tls handshake to happen
-    let stream = match SslContext::get().accept(stream).await {
-        Ok(s) => s,
-        Err(e) => {
-            error!(target:"server::rest", "Failed SSL handshake from Addr {addr}, err: {e}");
-            return Err(e.into());
-        },
-    };
-
-    debug!(target:"server::rest", "Accepted connection from Addr {addr}");
-
-    // Hyper has its own `AsyncRead` and `AsyncWrite` traits and doesn't use tokio.
-    // `TokioIo` converts between them.
-    let stream = TokioIo::new(stream);
-
-    // Hyper has also its own `Service` trait and doesn't use tower. We can use
-    // `hyper::service::service_fn` to create a hyper `Service` that calls our app through
-    // `tower::Service::call`.
-    let hyper_svc = service_fn(move |request: Request<Incoming>| {
-        // We have to clone `tower_svc` because hyper's `Service` uses `&self` whereas
-        // tower's `Service` requires `&mut self`.
-        //
-        // We don't need to call `poll_ready` since `Router` is always ready.
-        router.clone().call(request)
-    });
-
-    let mut builder = HyperServerConnBuilder::new(TokioExecutor::new());
-    builder.http1().title_case_headers(true);
-
-    builder
-        // .serve_connection(stream, hyper_svc)
-        .serve_connection_with_upgrades(stream, hyper_svc)
-        .await
-        .map_err(|e| {
-            warn!(target:"server::rest", "error serving connection from {addr}: {e}");
-            az_error!("{e}")
-        })
-}
-
-static LOGIN_SERVICE_DETAILS: OnceLock<LoginServiceDetails> = OnceLock::new();

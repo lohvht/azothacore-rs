@@ -126,16 +126,32 @@ impl DatabaseType {
 #[serde_inline_default]
 #[derive(Deserialize, DefaultFromSerde, Serialize, Clone, Debug, PartialEq)]
 pub struct DbUpdates {
+    /// A mask that describes which databases shall be updated
     #[serde_inline_default(FlagSet::full())]
     pub EnableDatabases:      FlagSet<DatabaseType>,
+    /// Auto populate empty databases.
     #[serde_inline_default(true)]
     pub AutoSetup:            bool,
+    /// Perform data redundancy checks through hashing
+    ///
+    /// to detect changes on sql updates and reapply it.
     #[serde_inline_default(true)]
     pub Redundancy:           bool,
+    /// Check hashes of archived updates (slows down startup).
     #[serde_inline_default(false)]
     pub ArchivedRedundancy:   bool,
+    /// Inserts the current file hash in the database if it is left empty.
+    ///
+    /// Useful if you want to mark a file as applied but you don't know its hash.
     #[serde_inline_default(true)]
     pub AllowRehash:          bool,
+    /// Cleans dead/ orphaned references that occur if an update was removed or renamed and edited in one step.
+    ///
+    /// It only starts the clean up if the count of the missing updates is below or equal the Updates.CleanDeadRefMaxCount value.
+    ///
+    /// This way prevents erasing of the update history due to wrong source directory state (maybe wrong branch or bad revision).
+    ///
+    /// Disable this if you want to know if the database is in a possible "dirty state".
     #[serde_inline_default(3)]
     pub CleanDeadRefMaxCount: isize,
 }

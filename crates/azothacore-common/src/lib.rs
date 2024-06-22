@@ -1,7 +1,6 @@
 #![feature(lint_reasons)]
 #![feature(const_float_bits_conv)]
 
-pub mod r#async;
 pub mod banner;
 pub mod bevy_app;
 pub mod bounded_nums;

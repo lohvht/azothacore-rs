@@ -5,13 +5,11 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[features]
-test-utils = ["dep:dotenvy"]
-
 [dependencies]
 # Local crates
 azothacore-common.workspace = true
 # External crates
+bevy.workspace = true
 flate2.workspace = true
 futures-core.workspace = true
 hugsqlx.workspace = true

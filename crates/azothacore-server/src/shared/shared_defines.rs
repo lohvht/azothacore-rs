@@ -1,5 +1,4 @@
-use std::sync::OnceLock;
-
+use bevy::prelude::*;
 use flagset::flags;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
@@ -10,16 +9,11 @@ pub enum ServerProcessType {
     Worldserver = 1,
 }
 
-pub struct ThisServerProcess;
+#[derive(Resource)]
+pub struct ThisServerProcess(pub ServerProcessType);
 
-impl ThisServerProcess {
-    pub fn get() -> ServerProcessType {
-        THIS_SERVER_PROCESS.get().expect("Server process not set").clone()
-    }
-
-    pub fn set(e: ServerProcessType) {
-        THIS_SERVER_PROCESS.set(e).expect("Server process already set");
-    }
+pub fn set_server_process(commands: &mut Commands, typ: ServerProcessType) {
+    commands.insert_resource(ThisServerProcess(typ));
 }
 
 pub const MAX_CHARACTERS_PER_REALM: u8 = 16;
@@ -172,4 +166,21 @@ pub enum DungeonAccessRequirementsPrintMode {
     DetailedInfo,
 }
 
-static THIS_SERVER_PROCESS: OnceLock<ServerProcessType> = OnceLock::new();
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn it_sets_server_process() {
+        let mut app = App::new();
+        assert!(app.world.get_resource::<ThisServerProcess>().is_none());
+
+        app.add_systems(Startup, |mut commands: Commands| {
+            set_server_process(&mut commands, ServerProcessType::Worldserver)
+        });
+        app.update();
+
+        let res = app.world.resource::<ThisServerProcess>();
+        assert_eq!(res.0, ServerProcessType::Worldserver);
+    }
+}

@@ -1,12 +1,16 @@
-use std::{path::Path, sync::Arc, time::Duration};
+use std::path::Path;
 
-use authserver::{config::AuthserverConfig, rest::LoginRESTService, ssl_context::SslContext, BnetSessionManager};
+use authserver::{
+    config::AuthserverConfig,
+    rest::{login_rest_service_plugin, LoginRESTServiceSystemSets},
+    session::{bnet_session_handling_plugin, SessionInner},
+    ssl_context::{ssl_context_plugin, SetSslContextSet},
+};
 use azothacore_common::{
     banner,
-    configuration::{DatabaseInfo, DatabaseType, DbUpdates, CONFIG_MGR},
-    log,
-    r#async::Context,
-    utils::create_pid_file,
+    bevy_app::{az_startup_succeeded, bevy_app, AzStartupFailedEvent, TokioRuntime},
+    configuration::{config_mgr_plugin, ConfigMgr, ConfigMgrSet, DatabaseType},
+    log::{logging_plugin, LoggingSetupSet},
     AzResult,
     AZOTHA_REALM_CONFIG,
     CONF_DIR,
@@ -17,144 +21,129 @@ use azothacore_database::{
     params,
 };
 use azothacore_server::shared::{
-    panic_handler,
-    realms::realm_list::RealmList,
-    shared_defines::{ServerProcessType, ThisServerProcess},
-    signal_handler,
+    networking::socket_mgr::socket_mgr_plugin,
+    realms::realm_list::realm_list_plugin,
+    shared_defines::{set_server_process, ServerProcessType},
+    tokio_signal_handling_bevy_plugin,
 };
+use bevy::{app::AppExit, prelude::*};
 use clap::Parser;
-use rand::{rngs::OsRng, Rng};
-use tokio::sync::oneshot;
 use tracing::{error, info};
 
 /// Launch the auth server
 fn main() -> AzResult<()> {
-    let rt = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build()?);
-    let root_ctx = Context::new(rt.handle());
-    panic_handler(root_ctx.clone());
-    ThisServerProcess::set(ServerProcessType::Authserver);
     let vm = ConsoleArgs::parse();
-    let cfg: AuthserverConfig = {
-        let mut cfg_mgr_w = CONFIG_MGR.blocking_write();
-        cfg_mgr_w.configure(&vm.config, vm.dry_run, Box::new(|_| Box::pin(async move { Ok(vec![]) })));
-        cfg_mgr_w.load_app_configs()?
-    };
-    let _wg = {
-        // TODO: Setup DB logging. Original code below
-        // // Init all logs
-        // sLog->RegisterAppender<AppenderDB>();
-        log::init(&cfg.LogsDir, &cfg.Appender, &cfg.Logger)
-    };
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
 
+    let mut app = bevy_app();
+    app.insert_resource(TokioRuntime(rt))
+        .add_plugins((
+            tokio_signal_handling_bevy_plugin,
+            config_mgr_plugin::<AuthserverConfig, _>(vm.config, vm.dry_run),
+            logging_plugin::<AuthserverConfig>,
+            ssl_context_plugin::<AuthserverConfig>,
+            login_rest_service_plugin,
+            // Get the list of realms for the server
+            realm_list_plugin::<AuthserverConfig>,
+            socket_mgr_plugin::<AuthserverConfig, SessionInner>,
+            bnet_session_handling_plugin,
+            // // TODO: Impl me? Init Secret Manager
+            // sSecretMgr->Initialize();
+        ))
+        .add_systems(
+            Startup,
+            (
+                (|mut commands: Commands| set_server_process(&mut commands, ServerProcessType::Authserver)).in_set(AuthserverSet::SetProcessType),
+                show_banner
+                    .run_if(resource_exists::<ConfigMgr<AuthserverConfig>>)
+                    .in_set(AuthserverSet::ShowBanner),
+                start_db.run_if(resource_exists::<ConfigMgr<AuthserverConfig>>).in_set(AuthserverSet::StartDB),
+                insert_ban_expiry_timer
+                    .run_if(resource_exists::<ConfigMgr<AuthserverConfig>>)
+                    .in_set(AuthserverSet::InsertBanExpiryTimer),
+            ),
+        )
+        .add_systems(FixedUpdate, ban_expiry_task.run_if(az_startup_succeeded()).in_set(AuthserverSet::BanExpiryTask))
+        // Init logging right after config management
+        .configure_sets(PreStartup, ConfigMgrSet::<AuthserverConfig>::load_initial().before(LoggingSetupSet))
+        .configure_sets(Startup, ((SetSslContextSet, AuthserverSet::StartDB).before(LoginRESTServiceSystemSets::Start),))
+        .add_systems(PostUpdate, stop_db)
+        .run();
+
+    Ok(())
+}
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum AuthserverSet {
+    ShowBanner,
+    SetProcessType,
+    InsertBanExpiryTimer,
+    BanExpiryTask,
+    StartDB,
+}
+
+#[derive(Resource)]
+struct BanExpiryTimer(Timer);
+
+fn insert_ban_expiry_timer(mut commands: Commands, cfg: Res<ConfigMgr<AuthserverConfig>>) {
+    commands.insert_resource(BanExpiryTimer(Timer::new(*cfg.BanExpiryCheckInterval, TimerMode::Repeating)));
+}
+
+fn ban_expiry_task(mut timer: ResMut<BanExpiryTimer>, time: Res<Time<Real>>, login_db: Res<LoginDatabase>, rt: Res<TokioRuntime>) {
+    timer.0.tick(time.delta());
+    if !timer.0.finished() {
+        return;
+    }
+    rt.block_on(async {
+        if let Err(e) = LoginDatabase::del_expired_ip_bans(&**login_db, params!()).await {
+            error!(target:"bnetserver", cause=%e, "del_expired_ip_bans err");
+        };
+        if let Err(e) = LoginDatabase::upd_expired_account_bans(&**login_db, params!()).await {
+            error!(target:"bnetserver", cause=%e, "upd_expired_account_bans err");
+        };
+        if let Err(e) = LoginDatabase::del_bnet_expired_account_banned(&**login_db, params!()).await {
+            error!(target:"bnetserver", cause=%e, "del_bnet_expired_account_banned err");
+        };
+    });
+}
+
+fn show_banner(cfg: Res<ConfigMgr<AuthserverConfig>>) {
     banner::azotha_banner_show("authserver-daemon", || {
         info!(
             target:"server::authserver",
             "> Using configuration file       {}",
-            CONFIG_MGR.blocking_read().get_filename().display()
+            cfg.filename.display()
         )
     });
-
-    // Seed the OsRng here.
-    // That way it won't auto-seed when calling OsRng and slow down the first world login
-    OsRng.gen::<u64>();
-
-    // worldserver PID file creation
-    if let Some(pid_file) = cfg.PidFile {
-        let pid = create_pid_file(pid_file)?;
-        error!(target:"server", "Daemon PID: {pid}");
-    }
-
-    SslContext::initialise(cfg.CertificatesFile, cfg.PrivateKeyFile)?;
-    // // TODO: Impl me? Init Secret Manager
-    // sSecretMgr->Initialize();
-
-    let (db_started_send, db_started_recv) = oneshot::channel();
-    let ctx = root_ctx.clone();
-    root_ctx.spawn(async move {
-        if let Err(e) = start_db(ctx.clone(), cfg.Updates, cfg.LoginDatabaseInfo, db_started_send).await {
-            error!(target:"server::authserver", cause=%e, "error starting/stopping DB");
-            ctx.cancel();
-        }
-    });
-    // Enforce DB to be up first
-    db_started_recv.blocking_recv().unwrap();
-
-    let ctx = root_ctx.clone();
-    root_ctx.spawn(async move {
-        if let Err(e) = LoginRESTService::start(ctx.clone(), cfg.BindIP, cfg.LoginREST, cfg.WrongPass).await {
-            error!(target:"server::authserver", cause=%e, "error starting/stopping LoginRESTService");
-            ctx.cancel();
-        }
-    });
-
-    // Get the list of realms for the server
-    let ctx = root_ctx.clone();
-    root_ctx.spawn(RealmList::init(ctx, *cfg.RealmsStateUpdateDelay));
-
-    // Stop auth server if dry run
-    if CONFIG_MGR.blocking_read().is_dry_run() {
-        info!(target:"server::authserver", "Dry run completed, terminating.");
-        root_ctx.cancel();
-        root_ctx.tt.close();
-        rt.block_on(root_ctx.tt.wait());
-        return Ok(());
-    }
-
-    let ctx = root_ctx.clone();
-    root_ctx.spawn(BnetSessionManager::start_network(ctx, (cfg.BindIP, cfg.BattlenetPort)));
-
-    // Set signal handlers
-    let ctx = root_ctx.clone();
-    root_ctx.spawn(signal_handler());
-
-    let ctx = root_ctx.clone();
-    root_ctx.spawn(ban_expiry_task(ctx, *cfg.BanExpiryCheckInterval));
-
-    root_ctx.tt.close();
-    rt.block_on(root_ctx.tt.wait());
-    info!(target:"server::authserver", "Halting process...");
-
-    Ok(())
-}
-
-async fn ban_expiry_task(ctx: Context, ban_expiry_check_interval: Duration) {
-    let mut interval = tokio::time::interval(ban_expiry_check_interval);
-    interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    loop {
-        tokio::select! {
-            _ = ctx.cancelled() => {
-                break;
-            }
-            i = interval.tick() => i,
-        };
-        let login_db = &LoginDatabase::get();
-        if let Err(e) = LoginDatabase::del_expired_ip_bans(login_db, params!()).await {
-            error!(target:"bnetserver", cause=%e, "del_expired_ip_bans err");
-        };
-        if let Err(e) = LoginDatabase::upd_expired_account_bans(login_db, params!()).await {
-            error!(target:"bnetserver", cause=%e, "upd_expired_account_bans err");
-        };
-        if let Err(e) = LoginDatabase::del_bnet_expired_account_banned(login_db, params!()).await {
-            error!(target:"bnetserver", cause=%e, "del_bnet_expired_account_banned err");
-        };
-    }
-    info!(target:"server::authserver", "Closed ban expiry handler");
 }
 
 /// Initialize connection to the database
-async fn start_db(ctx: Context, updates: DbUpdates, auth_cfg: DatabaseInfo, db_started_send: oneshot::Sender<()>) -> AzResult<()> {
-    let login_db_loader = DatabaseLoader::new(DatabaseType::Login, auth_cfg, updates, vec![]);
-    let auth_db = login_db_loader.load(ctx.clone()).await?;
-    LoginDatabase::set(auth_db);
-    info!("Started auth database connection pool.");
-    db_started_send.send(()).unwrap();
+fn start_db(mut commands: Commands, cfg: Res<ConfigMgr<AuthserverConfig>>, rt: Res<TokioRuntime>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
+    let login_db_loader = DatabaseLoader::new(DatabaseType::Login, cfg.LoginDatabaseInfo.clone(), cfg.Updates.clone(), vec![]);
+    let auth_db = match rt.block_on(login_db_loader.load()) {
+        Err(e) => {
+            error!(target:"server::authserver", cause=%e, "error starting/stopping DB");
+            ev_startup_failed.send_default();
+            return;
+        },
+        Ok(d) => d,
+    };
+    commands.insert_resource(LoginDatabase(auth_db));
+}
 
-    // Wait for cancellation
-    ctx.cancelled().await;
-    info!("Stopping auth database connection.");
-    LoginDatabase::close().await;
-
-    Ok(())
+fn stop_db(rt: Res<TokioRuntime>, login_db: Option<Res<LoginDatabase>>, mut app_exit_events: EventReader<AppExit>) {
+    let mut stopped = false;
+    for _ev in app_exit_events.read() {
+        if stopped {
+            continue;
+        }
+        // Deliberately read through all events. the login DB should be closed already
+        stopped = true;
+        if let Some(login_db) = &login_db {
+            info!("Stopping auth database connection.");
+            rt.block_on(login_db.close());
+        }
+    }
 }
 
 #[derive(clap::Parser, Debug)]

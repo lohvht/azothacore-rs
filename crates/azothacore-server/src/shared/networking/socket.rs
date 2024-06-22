@@ -1,160 +1,225 @@
-use std::{fmt::Debug, future::Future, io, net::SocketAddr, pin::Pin, sync::Arc, time::Duration};
+use std::{
+    fmt::Debug,
+    io,
+    net::SocketAddr,
+    sync::{atomic::AtomicBool, Arc},
+    time::Duration,
+};
 
-use azothacore_common::{r#async::Context, AzResult};
+use azothacore_common::utils::{BufferDecodeError, DecodeValueFromBytes, MessageBuffer};
 use tokio::{
     io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt},
-    net::TcpStream,
-    sync::{mpsc, Mutex as AsyncMutex},
+    runtime::Handle,
+    sync::mpsc,
 };
-use tracing::{debug, error, instrument};
+use tracing::{debug, error, instrument, warn};
 
-type AsyncSharedRead = Arc<AsyncMutex<Option<Pin<Box<dyn AsyncRead + Unpin + Send>>>>>;
-
-pub struct SocketWrappper {
-    name:                 String,
-    write_sender_channel: mpsc::Sender<bytes::Bytes>,
-    read_stream:          AsyncSharedRead,
-    ctx:                  Context,
+pub struct Socket<P: DecodeValueFromBytes> {
+    name:              AddressOrName,
+    snd_write_packets: mpsc::UnboundedSender<bytes::Bytes>,
+    rcv_read_packets:  mpsc::UnboundedReceiver<P>,
+    exited_flag:       Arc<AtomicBool>,
+    exiting_flag:      AtomicBool,
+    snd_exiting:       mpsc::UnboundedSender<()>,
 }
 
-/// SocketWrappper provides a socket wrapper that is cancel safe, with reads/writes not being
-/// mutable (via channels and interior mutability w/ mutexes)
-impl SocketWrappper {
-    pub fn new<R, W>(ctx: Context, name: AddressOrName, rd: R, wr: W) -> Self
+#[derive(Debug)]
+pub enum SocketStatus {
+    Running,
+    Closing,
+    Closed,
+}
+
+impl SocketStatus {
+    fn is_running(&self) -> bool {
+        matches!(self, SocketStatus::Running)
+    }
+}
+
+impl<P: DecodeValueFromBytes + Send + 'static> Socket<P> {
+    pub fn new<R, W>(tokio_handler: &Handle, name: AddressOrName, rd: R, wr: W) -> Self
     where
         R: AsyncRead + Unpin + Send + 'static,
         W: AsyncWrite + Unpin + Send + 'static,
     {
-        let read_stream: AsyncSharedRead = Arc::new(AsyncMutex::new(Some(Box::pin(rd))));
-        let (write_sender_channel, write_receiver_channel) = mpsc::channel(1024);
-        ctx.spawn(handle_socket(
-            ctx.clone(),
+        let exited_flag = Arc::new(AtomicBool::new(false));
+        let (snd_write_packets, rcv_write_packets) = mpsc::unbounded_channel();
+        let (snd_read_packets, rcv_read_packets) = mpsc::unbounded_channel();
+        let (snd_exiting, rcv_exiting) = mpsc::unbounded_channel();
+        tokio_handler.spawn(handle_socket(
             name.to_string(),
+            rd,
             wr,
-            read_stream.clone(),
-            write_sender_channel.clone(),
-            write_receiver_channel,
+            rcv_write_packets,
+            snd_read_packets,
+            exited_flag.clone(),
+            rcv_exiting,
         ));
 
         Self {
-            name: name.to_string(),
-            write_sender_channel,
-            read_stream,
-            ctx,
+            name,
+            snd_write_packets,
+            rcv_read_packets,
+            exited_flag,
+            exiting_flag: AtomicBool::new(false),
+            snd_exiting,
         }
     }
 
-    /// Returns Ok if not closed, else Err if closed
-    pub fn is_closed(&self) -> bool {
-        self.ctx.is_cancelled()
-    }
-
-    pub async fn wait_closed(&self) {
-        // token has been cancelled
-        self.ctx.cancelled().await;
-
-        // write channel must also be closed
-        self.write_sender_channel.closed().await;
-    }
-
-    pub fn close_socket(&self) {
-        self.ctx.cancel();
-    }
-
-    pub async fn receive(&self, num_bytes: usize) -> io::Result<bytes::Bytes> {
-        let mut read_stream_lock = self.read_stream.lock().await;
-        let read_stream = match read_stream_lock.as_mut() {
-            None => {
-                return Err(io::Error::new(
-                    io::ErrorKind::ConnectionAborted,
-                    format!("{} received failed due to already closed read connection", self.name),
-                ))
-            },
-            Some(s) => s,
-        };
-        let mut buf = vec![0u8; num_bytes];
-        let res = tokio::select! {
-            _ = self.ctx.cancelled() => Err(io::Error::new(io::ErrorKind::ConnectionAborted, format!("{} received failed due to already cancelled connection", self.name))),
-            r = read_stream.read_exact(&mut buf) => r,
-        };
-
-        if let Err(e) = &res {
-            error!(target: "network", cause=%e, "receive error, closing socket");
-            self.close_socket();
+    pub fn status(&self) -> SocketStatus {
+        if self.exited_flag.load(std::sync::atomic::Ordering::SeqCst) {
+            SocketStatus::Closed
+        } else if self.exiting_flag.load(std::sync::atomic::Ordering::SeqCst) {
+            SocketStatus::Closing
+        } else {
+            SocketStatus::Running
         }
-
-        res.map(|_| buf.into())
     }
 
-    pub async fn write(&self, b: impl Into<bytes::Bytes>) -> io::Result<()> {
-        let res = tokio::select! {
-            _ = self.ctx.cancelled() => Err(io::Error::new(io::ErrorKind::ConnectionAborted, format!("{} send write failed due to already cancelled connection", self.name))),
-            r = self.write_sender_channel.send(b.into()) => r.map_err(|e| {
-                io::Error::new(io::ErrorKind::ConnectionAborted, format!("{} send write failed due to already closed receiver, err={e}", self.name))
-            }),
-        };
+    pub fn close(&self) {
+        self.exiting_flag.store(self.snd_exiting.send(()).is_err(), std::sync::atomic::Ordering::SeqCst);
+    }
 
-        if let Err(e) = &res {
-            error!(target: "network", cause=%e, "write error, closing socket");
-            self.close_socket();
+    pub fn receive(&mut self, num_packets: Option<usize>) -> io::Result<Vec<P>> {
+        let current_status = self.status();
+        if !current_status.is_running() {
+            return Err(io::Error::new(
+                io::ErrorKind::ConnectionAborted,
+                format!(
+                    "{} received failed due to closed or closing read connection, status={current_status:?}",
+                    self.name
+                ),
+            ));
         }
-        res
+        let mut packets = if let Some(n) = num_packets {
+            if n == 0 {
+                return Ok(vec![]);
+            }
+            Vec::with_capacity(n)
+        } else {
+            Vec::new()
+        };
+        while let Ok(p) = self.rcv_read_packets.try_recv() {
+            // should be okay to ignore TryRecvError::Disconnected first, b/c the next receive call
+            // should trigger the above conditional.
+            packets.push(p);
+            match num_packets {
+                Some(n) if packets.len() >= n => break,
+                _ => {},
+            };
+        }
+        Ok(packets)
+    }
+
+    pub fn write(&self, b: impl Into<bytes::Bytes>) -> io::Result<()> {
+        let current_status = self.status();
+        if !current_status.is_running() {
+            return Err(io::Error::new(
+                io::ErrorKind::ConnectionAborted,
+                format!(
+                    "{} send write failed due to socket shutting down or has already shut down: status={current_status:?}",
+                    self.name
+                ),
+            ));
+        }
+        if let Err(e) = self.snd_write_packets.send(b.into()) {
+            return Err(io::Error::new(
+                io::ErrorKind::ConnectionAborted,
+                format!("{} send write failed due to already closed receiver, err={e}", self.name),
+            ));
+        }
+        Ok(())
+    }
+
+    /// Replaces GetRemoteIpAddress in TC/AC
+    pub fn remote_name(&self) -> &AddressOrName {
+        &self.name
     }
 }
 
 #[instrument(skip_all, fields(target="network", name=%name))]
-async fn handle_socket<W>(
-    ctx: Context,
+async fn handle_socket<R, W, P>(
     name: String,
+    mut rd: R,
     mut wr: W,
-    read_stream: AsyncSharedRead,
-    write_sender_channel: mpsc::Sender<bytes::Bytes>,
-    mut write_receiver_channel: mpsc::Receiver<bytes::Bytes>,
+    mut rcv_write_packets: mpsc::UnboundedReceiver<bytes::Bytes>,
+    snd_read_packets: mpsc::UnboundedSender<P>,
+    exited_flag: Arc<AtomicBool>,
+    mut rcv_exiting: mpsc::UnboundedReceiver<()>,
 ) where
+    R: AsyncRead + Unpin + Send + 'static,
     W: AsyncWrite + Unpin + Send + 'static,
+    P: DecodeValueFromBytes,
 {
-    let mut flush_interval = tokio::time::interval(Duration::from_secs(1));
-    flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut write_flush_interval = tokio::time::interval(Duration::from_secs(1));
+    write_flush_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut read_buffer_interval = tokio::time::interval(Duration::from_secs(10));
+    read_buffer_interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    let mut read_buffer = MessageBuffer::default();
+
     loop {
-        let mut recv_bytes_to_write = tokio::select! {
-            _ = ctx.cancelled() => {
-                debug!("shutdown write socket due to token cancellation");
+        tokio::select! {
+            res = rcv_exiting.recv() => {
+                debug!(cause=?res, "received the signal to begin exiting, breaking");
                 break;
             },
-            _ = flush_interval.tick() => match wr.flush().await {
+            _ = write_flush_interval.tick() => match wr.flush().await {
                 Err(e) if e.kind() != io::ErrorKind::WriteZero => {
                     error!(cause=?e, "shutdown as encountered non recoverable error when flushing buffers");
                     break;
                 },
                 _ => continue,
             },
-            opt_by = write_receiver_channel.recv() => {
+            _ = read_buffer_interval.tick() => {
+                read_buffer.normalise();
+            },
+            read_res = rd.read_buf(&mut *read_buffer) => {
+                match read_res {
+                    Err(e) => {
+                        error!(cause=%e, "shutdown read socket due to error in reading from stream");
+                        break;
+                    },
+                    Ok(_) => {
+                        let packet = match P::decode_from_bytes(&mut read_buffer) {
+                            Err(BufferDecodeError::InsufficientBytes{have, wanted}) => {
+                                warn!("insufficient bytes, continuing to read more, have {have} but wanted {wanted}");
+                                continue;
+                            },
+                            Err(e) => {
+                                error!(cause=%e, "error decoding data, possible socket corrruption? terminating");
+                                break;
+                            },
+                            Ok(p) => p,
+                        };
+                        if snd_read_packets.send(packet).is_err() {
+                            error!("unable to send read packets back, breaking out of handle socket loop");
+                            break;
+                        }
+                    },
+                }
+            },
+            opt_by = rcv_write_packets.recv() => {
                 match opt_by {
                     None => {
                         error!("shutdown write socket to due to write receiver channel closing");
                         break;
                     },
-                    Some(b) => b,
+                    Some(mut b) => {
+                        if let Err(e) = wr.write_all_buf(&mut b).await {
+                            error!(cause=?e, "shutdown write socket to due to write receiver channel closing");
+                            break;
+                        }
+                    },
                 }
             },
         };
-        if let Err(e) = wr.write_all_buf(&mut recv_bytes_to_write).await {
-            error!(cause=?e, "shutdown write socket to due to write receiver channel closing");
-            break;
-        }
     }
+    rcv_exiting.close();
     // Shutdown everything, cleaning up
     if let Err(e) = wr.shutdown().await {
         error!(cause=?e, "shutdown write socket error: {e}");
     }
-    // ensure that cancel is called again.
-    ctx.cancel();
-    // drop receiver, this should make the sender execute immediately too
-    drop(write_receiver_channel);
-    // drop read stream, this should have the effect of closing the read half of the stream
-    *read_stream.lock().await = None;
-    // wait for sender to close, this should also run immediately
-    write_sender_channel.closed().await;
+    exited_flag.store(true, std::sync::atomic::Ordering::SeqCst);
 }
 
 #[derive(Clone)]
@@ -200,29 +265,4 @@ impl std::fmt::Display for AddressOrName {
             AddressOrName::Name(s) => std::fmt::Display::fmt(s, f),
         }
     }
-}
-
-pub trait Socket {
-    fn start_from_tcp(ctx: Context, addr: AddressOrName, tcp_conn: TcpStream) -> impl Future<Output = AzResult<Arc<Self>>> + Send
-    where
-        Self: std::marker::Sized,
-    {
-        async {
-            let (rd, wr) = tcp_conn.into_split();
-            let rd = tokio::io::BufReader::new(rd);
-            let wr = tokio::io::BufWriter::new(wr);
-            Self::start(ctx, addr, rd, wr).await
-        }
-    }
-
-    fn start<R, W>(ctx: Context, name: AddressOrName, rd: R, wr: W) -> impl Future<Output = AzResult<Arc<Self>>> + Send
-    where
-        R: AsyncRead + Unpin + Send + Sync + 'static,
-        W: AsyncWrite + Unpin + Send + Sync + 'static;
-
-    fn is_closed(&self) -> bool;
-
-    fn wait_closed(&self) -> impl std::future::Future<Output = ()> + Send;
-
-    fn close(&self);
 }

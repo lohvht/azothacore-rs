@@ -20,16 +20,16 @@
 
 use std::collections::BTreeSet;
 
-use azothacore_common::AccountTypes;
-use azothacore_database::{
-    database_env::{LoginDatabase, LoginPreparedStmts},
-    params,
-};
+// use azothacore_common::AccountTypes;
+// use azothacore_database::{
+//     database_env::{LoginDatabase, LoginPreparedStmts},
+//     params,
+// };
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::{FromPrimitive, ToPrimitive};
-use tracing::{debug, instrument, trace};
+// use tracing::{debug, instrument, trace};
 
-use super::account_mgr::ACCOUNT_MGR;
+// use super::account_mgr::ACCOUNT_MGR;
 
 pub type RawRbacPermId = Result<RbacPermId, u32>;
 
@@ -811,375 +811,375 @@ pub struct RbacPermission {
     pub linked_permissions: BTreeSet<RawRbacPermId>,
 }
 
-/// @name RbacData
-/// @brief Contains all needed information about the acccount
-///
-/// This class contains all the data needed to calculate the account permissions.
-/// RbacData is formed by granted and denied permissions and all the inherited permissions
-///
-/// Calculation of current Permissions: Granted permissions - Denied permissions
-/// - Granted permissions: through linked permissions and directly assigned
-/// - Denied permissions: through linked permissions and directly assigned
-///
-pub struct RbacData {
-    /// Account id
-    pub id:            u32,
-    /// Account name
-    pub name:          String,
-    /// RealmId Affected
-    pub realm_id:      u32,
-    /// Account SecurityLevel
-    pub sec_level:     AccountTypes,
-    /// Granted permissions
-    pub granted_perms: BTreeSet<RawRbacPermId>,
-    /// Denied permissions
-    pub denied_perms:  BTreeSet<RawRbacPermId>,
-    /// Calculated permissions, i.e. the delta of granted_perms and denied_perms
-    global_perms:      BTreeSet<RawRbacPermId>,
-}
+// /// @name RbacData
+// /// @brief Contains all needed information about the acccount
+// ///
+// /// This class contains all the data needed to calculate the account permissions.
+// /// RbacData is formed by granted and denied permissions and all the inherited permissions
+// ///
+// /// Calculation of current Permissions: Granted permissions - Denied permissions
+// /// - Granted permissions: through linked permissions and directly assigned
+// /// - Denied permissions: through linked permissions and directly assigned
+// ///
+// pub struct RbacData {
+//     /// Account id
+//     pub id:            u32,
+//     /// Account name
+//     pub name:          String,
+//     /// RealmId Affected
+//     pub realm_id:      u32,
+//     /// Account SecurityLevel
+//     pub sec_level:     AccountTypes,
+//     /// Granted permissions
+//     pub granted_perms: BTreeSet<RawRbacPermId>,
+//     /// Denied permissions
+//     pub denied_perms:  BTreeSet<RawRbacPermId>,
+//     /// Calculated permissions, i.e. the delta of granted_perms and denied_perms
+//     global_perms:      BTreeSet<RawRbacPermId>,
+// }
 
-impl RbacData {
-    pub fn new(id: u32, name: &str, realm_id: u32, sec_level: AccountTypes) -> Self {
-        Self {
-            id,
-            name: name.to_string(),
-            realm_id,
-            sec_level,
-            granted_perms: BTreeSet::new(),
-            denied_perms: BTreeSet::new(),
-            global_perms: BTreeSet::new(),
-        }
-    }
+// impl RbacData {
+//     pub fn new(id: u32, name: &str, realm_id: u32, sec_level: AccountTypes) -> Self {
+//         Self {
+//             id,
+//             name: name.to_string(),
+//             realm_id,
+//             sec_level,
+//             granted_perms: BTreeSet::new(),
+//             denied_perms: BTreeSet::new(),
+//             global_perms: BTreeSet::new(),
+//         }
+//     }
 
-    ///
-    /// @name has_permission
-    /// @brief Checks if certain action is allowed
-    ///
-    /// Checks if certain action can be performed.
-    ///
-    /// @return grant or deny action
-    ///
-    /// Example Usage:
-    /// @code
-    /// bool Player::CanJoinArena(Battleground* bg)
-    /// {
-    ///     return bg->isArena() && has_permission(RBAC_PERM_JOIN_ARENA);
-    /// }
-    /// @endcode
-    ///
-    pub fn has_permission(&self, permission: RbacPermId) -> bool {
-        self.global_perms.contains(&Ok(permission))
-    }
+//     ///
+//     /// @name has_permission
+//     /// @brief Checks if certain action is allowed
+//     ///
+//     /// Checks if certain action can be performed.
+//     ///
+//     /// @return grant or deny action
+//     ///
+//     /// Example Usage:
+//     /// @code
+//     /// bool Player::CanJoinArena(Battleground* bg)
+//     /// {
+//     ///     return bg->isArena() && has_permission(RBAC_PERM_JOIN_ARENA);
+//     /// }
+//     /// @endcode
+//     ///
+//     pub fn has_permission(&self, permission: RbacPermId) -> bool {
+//         self.global_perms.contains(&Ok(permission))
+//     }
 
-    /// @name grant_permission
-    /// @brief Grants a permission
-    ///
-    /// Grants a permission to the account. If realm is 0 or the permission can not be added
-    /// No save to db action will be performed.
-    ///
-    /// Fails if permission Id does not exists or permission already granted or denied
-    ///
-    /// @param permission_id permission to be granted
-    /// @param realm_id realm affected
-    ///
-    /// @return Success or failure (with reason) to grant the permission
-    ///
-    /// Example Usage:
-    /// @code
-    /// // previously defined "RbacData* rbac" with proper initialization
-    /// permission_id: RbacPermId  = 2;
-    /// if (rbac->GrantRole(permission_id) == RBAC_IN_DENIED_LIST)
-    ///     TC_LOG_DEBUG("entities.player", "Failed to grant permission %u, already denied", permission_id);
-    /// @endcode
-    ///
-    #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
-    pub async fn grant_permission(&mut self, permission_id: RawRbacPermId, realm_id: Option<u32>) -> RbacCommandResult<()> {
-        // Check if permission Id exists
-        if ACCOUNT_MGR.read().await.get_rbac_permission(permission_id).is_none() {
-            trace!("RBACData::GrantPermission: Permission does not exists");
-            return Err(RbacCommandError::IdDoesNotExists);
-        }
-        // Check if already added in denied list
-        if self.has_denied_permission(permission_id) {
-            trace!("RBACData::GrantPermission: Permission in deny list");
-            return Err(RbacCommandError::InDeniedList);
-        }
+//     /// @name grant_permission
+//     /// @brief Grants a permission
+//     ///
+//     /// Grants a permission to the account. If realm is 0 or the permission can not be added
+//     /// No save to db action will be performed.
+//     ///
+//     /// Fails if permission Id does not exists or permission already granted or denied
+//     ///
+//     /// @param permission_id permission to be granted
+//     /// @param realm_id realm affected
+//     ///
+//     /// @return Success or failure (with reason) to grant the permission
+//     ///
+//     /// Example Usage:
+//     /// @code
+//     /// // previously defined "RbacData* rbac" with proper initialization
+//     /// permission_id: RbacPermId  = 2;
+//     /// if (rbac->GrantRole(permission_id) == RBAC_IN_DENIED_LIST)
+//     ///     TC_LOG_DEBUG("entities.player", "Failed to grant permission %u, already denied", permission_id);
+//     /// @endcode
+//     ///
+//     #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
+//     pub async fn grant_permission(&mut self, permission_id: RawRbacPermId, realm_id: Option<u32>) -> RbacCommandResult<()> {
+//         // Check if permission Id exists
+//         if ACCOUNT_MGR.read().await.get_rbac_permission(permission_id).is_none() {
+//             trace!("RBACData::GrantPermission: Permission does not exists");
+//             return Err(RbacCommandError::IdDoesNotExists);
+//         }
+//         // Check if already added in denied list
+//         if self.has_denied_permission(permission_id) {
+//             trace!("RBACData::GrantPermission: Permission in deny list");
+//             return Err(RbacCommandError::InDeniedList);
+//         }
 
-        // Already added?
-        if self.has_granted_permission(permission_id) {
-            trace!("RBACData::GrantPermission: Permission already granted");
-            return Err(RbacCommandError::CantAddAlreadyAdded);
-        }
+//         // Already added?
+//         if self.has_granted_permission(permission_id) {
+//             trace!("RBACData::GrantPermission: Permission already granted");
+//             return Err(RbacCommandError::CantAddAlreadyAdded);
+//         }
 
-        // Do not save to db when loading data from DB realm_id( = 0)
-        if let Some(realm_id) = realm_id {
-            self.save_permission(permission_id, true, realm_id).await?;
-            trace!("RBACData::GrantPermission: Ok and DB updated");
-            self.add_granted_permission(permission_id);
-            self.calculate_new_permissions();
-        } else {
-            self.add_granted_permission(permission_id);
-            trace!("RBACData::GrantPermission: Ok");
-        }
+//         // Do not save to db when loading data from DB realm_id( = 0)
+//         if let Some(realm_id) = realm_id {
+//             self.save_permission(permission_id, true, realm_id).await?;
+//             trace!("RBACData::GrantPermission: Ok and DB updated");
+//             self.add_granted_permission(permission_id);
+//             self.calculate_new_permissions();
+//         } else {
+//             self.add_granted_permission(permission_id);
+//             trace!("RBACData::GrantPermission: Ok");
+//         }
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    /// @name deny_permission
-    /// @brief Denies a permission
-    ///
-    /// Denied a permission to the account. If realm is 0 or the permission can not be added
-    /// No save to db action will be performed.
-    ///
-    /// Fails if permission Id does not exists or permission already granted or denied
-    ///
-    /// @param permission_id permission to be denied
-    /// @param realm_id realm affected
-    ///
-    /// @return Success or failure (with reason) to deny the permission
-    ///
-    /// Example Usage:
-    /// @code
-    /// // previously defined "RbacData* rbac" with proper initialization
-    /// permission_id: RbacPermId  = 2;
-    /// if (rbac->DenyRole(permission_id) == RBAC_ID_DOES_NOT_EXISTS)
-    ///     TC_LOG_DEBUG("entities.player", "Role Id %u does not exists", permission_id);
-    /// @endcode
-    ///
-    #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
-    pub async fn deny_permission(&mut self, permission_id: RawRbacPermId, realm_id: Option<u32>) -> RbacCommandResult<()> {
-        // Check if permission Id exists
-        if ACCOUNT_MGR.blocking_read().get_rbac_permission(permission_id).is_none() {
-            trace!("RBACData::DenyPermission. Permission does not exists");
-            return Err(RbacCommandError::IdDoesNotExists);
-        }
+//     /// @name deny_permission
+//     /// @brief Denies a permission
+//     ///
+//     /// Denied a permission to the account. If realm is 0 or the permission can not be added
+//     /// No save to db action will be performed.
+//     ///
+//     /// Fails if permission Id does not exists or permission already granted or denied
+//     ///
+//     /// @param permission_id permission to be denied
+//     /// @param realm_id realm affected
+//     ///
+//     /// @return Success or failure (with reason) to deny the permission
+//     ///
+//     /// Example Usage:
+//     /// @code
+//     /// // previously defined "RbacData* rbac" with proper initialization
+//     /// permission_id: RbacPermId  = 2;
+//     /// if (rbac->DenyRole(permission_id) == RBAC_ID_DOES_NOT_EXISTS)
+//     ///     TC_LOG_DEBUG("entities.player", "Role Id %u does not exists", permission_id);
+//     /// @endcode
+//     ///
+//     #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
+//     pub async fn deny_permission(&mut self, permission_id: RawRbacPermId, realm_id: Option<u32>) -> RbacCommandResult<()> {
+//         // Check if permission Id exists
+//         if ACCOUNT_MGR.blocking_read().get_rbac_permission(permission_id).is_none() {
+//             trace!("RBACData::DenyPermission. Permission does not exists");
+//             return Err(RbacCommandError::IdDoesNotExists);
+//         }
 
-        // Check if already added in granted list
-        if self.has_granted_permission(permission_id) {
-            trace!("RBACData::DenyPermission. Permission in grant list");
-            return Err(RbacCommandError::InGrantedList);
-        }
+//         // Check if already added in granted list
+//         if self.has_granted_permission(permission_id) {
+//             trace!("RBACData::DenyPermission. Permission in grant list");
+//             return Err(RbacCommandError::InGrantedList);
+//         }
 
-        // Already added?
-        if self.has_denied_permission(permission_id) {
-            trace!("RBACData::DenyPermission. Permission already denied");
-            return Err(RbacCommandError::CantAddAlreadyAdded);
-        }
+//         // Already added?
+//         if self.has_denied_permission(permission_id) {
+//             trace!("RBACData::DenyPermission. Permission already denied");
+//             return Err(RbacCommandError::CantAddAlreadyAdded);
+//         }
 
-        // Do not save to db when loading data from DB realm_id: Option<u32>( = 0)
-        if let Some(realm_id) = realm_id {
-            trace!("RBACData::DenyPermission. Ok and DB updated");
-            self.save_permission(permission_id, false, realm_id).await?;
-            self.add_denied_permission(permission_id);
-            self.calculate_new_permissions();
-        } else {
-            self.add_denied_permission(permission_id);
-            trace!("RBACData::DenyPermission. Ok");
-        }
+//         // Do not save to db when loading data from DB realm_id: Option<u32>( = 0)
+//         if let Some(realm_id) = realm_id {
+//             trace!("RBACData::DenyPermission. Ok and DB updated");
+//             self.save_permission(permission_id, false, realm_id).await?;
+//             self.add_denied_permission(permission_id);
+//             self.calculate_new_permissions();
+//         } else {
+//             self.add_denied_permission(permission_id);
+//             trace!("RBACData::DenyPermission. Ok");
+//         }
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    /// @name revoke_permission
-    /// @brief Removes a permission
-    ///
-    /// Removes a permission from the account. If realm is 0 or the permission can not be removed
-    /// No save to db action will be performed. Any delete operation will always affect
-    /// "all realms (-1)" in addition to the realm specified
-    ///
-    /// Fails if permission not present
-    ///
-    /// @param permission_id permission to be removed
-    /// @param realm_id realm affected
-    ///
-    /// @return Success or failure (with reason) to remove the permission
-    ///
-    /// Example Usage:
-    /// @code
-    /// // previously defined "RbacData* rbac" with proper initialization
-    /// permission_id: RbacPermId  = 2;
-    /// if (rbac->RevokeRole(permission_id) == RBAC_OK)
-    ///     TC_LOG_DEBUG("entities.player", "Permission %u succesfully removed", permission_id);
-    /// @endcode
-    ///
-    #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
-    pub async fn revoke_permission(&mut self, permission_id: RawRbacPermId, realm_id: Option<u32>) -> RbacCommandResult<()> {
-        // Check if it's present in any list
-        if !self.has_granted_permission(permission_id) && !self.has_denied_permission(permission_id) {
-            trace!("RBACData::RevokePermission Not granted or revoked");
-            return Err(RbacCommandError::CantRevokeNotInList);
-        }
+//     /// @name revoke_permission
+//     /// @brief Removes a permission
+//     ///
+//     /// Removes a permission from the account. If realm is 0 or the permission can not be removed
+//     /// No save to db action will be performed. Any delete operation will always affect
+//     /// "all realms (-1)" in addition to the realm specified
+//     ///
+//     /// Fails if permission not present
+//     ///
+//     /// @param permission_id permission to be removed
+//     /// @param realm_id realm affected
+//     ///
+//     /// @return Success or failure (with reason) to remove the permission
+//     ///
+//     /// Example Usage:
+//     /// @code
+//     /// // previously defined "RbacData* rbac" with proper initialization
+//     /// permission_id: RbacPermId  = 2;
+//     /// if (rbac->RevokeRole(permission_id) == RBAC_OK)
+//     ///     TC_LOG_DEBUG("entities.player", "Permission %u succesfully removed", permission_id);
+//     /// @endcode
+//     ///
+//     #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
+//     pub async fn revoke_permission(&mut self, permission_id: RawRbacPermId, realm_id: Option<u32>) -> RbacCommandResult<()> {
+//         // Check if it's present in any list
+//         if !self.has_granted_permission(permission_id) && !self.has_denied_permission(permission_id) {
+//             trace!("RBACData::RevokePermission Not granted or revoked");
+//             return Err(RbacCommandError::CantRevokeNotInList);
+//         }
 
-        // Do not save to db when loading data from DB realm_id: Option<u32>( = 0)
-        if let Some(realm_id) = realm_id {
-            let permission_id_in_u32 = permission_id.map_or_else(|e| e, |v| v.into());
-            LoginDatabase::del_rbac_account_permission(&LoginDatabase::get(), params!(self.id, permission_id_in_u32, realm_id)).await?;
-            trace!("RBACData::RevokePermission Ok and DB updated");
-            self.remove_granted_permission(permission_id);
-            self.remove_denied_permission(permission_id);
-            self.calculate_new_permissions();
-        } else {
-            trace!("RBACData::RevokePermission. Ok");
-            self.remove_granted_permission(permission_id);
-            self.remove_denied_permission(permission_id);
-        }
+//         // Do not save to db when loading data from DB realm_id: Option<u32>( = 0)
+//         if let Some(realm_id) = realm_id {
+//             let permission_id_in_u32 = permission_id.map_or_else(|e| e, |v| v.into());
+//             LoginDatabase::del_rbac_account_permission(&LoginDatabase::get(), params!(self.id, permission_id_in_u32, realm_id)).await?;
+//             trace!("RBACData::RevokePermission Ok and DB updated");
+//             self.remove_granted_permission(permission_id);
+//             self.remove_denied_permission(permission_id);
+//             self.calculate_new_permissions();
+//         } else {
+//             trace!("RBACData::RevokePermission. Ok");
+//             self.remove_granted_permission(permission_id);
+//             self.remove_denied_permission(permission_id);
+//         }
 
-        Ok(())
-    }
+//         Ok(())
+//     }
 
-    /// Loads all permissions assigned to current account
-    #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name))]
-    pub async fn load_from_db(&mut self) -> RbacCommandResult<()> {
-        self.clear_data();
+//     /// Loads all permissions assigned to current account
+//     #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name))]
+//     pub async fn load_from_db(&mut self) -> RbacCommandResult<()> {
+//         self.clear_data();
 
-        debug!(target:"rbac", "RBACData::LoadFromDB: Loading permissions");
+//         debug!(target:"rbac", "RBACData::LoadFromDB: Loading permissions");
 
-        #[derive(sqlx::FromRow)]
-        struct DbRbacAccountRow {
-            #[sqlx(rename = "permissionId")]
-            permission_id: u32,
-            #[sqlx(rename = "granted")]
-            granted:       bool,
-        }
+//         #[derive(sqlx::FromRow)]
+//         struct DbRbacAccountRow {
+//             #[sqlx(rename = "permissionId")]
+//             permission_id: u32,
+//             #[sqlx(rename = "granted")]
+//             granted:       bool,
+//         }
 
-        // Load account permissions (granted and denied) that affect current realm
-        let result = LoginDatabase::sel_rbac_account_permissions::<_, DbRbacAccountRow>(&LoginDatabase::get(), params!(self.id, self.realm_id)).await?;
-        for DbRbacAccountRow { permission_id, granted } in result {
-            let permission_id = permission_id.try_into();
-            if granted {
-                self.grant_permission(permission_id, None).await?;
-            } else {
-                self.deny_permission(permission_id, None).await?;
-            }
-        }
-        // Add default permissions
-        if let Some(permissions) = ACCOUNT_MGR.read().await.get_rbac_default_permissions(self.sec_level) {
-            for permission_id in permissions {
-                self.grant_permission(*permission_id, None).await?;
-            }
-        }
-        // Force calculation of permissions
-        self.calculate_new_permissions();
-        Ok(())
-    }
+//         // Load account permissions (granted and denied) that affect current realm
+//         let result = LoginDatabase::sel_rbac_account_permissions::<_, DbRbacAccountRow>(&LoginDatabase::get(), params!(self.id, self.realm_id)).await?;
+//         for DbRbacAccountRow { permission_id, granted } in result {
+//             let permission_id = permission_id.try_into();
+//             if granted {
+//                 self.grant_permission(permission_id, None).await?;
+//             } else {
+//                 self.deny_permission(permission_id, None).await?;
+//             }
+//         }
+//         // Add default permissions
+//         if let Some(permissions) = ACCOUNT_MGR.read().await.get_rbac_default_permissions(self.sec_level) {
+//             for permission_id in permissions {
+//                 self.grant_permission(*permission_id, None).await?;
+//             }
+//         }
+//         // Force calculation of permissions
+//         self.calculate_new_permissions();
+//         Ok(())
+//     }
 
-    /// Sets security level
-    pub async fn set_security_level(&mut self, id: AccountTypes) -> RbacCommandResult<()> {
-        self.sec_level = id;
-        self.load_from_db().await
-    }
+//     /// Sets security level
+//     pub async fn set_security_level(&mut self, id: AccountTypes) -> RbacCommandResult<()> {
+//         self.sec_level = id;
+//         self.load_from_db().await
+//     }
 
-    //     /// Returns the security level assigned
-    //     uint8 GetSecurityLevel() const { return _secLevel; }
-    // private:
-    /// Saves a permission to DB, Granted or Denied
-    async fn save_permission(&self, permission: RawRbacPermId, granted: bool, realm: u32) -> RbacCommandResult<()> {
-        let login_db = &LoginDatabase::get();
-        let permission = permission.map_or_else(|e| e, |v| v.into());
-        LoginDatabase::ins_rbac_account_permission(login_db, params!(self.id, permission, granted, realm)).await?;
-        Ok(())
-    }
+//     //     /// Returns the security level assigned
+//     //     uint8 GetSecurityLevel() const { return _secLevel; }
+//     // private:
+//     /// Saves a permission to DB, Granted or Denied
+//     async fn save_permission(&self, permission: RawRbacPermId, granted: bool, realm: u32) -> RbacCommandResult<()> {
+//         let login_db = &LoginDatabase::get();
+//         let permission = permission.map_or_else(|e| e, |v| v.into());
+//         LoginDatabase::ins_rbac_account_permission(login_db, params!(self.id, permission, granted, realm)).await?;
+//         Ok(())
+//     }
 
-    /// Clears roles, groups and permissions - Used for reload
-    fn clear_data(&mut self) {
-        self.granted_perms.clear();
-        self.denied_perms.clear();
-        self.global_perms.clear();
-    }
+//     /// Clears roles, groups and permissions - Used for reload
+//     fn clear_data(&mut self) {
+//         self.granted_perms.clear();
+//         self.denied_perms.clear();
+//         self.global_perms.clear();
+//     }
 
-    ///
-    /// @name calculate_new_permissions
-    /// @brief Calculates new permissions
-    ///
-    /// Calculates new permissions after some change
-    /// The calculation is done Granted - Denied:
-    /// - Granted permissions: through linked permissions and directly assigned
-    /// - Denied permissions: through linked permissions and directly assigned
-    ///
-    fn calculate_new_permissions(&mut self) {
-        trace!(target:"rbac", account_id=self.id, name=self.name, "RBACData::CalculateNewPermissions");
+//     ///
+//     /// @name calculate_new_permissions
+//     /// @brief Calculates new permissions
+//     ///
+//     /// Calculates new permissions after some change
+//     /// The calculation is done Granted - Denied:
+//     /// - Granted permissions: through linked permissions and directly assigned
+//     /// - Denied permissions: through linked permissions and directly assigned
+//     ///
+//     fn calculate_new_permissions(&mut self) {
+//         trace!(target:"rbac", account_id=self.id, name=self.name, "RBACData::CalculateNewPermissions");
 
-        // Get the list of granted permissions and replace global permissions
-        self.global_perms = self.granted_perms.clone();
-        Self::expand_permissions(&mut self.global_perms);
-        let mut revoked = self.denied_perms.clone();
-        Self::expand_permissions(&mut revoked);
-        Self::remove_permissions(&mut self.global_perms, &revoked);
-    }
+//         // Get the list of granted permissions and replace global permissions
+//         self.global_perms = self.granted_perms.clone();
+//         Self::expand_permissions(&mut self.global_perms);
+//         let mut revoked = self.denied_perms.clone();
+//         Self::expand_permissions(&mut revoked);
+//         Self::remove_permissions(&mut self.global_perms, &revoked);
+//     }
 
-    // Auxiliar private functions - defined to allow to maintain same code even
-    // if internal structure changes.
+//     // Auxiliar private functions - defined to allow to maintain same code even
+//     // if internal structure changes.
 
-    /// Checks if a permission is granted
-    fn has_granted_permission(&self, permission_id: RawRbacPermId) -> bool {
-        self.granted_perms.contains(&permission_id)
-    }
+//     /// Checks if a permission is granted
+//     fn has_granted_permission(&self, permission_id: RawRbacPermId) -> bool {
+//         self.granted_perms.contains(&permission_id)
+//     }
 
-    /// Checks if a permission is denied
-    fn has_denied_permission(&self, permission_id: RawRbacPermId) -> bool {
-        self.denied_perms.contains(&permission_id)
-    }
+//     /// Checks if a permission is denied
+//     fn has_denied_permission(&self, permission_id: RawRbacPermId) -> bool {
+//         self.denied_perms.contains(&permission_id)
+//     }
 
-    /// Adds a new granted permission
-    fn add_granted_permission(&mut self, permission_id: RawRbacPermId) -> bool {
-        self.granted_perms.insert(permission_id)
-    }
+//     /// Adds a new granted permission
+//     fn add_granted_permission(&mut self, permission_id: RawRbacPermId) -> bool {
+//         self.granted_perms.insert(permission_id)
+//     }
 
-    /// Removes a granted permission
-    fn remove_granted_permission(&mut self, permission_id: RawRbacPermId) -> bool {
-        self.granted_perms.remove(&permission_id)
-    }
+//     /// Removes a granted permission
+//     fn remove_granted_permission(&mut self, permission_id: RawRbacPermId) -> bool {
+//         self.granted_perms.remove(&permission_id)
+//     }
 
-    /// Adds a new denied permission
-    fn add_denied_permission(&mut self, permission_id: RawRbacPermId) {
-        self.denied_perms.insert(permission_id);
-    }
+//     /// Adds a new denied permission
+//     fn add_denied_permission(&mut self, permission_id: RawRbacPermId) {
+//         self.denied_perms.insert(permission_id);
+//     }
 
-    /// Removes a denied permission
-    fn remove_denied_permission(&mut self, permission_id: RawRbacPermId) -> bool {
-        self.denied_perms.remove(&permission_id)
-    }
+//     /// Removes a denied permission
+//     fn remove_denied_permission(&mut self, permission_id: RawRbacPermId) -> bool {
+//         self.denied_perms.remove(&permission_id)
+//     }
 
-    // /// Removes a denied permission
-    // void RemoveDeniedPermission(permission_id: RbacPermId )
-    // {
-    //     self.denied_perms.erase(permission_id);
-    // }
+//     // /// Removes a denied permission
+//     // void RemoveDeniedPermission(permission_id: RbacPermId )
+//     // {
+//     //     self.denied_perms.erase(permission_id);
+//     // }
 
-    // /// Removes a list of permissions from another list
-    fn remove_permissions(perms_from: &mut BTreeSet<RawRbacPermId>, perms_to_remove: &BTreeSet<RawRbacPermId>) {
-        for p in perms_to_remove {
-            perms_from.remove(p);
-        }
-    }
+//     // /// Removes a list of permissions from another list
+//     fn remove_permissions(perms_from: &mut BTreeSet<RawRbacPermId>, perms_to_remove: &BTreeSet<RawRbacPermId>) {
+//         for p in perms_to_remove {
+//             perms_from.remove(p);
+//         }
+//     }
 
-    /**
-     * @name expand_permissions
-     * @brief Adds the list of linked permissions to the original list
-     *
-     * Given a list of permissions, gets all the inherited permissions
-     * @param permissions The list of permissions to expand
-     */
-    fn expand_permissions(permissions: &mut BTreeSet<RawRbacPermId>) {
-        let mut to_check = permissions.clone();
-        permissions.clear();
+//     /**
+//      * @name expand_permissions
+//      * @brief Adds the list of linked permissions to the original list
+//      *
+//      * Given a list of permissions, gets all the inherited permissions
+//      * @param permissions The list of permissions to expand
+//      */
+//     fn expand_permissions(permissions: &mut BTreeSet<RawRbacPermId>) {
+//         let mut to_check = permissions.clone();
+//         permissions.clear();
 
-        // remove the permission from original list
-        let accnt_mgr = ACCOUNT_MGR.blocking_read();
-        while let Some(perm_id) = to_check.pop_first() {
-            let Some(permission) = accnt_mgr.get_rbac_permission(perm_id) else {
-                continue;
-            };
-            // insert into the final list (expanded list)
-            permissions.insert(perm_id);
-            // add all linked permissions (that are not already expanded) to the list of permissions to be checked
-            for linked in &permission.linked_permissions {
-                if permissions.get(linked).is_none() {
-                    to_check.insert(*linked);
-                }
-            }
-        }
+//         // remove the permission from original list
+//         let accnt_mgr = ACCOUNT_MGR.blocking_read();
+//         while let Some(perm_id) = to_check.pop_first() {
+//             let Some(permission) = accnt_mgr.get_rbac_permission(perm_id) else {
+//                 continue;
+//             };
+//             // insert into the final list (expanded list)
+//             permissions.insert(perm_id);
+//             // add all linked permissions (that are not already expanded) to the list of permissions to be checked
+//             for linked in &permission.linked_permissions {
+//                 if permissions.get(linked).is_none() {
+//                     to_check.insert(*linked);
+//                 }
+//             }
+//         }
 
-        debug!(target:"rbac", "RBACData::ExpandPermissions: Expanded: {perms:?}", perms=permissions);
-    }
-}
+//         debug!(target:"rbac", "RBACData::ExpandPermissions: Expanded: {perms:?}", perms=permissions);
+//     }
+// }

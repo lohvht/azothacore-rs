@@ -2,9 +2,10 @@ use std::{
     collections::BTreeMap,
     fs,
     io::{self, Read},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
+use bevy::prelude::*;
 use chrono::Local;
 use flagset::FlagSet;
 use tracing::subscriber::set_global_default;
@@ -16,8 +17,9 @@ use tracing_subscriber::{
     {self as ts},
 };
 
-use crate::configuration::{LogAppender, LogFlags, LogLevel, LogLoggerConfig};
+use crate::configuration::{ConfigMgr, LogAppender, LogFlags, LogLevel, LogLoggerConfig};
 
+#[derive(Resource)]
 pub struct LogGuard {
     _guards: Vec<tanb::WorkerGuard>,
 }
@@ -200,6 +202,30 @@ pub fn init_console() -> LogGuard {
             appenders: vec![String::from("Console")],
         }],
     )
+}
+
+pub trait LoggingConfig: Send + Sync + 'static {
+    fn retrieve_loggers(&self) -> &[LogLoggerConfig];
+    fn retrieve_appenders(&self) -> &[LogAppender];
+    fn retrieve_logs_dir(&self) -> PathBuf;
+}
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct LoggingSetupSet;
+
+pub fn logging_plugin<C: LoggingConfig>(app: &mut App) {
+    app.add_systems(
+        PreStartup,
+        (|cfg: Res<ConfigMgr<C>>, mut commands: Commands| {
+            // TODO: Setup DB logging. Original code below
+            // // Init all logs
+            // sLog->RegisterAppender<AppenderDB>();
+            let wg = init(cfg.retrieve_logs_dir(), cfg.retrieve_appenders(), cfg.retrieve_loggers());
+            commands.insert_resource(wg);
+        })
+        .run_if(resource_exists::<ConfigMgr<C>>)
+        .in_set(LoggingSetupSet),
+    );
 }
 
 /// Compose multiple layers into a `tracing`'s subscriber.

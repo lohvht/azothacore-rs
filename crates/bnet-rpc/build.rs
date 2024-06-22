@@ -189,7 +189,7 @@ impl BnetRpcServiceGenerator {
                     Span::call_site(),
                 );
                 quote! {
-                    fn #client_response_method_name(&self, response: #return_type) -> impl ::std::future::Future<Output=::std::io::Result<()>> + Send {
+                    fn #client_response_method_name(&self, response: #return_type) -> impl ::std::future::Future<Output=::std::io::Result<()>> {
                         async move {
                             tracing::debug!(#client_response_debug_message);
                             Ok(())
@@ -205,7 +205,7 @@ impl BnetRpcServiceGenerator {
             );
             let method_piece = quote!(
                 #[tracing::instrument(skip(self), target = "service.protobuf", fields(caller_info=self.caller_info()))]
-                fn #client_method_name(&self, request: #request_type) -> impl ::std::future::Future<Output=::std::io::Result<()>> + Send where Self: Sync, {
+                fn #client_method_name(&self, request: #request_type) -> impl ::std::future::Future<Output=::std::io::Result<()>> {
                     async {
                         tracing::debug!(#client_debug_message);
                         let request = self.pre_send_store_client_request(self.service_hash(), #method_id, request).await?;
@@ -216,7 +216,7 @@ impl BnetRpcServiceGenerator {
                 #client_response_method
 
                 #[tracing::instrument(skip(self), target = "service.protobuf", fields(caller_info=self.caller_info()))]
-                fn #server_method_name(&self, request: #request_type) -> impl ::std::future::Future<Output=crate::BnetRpcResult<#return_type>> + Send where Self: Sync, {
+                fn #server_method_name(&self, request: #request_type) -> impl ::std::future::Future<Output=crate::BnetRpcResult<#return_type>> {
                     async {
                         tracing::error!(#server_error_msg);
                         Err(crate::BattlenetRpcErrorCode::RpcNotImplemented)
@@ -333,10 +333,9 @@ impl BnetRpcServiceGenerator {
 
         quote! {
             #[tracing::instrument(skip(self, message), target = "service.protobuf", fields(caller_info=self.caller_info()))]
-            fn call_server_method<B>(&self, token: u32, method_id: u32, message: B) -> impl ::std::future::Future<Output=::std::io::Result<()>> + Send
+            fn call_server_method<'a, B>(&'a self, token: u32, method_id: u32, message: B) -> impl ::std::future::Future<Output=::std::io::Result<()>> + 'a
             where
-                Self: Sync,
-                B: bytes::Buf + Send,
+                B: bytes::Buf + 'a,
             {
                 use prost::Message;
                 async {
@@ -428,10 +427,9 @@ impl BnetRpcServiceGenerator {
 
         quote! {
             #[tracing::instrument(skip(self, _message), target = "service.protobuf", fields(caller_info=self.caller_info()))]
-            fn receive_client_response<B>(&self, _method_id: u32, _message: B) -> impl ::std::future::Future<Output=::std::io::Result<()>> + Send
+            fn receive_client_response<'a, B>(&'a self, _method_id: u32, _message: B) -> impl ::std::future::Future<Output=::std::io::Result<()>> + 'a
             where
-                Self: Sync,
-                B: bytes::Buf + Send,
+                B: bytes::Buf + 'a,
             {
                 async {
                     #receive_client_response_body

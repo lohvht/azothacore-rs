@@ -10,7 +10,6 @@ use std::{
 use azothacore_common::{
     configuration::{DatabaseInfo, DatabaseType, DbUpdates},
     hex_str,
-    r#async::Context,
 };
 use hugsqlx::params;
 use sha2::{Digest, Sha256};
@@ -164,16 +163,16 @@ impl DatabaseLoader {
 
     /// Loads and prepares the database as required. it first opens the connection to the DB
     /// Then populates the DB if needed and keeps it up to date.
-    pub async fn load(self, ctx: Context) -> Result<sqlx::Pool<DbDriver>, DatabaseLoaderError> {
+    pub async fn load(self) -> Result<sqlx::Pool<DbDriver>, DatabaseLoaderError> {
         if !self.database_config.updates_enabled() {
             info!("Automatic database updates are disabled for {}", self.database_config.DatabaseName);
         }
         let pool = self.open_database().await?;
-        if let Err(e) = self.populate_database(ctx.clone(), pool.clone()).await {
+        if let Err(e) = self.populate_database(pool.clone()).await {
             pool.close().await;
             return Err(e);
         }
-        if let Err(e) = self.update_database(ctx.clone(), pool.clone()).await {
+        if let Err(e) = self.update_database(pool.clone()).await {
             pool.close().await;
             return Err(e);
         }
@@ -215,7 +214,7 @@ impl DatabaseLoader {
         Ok(pool)
     }
 
-    async fn populate_database(&self, ctx: Context, pool: sqlx::Pool<DbDriver>) -> Result<(), DatabaseLoaderError> {
+    async fn populate_database(&self, pool: sqlx::Pool<DbDriver>) -> Result<(), DatabaseLoaderError> {
         if !self.database_config.updates_enabled() {
             return Ok(());
         }
@@ -253,13 +252,12 @@ impl DatabaseLoader {
         }
 
         for f in files {
-            let ctx = ctx.clone();
             pool.acquire()
                 .await?
                 .transaction(|tx| {
                     Box::pin(async move {
                         let is_gz = f.path().extension().filter(|ext| *ext == "gz").is_some();
-                        apply_file(ctx, &mut **tx, f.path(), is_gz).await?;
+                        apply_file(&mut **tx, f.path(), is_gz).await?;
                         Ok::<_, DatabaseLoaderError>(())
                     })
                 })
@@ -270,16 +268,16 @@ impl DatabaseLoader {
         Ok(())
     }
 
-    async fn update_database(&self, ctx: Context, pool: sqlx::Pool<DbDriver>) -> Result<(), DatabaseLoaderError> {
+    async fn update_database(&self, pool: sqlx::Pool<DbDriver>) -> Result<(), DatabaseLoaderError> {
         if !self.database_config.updates_enabled() {
             return Ok(());
         }
         info!("Updating {} database...", self.database_config.DatabaseName);
 
-        self.check_update_table(ctx.clone(), pool.clone(), "updates").await?;
-        self.check_update_table(ctx.clone(), pool.clone(), "updates_include").await?;
+        self.check_update_table(pool.clone(), "updates").await?;
+        self.check_update_table(pool.clone(), "updates_include").await?;
 
-        let (updated, recent, archived) = self.fetch_and_apply_updates(ctx, pool).await?;
+        let (updated, recent, archived) = self.fetch_and_apply_updates(pool).await?;
         let info = format!("Containing {} new and {} archived updates.", recent, archived);
         if updated > 0 {
             info!(">> {} database is up-to-date! {}", self.database_config.DatabaseName, info);
@@ -290,7 +288,7 @@ impl DatabaseLoader {
         Ok(())
     }
 
-    async fn fetch_and_apply_updates(&self, ctx: Context, pool: sqlx::Pool<DbDriver>) -> Result<(usize, usize, usize), DatabaseLoaderError> {
+    async fn fetch_and_apply_updates(&self, pool: sqlx::Pool<DbDriver>) -> Result<(usize, usize, usize), DatabaseLoaderError> {
         let available = self.get_file_list(pool.clone()).await?;
         if available.is_empty() {
             return Ok((0, 0, 0));
@@ -329,7 +327,7 @@ impl DatabaseLoader {
                 continue;
             };
 
-            self.apply_update_file(ctx.clone(), pool.clone(), f, mode).await?;
+            self.apply_update_file(pool.clone(), f, mode).await?;
             applied.remove(&f.name());
             imported_updates += 1;
         }
@@ -562,11 +560,11 @@ impl DatabaseLoader {
         Ok(Some(mode))
     }
 
-    async fn apply_update_file(&self, ctx: Context, pool: sqlx::Pool<DbDriver>, file: &DbFile, mode: UpdateMode) -> Result<(), DatabaseLoaderError> {
+    async fn apply_update_file(&self, pool: sqlx::Pool<DbDriver>, file: &DbFile, mode: UpdateMode) -> Result<(), DatabaseLoaderError> {
         let mut txn = pool.begin().await?;
         let now = Instant::now();
         if matches!(mode, UpdateMode::Apply) {
-            apply_file(ctx, &mut *txn, &file.path, file.is_gz()).await?;
+            apply_file(&mut *txn, &file.path, file.is_gz()).await?;
         }
         let speed = now.elapsed();
         query_with(
@@ -592,7 +590,7 @@ impl DatabaseLoader {
         Ok(())
     }
 
-    async fn check_update_table(&self, ctx: Context, pool: sqlx::Pool<DbDriver>, table_name: &str) -> Result<(), DatabaseLoaderError> {
+    async fn check_update_table(&self, pool: sqlx::Pool<DbDriver>, table_name: &str) -> Result<(), DatabaseLoaderError> {
         let res = query(&format!("SHOW TABLES LIKE '{}'", table_name)).fetch_optional(&pool).await?;
         if res.is_some() {
             return Ok(());
@@ -608,7 +606,7 @@ impl DatabaseLoader {
 
         let db_name = self.database_config.DatabaseName.clone();
         let mut txn = pool.begin().await?;
-        apply_file(ctx, &mut *txn, f, is_gz).await.map_err(|e| {
+        apply_file(&mut *txn, f, is_gz).await.map_err(|e| {
             error!(
                 "Failed apply file to database {db_name} due to error: {e}! Does the user (named in *.conf) have `INSERT` and `DELETE` privileges on the MySQL server?",
             );

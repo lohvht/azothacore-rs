@@ -13,6 +13,7 @@ figment = { workspace = true, features = ["test"] }
 anyhow = { version = "1" }
 bevy.workspace = true
 bincode = { version = "1" }
+bytes.workspace = true
 chrono.workspace = true
 const_format = { version = "0" }
 figment.workspace = true
@@ -33,7 +34,6 @@ serde-inline-default.workspace = true
 serde.workspace = true
 structstruck.workspace = true
 thiserror.workspace = true
-tokio-util.workspace = true
 tokio.workspace = true
 tracing-appender = { version = "0" }
 tracing-subscriber = { version = "0", features = ["registry"] }

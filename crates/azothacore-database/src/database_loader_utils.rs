@@ -4,7 +4,7 @@ use std::{
     path::Path,
 };
 
-use azothacore_common::{r#async::Context, utils::buffered_file_open};
+use azothacore_common::utils::buffered_file_open;
 use flate2::bufread::GzDecoder;
 use thiserror::Error;
 use tracing::{error, info};
@@ -35,7 +35,7 @@ fn map_open_err(file_path: &str) -> impl FnOnce(io::Error) -> DatabaseLoaderErro
 }
 
 /// Applies the file's content to the given pool.
-pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(ctx: Context, conn: E, f: P, is_gz: bool) -> Result<(), DatabaseLoaderError> {
+pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(conn: E, f: P, is_gz: bool) -> Result<(), DatabaseLoaderError> {
     let file_path = f.as_ref().display().to_string();
     info!(">> Applying \'{file_path}\'...");
 
@@ -50,9 +50,6 @@ pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(ctx: Context, con
     };
 
     tokio::select! {
-        _ = ctx.cancelled() => {
-            return Err(DatabaseLoaderError::Generic{ msg: "DB apply cancelled".to_string()})
-        },
         res = conn.execute(file_data.as_str()) => {
                 // NOTE: hirogoro@21dec2023: Raw unprepared execution, by not enclosing with sqlx::query function
                 // => See: https://github.com/launchbadge/sqlx/issues/2557
@@ -67,7 +64,6 @@ pub async fn apply_file<'e, P: AsRef<Path>, E: DbExecutor<'e>>(ctx: Context, con
                   
                   {e}"#,
                 );
-                ctx.cancel();
             }
             res?;
         }
