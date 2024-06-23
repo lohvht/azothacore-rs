@@ -202,10 +202,10 @@ where
 }
 
 #[derive(Resource)]
-pub struct SocketReceiver<S>(pub UnboundedReceiver<NewTcpConnection>, PhantomData<S>);
+pub struct SocketReceiver<S: ConnectionComponent>(pub UnboundedReceiver<NewTcpConnection>, PhantomData<S>);
 
 #[derive(Resource)]
-struct TermSender<S>(UnboundedSender<()>, PhantomData<S>);
+struct TermSender<S: ConnectionComponent>(UnboundedSender<()>, PhantomData<S>);
 
 fn start_network<C, S>(cfg: Res<ConfigMgr<C>>, mut commands: Commands, rt: Res<TokioRuntime>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>)
 where
