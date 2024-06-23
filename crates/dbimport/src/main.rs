@@ -1,127 +1,164 @@
-// use std::{path::Path, sync::Arc};
+use std::path::Path;
 
 use azothacore_common::{
-    //     banner,
-    //     configuration::{
-    //         DatabaseType::{Character as DBFlagCharacter, Hotfix as DBFlagHotfix, Login as DBFlagLogin, World as DBFlagWorld},
-    //         DbUpdates,
-    //         CONFIG_MGR,
-    //     },
-    //     log,
-    //     r#async::Context,
-    AzResult,
-    //     AZOTHA_DB_IMPORT_CONFIG,
-    //     CONF_DIR,
+    banner,
+    bevy_app::{bevy_app, TokioRuntime},
+    configuration::{config_mgr_plugin, ConfigMgr, ConfigMgrSet, DatabaseType},
+    log::{logging_plugin, LoggingSetupSet},
+    AZOTHA_DB_IMPORT_CONFIG,
+    CONF_DIR,
 };
+use azothacore_database::{database_loader::DatabaseLoader, database_loader_utils::DatabaseLoaderError};
+use azothacore_modules::SCRIPTS as MODULES_LIST;
+use azothacore_server::shared::{tokio_signal_handling_bevy_plugin, SignalBroadcaster};
+use bevy::prelude::*;
+use clap::Parser;
+use dbimport::DbImportConfig;
+use tracing::{error, info};
 
-// use azothacore_database::{
-//     database_env::{CharacterDatabase, HotfixDatabase, LoginDatabase, WorldDatabase},
-//     database_loader::DatabaseLoader,
-// };
-// use azothacore_modules::SCRIPTS as MODULES_LIST;
-// use azothacore_server::shared::{panic_handler, signal_handler};
-// use clap::Parser;
-// use tokio::sync::oneshot;
-// use tracing::{error, info};
+fn main() {
+    let vm = ConsoleArgs::parse();
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
 
-fn main() -> AzResult<()> {
-    // let rt = Arc::new(tokio::runtime::Builder::new_multi_thread().enable_all().build()?);
-    // let root_ctx = Context::new(rt.handle());
-    // panic_handler(root_ctx.clone());
-    // let vm = ConsoleArgs::parse();
-    // {
-    //     let mut cfg_mgr_w = CONFIG_MGR.blocking_write();
-    //     cfg_mgr_w.configure(&vm.config, vm.dry_run, Box::new(|_| Box::pin(async move { Ok(vec![]) })));
-    //     cfg_mgr_w.load_app_configs()?;
-    // };
-    // let _wg = {
-    //     let cfg_mgr_r = CONFIG_MGR.blocking_read();
-    //     // TODO: Setup DB logging. Original code below
-    //     // // Init all logs
-    //     // sLog->RegisterAppender<AppenderDB>();
-    //     log::init(
-    //         cfg_mgr_r.get_option::<String>("LogsDir")?,
-    //         &cfg_mgr_r.get_option::<Vec<_>>("Appender")?,
-    //         &cfg_mgr_r.get_option::<Vec<_>>("Logger")?,
-    //     )
-    // };
-    // banner::azotha_banner_show("dbimport", || {
-    //     info!(
-    //         target:"dbimport",
-    //         "> Using configuration file       {}",
-    //         CONFIG_MGR.blocking_read().get_filename().display()
-    //     )
-    // });
-
-    // let ctx = root_ctx.clone();
-    // root_ctx.spawn(signal_handler(ctx));
-
-    // let (db_started_send, db_started_recv) = oneshot::channel();
-    // let ctx = root_ctx.clone();
-    // root_ctx.spawn(async move {
-    //     if let Err(e) = start_db(ctx.clone(), db_started_send).await {
-    //         error!(target:"server::authserver", cause=%e, "error starting/stopping DB");
-    //         ctx.cancel();
-    //     }
-    // });
-    // // Enforce DB to be up first
-    // db_started_recv.blocking_recv().unwrap();
-
-    // info!(target:"dbimport", "Halting process...");
-
-    Ok(())
+    let mut app = bevy_app();
+    app.insert_resource(TokioRuntime(rt))
+        .add_plugins((
+            tokio_signal_handling_bevy_plugin,
+            config_mgr_plugin::<DbImportConfig, _>(vm.config, false),
+            logging_plugin::<DbImportConfig>,
+        ))
+        .add_systems(
+            Startup,
+            (
+                show_banner.run_if(resource_exists::<ConfigMgr<DbImportConfig>>).in_set(DbImportSet::ShowBanner),
+                start_db.run_if(resource_exists::<ConfigMgr<DbImportConfig>>).in_set(DbImportSet::StartDB),
+            ),
+        )
+        // Init logging right after config management
+        .configure_sets(PreStartup, ConfigMgrSet::<DbImportConfig>::load_initial().before(LoggingSetupSet))
+        .update();
 }
 
-// /// Initialize connection to the database
-// async fn start_db(ctx: Context, db_started_send: oneshot::Sender<()>) -> AzResult<()> {
-//     let updates;
-//     let auth_cfg;
-//     let world_cfg;
-//     let character_cfg;
-//     let hotfix_cfg;
-//     {
-//         let config_mgr_r = CONFIG_MGR.read().await;
-//         updates = config_mgr_r.get_option::<DbUpdates>("Updates")?;
-//         auth_cfg = config_mgr_r.get_option("LoginDatabaseInfo")?;
-//         world_cfg = config_mgr_r.get_option("WorldDatabaseInfo")?;
-//         character_cfg = config_mgr_r.get_option("CharacterDatabaseInfo")?;
-//         hotfix_cfg = config_mgr_r.get_option("HotfixDatabaseInfo")?;
-//     }
-//     let modules: Vec<_> = MODULES_LIST.iter().map(|s| s.to_string()).collect();
-//     let login_db_loader = DatabaseLoader::new(DBFlagLogin, auth_cfg, updates.clone(), modules.clone());
-//     let world_db_loader = DatabaseLoader::new(DBFlagWorld, world_cfg, updates.clone(), modules.clone());
-//     let chars_db_loader = DatabaseLoader::new(DBFlagCharacter, character_cfg, updates.clone(), modules.clone());
-//     let hotfixes_db_loader = DatabaseLoader::new(DBFlagHotfix, hotfix_cfg, updates.clone(), modules.clone());
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum DbImportSet {
+    ShowBanner,
+    StartDB,
+}
 
-//     LoginDatabase::set(login_db_loader.load(ctx.clone()).await?);
-//     WorldDatabase::set(world_db_loader.load(ctx.clone()).await?);
-//     CharacterDatabase::set(chars_db_loader.load(ctx.clone()).await?);
-//     HotfixDatabase::set(hotfixes_db_loader.load(ctx.clone()).await?);
+fn show_banner(cfg: Res<ConfigMgr<DbImportConfig>>) {
+    banner::azotha_banner_show("dbimport", || {
+        info!(
+            target:"dbimport",
+            "> Using configuration file       {}",
+            cfg.filename.display()
+        )
+    });
+}
 
-//     info!(target:"dbimport", "Started database connection pool.");
-//     db_started_send.send(()).unwrap();
+/// Initialize connection to the database
+fn start_db(cfg: Res<ConfigMgr<DbImportConfig>>, rt: Res<TokioRuntime>, mut signal: ResMut<SignalBroadcaster>) {
+    let modules: Vec<_> = MODULES_LIST.iter().map(|s| s.to_string()).collect();
+    let login_db_loader = DatabaseLoader::new(DatabaseType::Character, cfg.CharacterDatabaseInfo.clone(), cfg.Updates.clone(), modules.clone());
+    let world_db_loader = DatabaseLoader::new(DatabaseType::World, cfg.WorldDatabaseInfo.clone(), cfg.Updates.clone(), modules.clone());
+    let chars_db_loader = DatabaseLoader::new(DatabaseType::Character, cfg.LoginDatabaseInfo.clone(), cfg.Updates.clone(), modules.clone());
+    let hotfixes_db_loader = DatabaseLoader::new(DatabaseType::Hotfix, cfg.HotfixDatabaseInfo.clone(), cfg.Updates.clone(), modules.clone());
 
-//     // Wait for cancellation
-//     ctx.cancelled().await;
-//     info!(target:"dbimport", "Stopping database connection pool.");
-//     LoginDatabase::close().await;
-//     WorldDatabase::close().await;
-//     CharacterDatabase::close().await;
-//     HotfixDatabase::close().await;
-//     info!(target:"dbimport", "Stopped database connection pool.");
+    let span = info_span!(target:"dbimport", "login_db", db=?cfg.LoginDatabaseInfo);
+    let span_guard = span.enter();
+    match rt.block_on(async {
+        tokio::select! {
+            d = login_db_loader.load() => d,
+            _ = signal.0.recv() => {
+                Err(DatabaseLoaderError::Generic { msg: "signal termination detected!".to_string() })
+            }
+        }
+    }) {
+        Err(e) => {
+            error!(cause=%e, "error starting / updating DB");
+        },
+        Ok(db) => {
+            info!("connected to DB successfully and updated the DB (if configured). Stopping connection pool");
+            rt.block_on(db.close());
+        },
+    }
+    drop(span_guard);
+    let span = info_span!(target:"dbimport", "world_db", db=?cfg.WorldDatabaseInfo);
+    let span_guard = span.enter();
+    match rt.block_on(async {
+        tokio::select! {
+            d = world_db_loader.load() => d,
+            _ = signal.0.recv() => {
+                Err(DatabaseLoaderError::Generic { msg: "signal termination detected!".to_string() })
+            }
+        }
+    }) {
+        Err(DatabaseLoaderError::Generic { msg }) if msg.strip_prefix("signal termination detected").is_none() => {
+            error!("signal termination detected, quitting start and update DB.");
+            return;
+        },
+        Err(e) => {
+            error!(cause=%e, "error starting / updating DB");
+        },
+        Ok(db) => {
+            info!("connected to DB successfully and updated the DB (if configured). Stopping connection pool");
+            rt.block_on(db.close());
+        },
+    }
+    drop(span_guard);
+    let span = info_span!(target:"dbimport", "characters_db", db=?cfg.CharacterDatabaseInfo);
+    let span_guard = span.enter();
+    match rt.block_on(async {
+        tokio::select! {
+            d = chars_db_loader.load() => d,
+            _ = signal.0.recv() => {
+                Err(DatabaseLoaderError::Generic { msg: "signal termination detected!".to_string() })
+            }
+        }
+    }) {
+        Err(DatabaseLoaderError::Generic { msg }) if msg.strip_prefix("signal termination detected").is_some() => {
+            error!("signal termination detected, quitting start and update DB.");
+            return;
+        },
+        Err(e) => {
+            error!(cause=%e, "error starting / updating DB");
+        },
+        Ok(db) => {
+            info!("connected to DB successfully and updated the DB (if configured). Stopping connection pool");
+            rt.block_on(db.close());
+        },
+    }
+    drop(span_guard);
+    let span = info_span!(target:"dbimport", "characters_db", db=?cfg.HotfixDatabaseInfo);
+    let span_guard = span.enter();
+    match rt.block_on(async {
+        tokio::select! {
+            d = hotfixes_db_loader.load() => d,
+            _ = signal.0.recv() => {
+                Err(DatabaseLoaderError::Generic { msg: "signal termination detected!".to_string() })
+            }
+        }
+    }) {
+        Err(DatabaseLoaderError::Generic { msg }) if msg.strip_prefix("signal termination detected").is_none() => {
+            error!("signal termination detected, quitting start and update DB.");
+            return;
+        },
+        Err(e) => {
+            error!(cause=%e, "error starting / updating DB");
+        },
+        Ok(db) => {
+            info!("connected to DB successfully and updated the DB (if configured). Stopping connection pool");
+            rt.block_on(db.close());
+        },
+    }
+    drop(span_guard);
+}
 
-//     Ok(())
-// }
-
-// #[derive(clap::Parser, Debug)]
-// #[command(author, version, about, long_about = None)]
-// struct ConsoleArgs {
-//     /// Dry run
-//     #[arg(short, long = "dry-run")]
-//     dry_run: bool,
-//     /// use <arg> as configuration file
-//     #[arg(short, long, default_value_t = Path::new(CONF_DIR).join(AZOTHA_DB_IMPORT_CONFIG).to_str().unwrap().to_string())]
-//     config:  String,
-//     #[arg(short, long, default_value_t = String::new())]
-//     service: String,
-// }
+#[derive(clap::Parser, Debug)]
+#[command(author, version, about, long_about = None)]
+struct ConsoleArgs {
+    /// use <arg> as configuration file
+    #[arg(short, long, default_value_t = Path::new(CONF_DIR).join(AZOTHA_DB_IMPORT_CONFIG).to_str().unwrap().to_string())]
+    config:  String,
+    #[arg(short, long, default_value_t = String::new())]
+    service: String,
+}

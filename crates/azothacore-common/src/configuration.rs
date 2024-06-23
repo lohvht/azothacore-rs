@@ -31,8 +31,9 @@ pub trait Config: serde::de::DeserializeOwned + Send + Sync + 'static {
 
 #[derive(Resource)]
 pub struct ConfigMgr<C> {
-    pub filename: PathBuf,
-    config:       C,
+    pub filename:   PathBuf,
+    pub is_dry_run: bool,
+    config:         C,
 }
 
 impl<C> Deref for ConfigMgr<C> {
@@ -165,7 +166,8 @@ where
         };
         commands.insert_resource(ConfigMgr {
             filename: path.as_ref().to_path_buf(),
-            config:   cfg,
+            config: cfg,
+            is_dry_run,
         });
 
         if is_dry_run {

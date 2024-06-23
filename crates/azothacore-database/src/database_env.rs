@@ -49,7 +49,7 @@ pub use world_db::HugSql as WorldPreparedStmts;
 use crate::DbDriver;
 
 #[derive(Resource, Clone)]
-pub struct CharacterDatabase(Pool<DbDriver>);
+pub struct CharacterDatabase(pub Pool<DbDriver>);
 deref_boilerplate!(CharacterDatabase, Pool<DbDriver>, 0);
 impl CharacterPreparedStmts for CharacterDatabase {}
 

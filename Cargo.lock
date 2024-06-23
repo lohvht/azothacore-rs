@@ -1901,7 +1901,12 @@ dependencies = [
  "azothacore-database",
  "azothacore-modules",
  "azothacore-server",
+ "bevy",
  "clap 4.5.4",
+ "serde",
+ "serde-inline-default",
+ "serde_default",
+ "structstruck",
  "tokio",
  "tracing",
 ]
