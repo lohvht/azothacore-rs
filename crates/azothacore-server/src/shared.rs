@@ -12,7 +12,10 @@ use std::{
 use azothacore_common::bevy_app::TokioRuntime;
 use bevy::{app::AppExit, prelude::*, tasks::poll_once};
 use thiserror::Error;
-use tokio::task::JoinHandle;
+use tokio::{
+    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    task::JoinHandle,
+};
 use tracing::{error, info};
 
 pub fn bnetrpc_zcompress(mut json: Vec<u8>) -> io::Result<Vec<u8>> {
@@ -43,7 +46,7 @@ impl SignalError {
     }
 }
 
-pub async fn signal_handler() -> Result<String, SignalError> {
+pub async fn signal_handler(signal_broadcast_snd: UnboundedSender<String>) -> Result<String, SignalError> {
     #[cfg(target_os = "windows")]
     let mut sig_break = match tokio::signal::windows::ctrl_break::ctrl_break() {
         Err(e) => {
@@ -75,21 +78,22 @@ pub async fn signal_handler() -> Result<String, SignalError> {
     #[cfg(target_os = "windows")]
     let sig = tokio::select! {
         _ = sig_break.recv() => {
-            "SIGBREAK".into()
+            "SIGBREAK".to_string()
         },
     };
     #[cfg(target_os = "linux")]
     let sig = tokio::select! {
         _ = sig_interrupt.recv() => {
-            "SIGINT".into()
+            "SIGINT".to_string()
         },
         _ = sig_terminate.recv() => {
-            "SIGTERM".into()
+            "SIGTERM".to_string()
         },
         _ = sig_quit.recv() => {
-            "SIGQUIT".into()
+            "SIGQUIT".to_string()
         },
     };
+    _ = signal_broadcast_snd.send(sig.clone());
 
     Ok(sig)
 }
@@ -102,10 +106,15 @@ pub fn tokio_signal_handling_bevy_plugin(app: &mut App) {
 #[derive(Component)]
 struct SignalHandlerTokioTask(JoinHandle<Result<String, SignalError>>);
 
+#[derive(Resource)]
+pub struct SignalBroadcaster(pub UnboundedReceiver<String>);
+
 fn overwrite_signal_handlers(mut commands: Commands, rt: Res<TokioRuntime>) {
-    let task = rt.spawn(async move { signal_handler().await });
+    let (snd, rcv) = unbounded_channel();
+    let task = rt.spawn(async move { signal_handler(snd).await });
     let entity = commands.spawn_empty().id();
     commands.entity(entity).insert(SignalHandlerTokioTask(task));
+    commands.insert_resource(SignalBroadcaster(rcv));
 }
 
 fn try_receive_signal(
