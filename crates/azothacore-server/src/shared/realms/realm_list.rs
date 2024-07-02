@@ -351,20 +351,18 @@ pub fn realm_list_plugin<C: RealmListConfig>(app: &mut App) {
         .add_systems(Update, update_realmlists.run_if(az_startup_succeeded()).in_set(RealmListUpdateSet));
 }
 
-fn init_realm_list<C: RealmListConfig>(mut commands: Commands, cfg: Res<ConfigMgr<C>>) {
-    commands.insert_resource(RealmList::new(cfg.realms_state_update_delay()));
+fn init_realm_list<C: RealmListConfig>(mut commands: Commands, cfg: Res<ConfigMgr<C>>, rt: Res<TokioRuntime>, login_db: Option<Res<LoginDatabase>>) {
+    let mut realm_list = RealmList::new(cfg.realms_state_update_delay());
+    if let Some(db) = login_db {
+        rt.block_on(realm_list.update(db.clone()));
+    }
+    commands.insert_resource(realm_list);
 }
 
-fn update_realmlists(
-    mut has_run_once: Local<bool>,
-    time: Res<Time<Real>>,
-    rt: Res<TokioRuntime>,
-    login_db: Res<LoginDatabase>,
-    mut realm_list: ResMut<RealmList>,
-) {
+fn update_realmlists(time: Res<Time<Real>>, rt: Res<TokioRuntime>, login_db: Res<LoginDatabase>, mut realm_list: ResMut<RealmList>) {
     realm_list.update_timer.tick(time.delta());
-    if !*has_run_once {
-        *has_run_once = true;
+    if !realm_list.has_run_once {
+        realm_list.has_run_once = true;
         rt.block_on(realm_list.update(login_db.clone()));
     }
     if !realm_list.update_timer.finished() {
@@ -377,6 +375,7 @@ fn update_realmlists(
 pub struct RealmList {
     pub realms:      BTreeMap<BnetRealmHandle, Realm>,
     pub sub_regions: BTreeSet<String>,
+    has_run_once:    bool,
     update_timer:    Timer,
 }
 
@@ -385,6 +384,7 @@ impl RealmList {
         Self {
             realms:       BTreeMap::new(),
             sub_regions:  BTreeSet::new(),
+            has_run_once: false,
             update_timer: Timer::new(update_delay, TimerMode::Repeating),
         }
     }

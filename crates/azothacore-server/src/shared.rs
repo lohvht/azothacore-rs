@@ -107,14 +107,14 @@ pub fn tokio_signal_handling_bevy_plugin(app: &mut App) {
 struct SignalHandlerTokioTask(JoinHandle<Result<String, SignalError>>);
 
 #[derive(Resource)]
-pub struct SignalBroadcaster(pub UnboundedReceiver<String>);
+pub struct SignalReceiver(pub UnboundedReceiver<String>);
 
 fn overwrite_signal_handlers(mut commands: Commands, rt: Res<TokioRuntime>) {
     let (snd, rcv) = unbounded_channel();
     let task = rt.spawn(async move { signal_handler(snd).await });
     let entity = commands.spawn_empty().id();
     commands.entity(entity).insert(SignalHandlerTokioTask(task));
-    commands.insert_resource(SignalBroadcaster(rcv));
+    commands.insert_resource(SignalReceiver(rcv));
 }
 
 fn try_receive_signal(

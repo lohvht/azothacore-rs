@@ -43,8 +43,6 @@ pub struct AuthserverConfig {
     // #[serde(default)] pub DBPingInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(30) }>,
     /// Logs directory path - all logs will be written inside this directory.
     #[serde_inline_default("logs".into())] pub LogsDir: PathBuf,
-    /// Auth server PID file.
-    #[serde(default)] pub PidFile: Option<PathBuf>,
     #[serde(default="default_authserver_log_appenders")] pub Appender: Vec<LogAppender>,
     #[serde(default="default_authserver_log_configs")] pub Logger: Vec<LogLoggerConfig>,
     /// Bind auth server to IP/hostname

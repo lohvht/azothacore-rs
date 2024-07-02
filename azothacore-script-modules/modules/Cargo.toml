@@ -7,5 +7,6 @@ edition = "2021"
 
 [dependencies]
 azothacore-common.workspace = true
-# azothacore-server.workspace = true
+azothacore-server.workspace = true
+bevy.workspace = true
 skeleton-module = { path = "../skeleton-module" }

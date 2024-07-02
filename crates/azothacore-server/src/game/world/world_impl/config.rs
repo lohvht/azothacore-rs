@@ -6,7 +6,7 @@ use std::{
 
 use azothacore_common::{
     bounded_nums::{LowerBoundedNum, RangedBoundedNum, UpperBoundedNum},
-    configuration::{from_env_toml, DatabaseInfo, DbUpdates, LogAppender, LogFlags, LogLevel, LogLoggerConfig},
+    configuration::{from_env_toml, Config, DatabaseInfo, DbUpdates, LogAppender, LogFlags, LogLevel, LogLoggerConfig},
     durationb,
     durationb_days,
     durationb_hours,
@@ -14,6 +14,7 @@ use azothacore_common::{
     durationb_ms,
     durationb_s,
     f32b,
+    log::LoggingConfig,
     AccountTypes,
     AzResult,
     Locale,
@@ -59,7 +60,7 @@ use crate::{
     },
     shared::{
         data_stores::dbc_enums::{LEVEL_LIMIT_MAX, LEVEL_LIMIT_MAX_DEFAULT},
-        realms::RealmType,
+        realms::{realm_list::RealmListConfig, RealmType},
         shared_defines::{
             AccountPasswordChangeSecurityPolicy,
             AutoBroadcastDisplayMethod,
@@ -200,10 +201,12 @@ pub struct WorldConfig {
     #[serde_inline_default("logs".into())] pub LogsDir: PathBuf,
     #[serde(default="default_worldserver_log_appenders")] pub Appender: Vec<LogAppender>,
     #[serde(default="default_worldserver_log_configs")] pub Logger: Vec<LogLoggerConfig>,
+    /// Time between realm list updates.
+    #[serde(default)] pub RealmsStateUpdateDelay: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_s!(10) }>,
+    #[serde_inline_default(1)] pub RealmID: u32,
     #[serde_inline_default("0.0.0.0".parse().unwrap())] pub BindIP: IpAddr,
-    #[serde(default)] pub PidFile: Option<PathBuf>,
-    #[serde(default)] pub ClientCacheVersion: Option<u32>,
-    #[serde(default)] pub HotfixCacheVersion: Option<u32>,
+    #[serde(default)] pub ClientCacheVersion: u32,
+    #[serde(default)] pub HotfixCacheVersion: u32,
     #[serde_inline_default(Locale::enUS)] pub DBCLocale: Locale,
     /// Read the player limit from the config file
     #[serde_inline_default(100)] pub PlayerLimit: usize,
@@ -980,8 +983,8 @@ macro_rules! clamp_cfg_min {
     }};
 }
 
-impl WorldConfig {
-    pub fn load<P: AsRef<Path>>(config_toml: P) -> AzResult<Self> {
+impl Config for WorldConfig {
+    fn load<P: AsRef<Path>>(config_toml: P) -> AzResult<Self> {
         let mut cfg: Self = from_env_toml(config_toml)?;
         // Load the rest of the stuff that cannot be set on deserialisation time
         if cfg.BaseMapLoadAllGrids && cfg.GridUnload {
@@ -1019,5 +1022,25 @@ impl WorldConfig {
             clamp_cfg_max!(|>, below, below, "NoGrayAggroBelow", above, "NoGrayAggroAbove");
         }
         Ok(cfg)
+    }
+}
+
+impl LoggingConfig for WorldConfig {
+    fn retrieve_appenders(&self) -> &[LogAppender] {
+        &self.Appender
+    }
+
+    fn retrieve_loggers(&self) -> &[LogLoggerConfig] {
+        &self.Logger
+    }
+
+    fn retrieve_logs_dir(&self) -> PathBuf {
+        self.LogsDir.clone()
+    }
+}
+
+impl RealmListConfig for WorldConfig {
+    fn realms_state_update_delay(&self) -> Duration {
+        *self.RealmsStateUpdateDelay
     }
 }

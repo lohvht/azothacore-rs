@@ -7,7 +7,7 @@ use std::{
 use azothacore_common::HexFmt;
 use flagset::{flags, FlagSet};
 
-use crate::game::world::CurrentRealm;
+use crate::shared::realms::Realm;
 
 flags! {
     pub enum TypeId: u16 {
@@ -273,8 +273,8 @@ pub trait RealmSpecific<const H: u8> {
         }
     };
 
-    fn create(counter: u64) -> ObjectGuid {
-        ObjectGuid::realm_specific(Self::TYPE, counter)
+    fn create(realm: &Realm, counter: u64) -> ObjectGuid {
+        ObjectGuid::realm_specific(realm, Self::TYPE, counter)
     }
 }
 
@@ -299,8 +299,8 @@ pub trait MapSpecificWithSubType<const H: u8> {
     //     template<HighGuid type>
     //     static typename std::enable_if<ObjectGuidTraits<type>::MapSpecific && type != HighGuid::Transport, ObjectGuid>::type Create(uint16 mapId, uint32 entry, LowType counter) { return MapSpecific(type, 0, mapId, 0, entry, counter); }
 
-    fn create(subtype: u8, map_id: u16, entry: u32, counter: u64) -> ObjectGuid {
-        ObjectGuid::map_specific(Self::TYPE, subtype, map_id, 0, entry, counter)
+    fn create(realm: &Realm, subtype: u8, map_id: u16, entry: u32, counter: u64) -> ObjectGuid {
+        ObjectGuid::map_specific(realm, Self::TYPE, subtype, map_id, 0, entry, counter)
     }
 }
 
@@ -335,8 +335,8 @@ pub trait MapSpecific<const H: u8>: MapSpecificWithSubType<H> {
             panic!("map specific high guid does not allow any other values")
         }
     };
-    fn create(map_id: u16, entry: u32, counter: u64) -> ObjectGuid {
-        ObjectGuid::map_specific(<Self as MapSpecific<H>>::TYPE, 0, map_id, 0, entry, counter)
+    fn create(realm: &Realm, map_id: u16, entry: u32, counter: u64) -> ObjectGuid {
+        ObjectGuid::map_specific(realm, <Self as MapSpecific<H>>::TYPE, 0, map_id, 0, entry, counter)
     }
 }
 
@@ -463,15 +463,15 @@ impl ObjectGuid {
         }
     }
 
-    fn realm_specific(typ: HighGuid, counter: u64) -> Self {
+    fn realm_specific(realm: &Realm, typ: HighGuid, counter: u64) -> Self {
         Self {
-            high: (typ.to_id() as u64) << 58 | ((CurrentRealm::get().id.realm & 0x1FFF) as u64) << 42,
+            high: (typ.to_id() as u64) << 58 | ((realm.id.realm & 0x1FFF) as u64) << 42,
             low:  counter,
         }
     }
 
-    fn map_specific(typ: HighGuid, subtype: u8, map_id: u16, server_id: u32, entry: u32, counter: u64) -> Self {
-        Self::create(typ, subtype, CurrentRealm::get().id.realm, map_id, server_id, entry, counter)
+    fn map_specific(realm: &Realm, typ: HighGuid, subtype: u8, map_id: u16, server_id: u32, entry: u32, counter: u64) -> Self {
+        Self::create(typ, subtype, realm.id.realm, map_id, server_id, entry, counter)
     }
 
     /// creates the GUID from all its relevant parts
@@ -632,8 +632,16 @@ fn unpack_u64<B: bytes::Buf>(mask: u8, buf: &mut B) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{Global, HighGuid, MapSpecific, MapSpecificWithSubType, ObjectGuid, RealmSpecific};
-    use crate::game::world::CurrentRealm;
+    use std::net::{Ipv4Addr, SocketAddr};
+
+    use azothacore_common::AccountTypes;
+    use ipnet::IpNet;
+
+    use super::HighGuid;
+    use crate::{
+        game::entities::object::object_guid::{Global, MapSpecific, MapSpecificWithSubType, ObjectGuid, RealmSpecific},
+        shared::realms::{BnetRealmHandle, Realm, RealmFlags, RealmType},
+    };
 
     #[test]
     fn high_guid_to_from() {
@@ -698,7 +706,28 @@ mod tests {
     #[test]
     fn create_guids() {
         use HighGuid::*;
-        CurrentRealm::setup_test();
+        let current_realm = Realm {
+            id:                     BnetRealmHandle {
+                realm:  123,
+                region: 2,
+                site:   1,
+            },
+            build:                  456,
+            external_address:       SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8085),
+            local_address:          SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8085),
+            local_network:          IpNet::with_netmask(
+                std::net::IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)),
+                std::net::IpAddr::V4(Ipv4Addr::new(255, 255, 255, 0)),
+            )
+            .unwrap(),
+            port:                   8085,
+            realm_type:             RealmType::Normal,
+            name:                   "TEST_CLIENT".to_string(),
+            flag:                   RealmFlags::None.into(),
+            timezone:               0,
+            allowed_security_level: AccountTypes::SecPlayer,
+            population_level:       0.0,
+        };
 
         for (guid, high, counter, entry, realm, map, empty, raw, packed) in [
             (
@@ -713,7 +742,7 @@ mod tests {
                 vec![0, 0],
             ),
             (
-                <ObjectGuid as Global<{ HighGuid::WowAccount as u8 }>>::create(1111),
+                <ObjectGuid as Global   <{ HighGuid::WowAccount as u8 }>>::create(1111),
                 WowAccount,
                 1111,
                 0,
@@ -724,33 +753,33 @@ mod tests {
                 vec![0b00000011, 0b10000000, 87, 4, 116],
             ),
             (
-                <ObjectGuid as RealmSpecific<{ Item as u8 }>>::create(2222),
+                <ObjectGuid as RealmSpecific<{ Item as u8 }>>::create(&current_realm, 2222),
                 Item,
                 2222,
                 0,
-                CurrentRealm::get().id.realm,
+                current_realm.id.realm,
                 0,
                 false,
                 [0, 0, 0, 0, 0, 236, 1, 12, 174, 8, 0, 0, 0, 0, 0, 0],
                 vec![0b00000011, 0b11100000, 174, 8, 236, 1, 12],
             ),
             (
-                <ObjectGuid as MapSpecific<{ DynamicObject as u8 }>>::create(1, 2, 3333),
+                <ObjectGuid as MapSpecific<{ DynamicObject as u8 }>>::create(&current_realm, 1, 2, 3333),
                 DynamicObject,
                 3333,
                 2,
-                CurrentRealm::get().id.realm,
+                current_realm.id.realm,
                 1,
                 false,
                 [128, 0, 0, 32, 0, 236, 1, 48, 5, 13, 0, 0, 0, 0, 0, 0],
                 vec![0b00000011, 0b11101001, 5, 13, 128, 32, 236, 1, 48],
             ),
             (
-                <ObjectGuid as MapSpecificWithSubType<{ Transport as u8 }>>::create(4, 2, 3, 4444),
+                <ObjectGuid as MapSpecificWithSubType<{ Transport as u8 }>>::create(&current_realm, 4, 2, 3, 4444),
                 Transport,
                 4444,
                 3,
-                CurrentRealm::get().id.realm,
+                current_realm.id.realm,
                 2,
                 false,
                 [196, 0, 0, 64, 0, 236, 1, 24, 92, 17, 0, 0, 0, 0, 0, 0],

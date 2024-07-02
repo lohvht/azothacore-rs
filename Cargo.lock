@@ -531,6 +531,8 @@ name = "azothacore-modules"
 version = "0.0.0"
 dependencies = [
  "azothacore-common",
+ "azothacore-server",
+ "bevy",
  "skeleton-module",
 ]
 
@@ -1543,6 +1545,13 @@ dependencies = [
 [[package]]
 name = "connection-patcher"
 version = "0.1.0"
+dependencies = [
+ "azothacore-common",
+ "azothacore-server",
+ "bevy",
+ "clap 4.5.4",
+ "tracing",
+]
 
 [[package]]
 name = "console"
@@ -4534,6 +4543,7 @@ version = "0.0.0"
 dependencies = [
  "azothacore-common",
  "azothacore-server",
+ "bevy",
  "serde",
  "tokio",
  "tracing",
@@ -6048,6 +6058,7 @@ dependencies = [
  "azothacore-database",
  "azothacore-modules",
  "azothacore-server",
+ "bevy",
  "clap 4.5.4",
  "flagset",
  "rand",

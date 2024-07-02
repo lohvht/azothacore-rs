@@ -10,7 +10,7 @@ use azothacore_common::{
 };
 use azothacore_database::{database_loader::DatabaseLoader, database_loader_utils::DatabaseLoaderError};
 use azothacore_modules::SCRIPTS as MODULES_LIST;
-use azothacore_server::shared::{tokio_signal_handling_bevy_plugin, SignalBroadcaster};
+use azothacore_server::shared::{tokio_signal_handling_bevy_plugin, SignalReceiver};
 use bevy::prelude::*;
 use clap::Parser;
 use dbimport::DbImportConfig;
@@ -56,11 +56,11 @@ fn show_banner(cfg: Res<ConfigMgr<DbImportConfig>>) {
 }
 
 /// Initialize connection to the database
-fn start_db(cfg: Res<ConfigMgr<DbImportConfig>>, rt: Res<TokioRuntime>, mut signal: ResMut<SignalBroadcaster>) {
+fn start_db(cfg: Res<ConfigMgr<DbImportConfig>>, rt: Res<TokioRuntime>, mut signal: ResMut<SignalReceiver>) {
     let modules: Vec<_> = MODULES_LIST.iter().map(|s| s.to_string()).collect();
-    let login_db_loader = DatabaseLoader::new(DatabaseType::Character, cfg.CharacterDatabaseInfo.clone(), cfg.Updates.clone(), modules.clone());
+    let login_db_loader = DatabaseLoader::new(DatabaseType::Login, cfg.LoginDatabaseInfo.clone(), cfg.Updates.clone(), modules.clone());
     let world_db_loader = DatabaseLoader::new(DatabaseType::World, cfg.WorldDatabaseInfo.clone(), cfg.Updates.clone(), modules.clone());
-    let chars_db_loader = DatabaseLoader::new(DatabaseType::Character, cfg.LoginDatabaseInfo.clone(), cfg.Updates.clone(), modules.clone());
+    let chars_db_loader = DatabaseLoader::new(DatabaseType::Character, cfg.CharacterDatabaseInfo.clone(), cfg.Updates.clone(), modules.clone());
     let hotfixes_db_loader = DatabaseLoader::new(DatabaseType::Hotfix, cfg.HotfixDatabaseInfo.clone(), cfg.Updates.clone(), modules.clone());
 
     let span = info_span!(target:"dbimport", "login_db", db=?cfg.LoginDatabaseInfo);
@@ -128,7 +128,7 @@ fn start_db(cfg: Res<ConfigMgr<DbImportConfig>>, rt: Res<TokioRuntime>, mut sign
         },
     }
     drop(span_guard);
-    let span = info_span!(target:"dbimport", "characters_db", db=?cfg.HotfixDatabaseInfo);
+    let span = info_span!(target:"dbimport", "hotfix_db", db=?cfg.HotfixDatabaseInfo);
     let span_guard = span.enter();
     match rt.block_on(async {
         tokio::select! {

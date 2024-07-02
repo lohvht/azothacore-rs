@@ -10,6 +10,7 @@ azothacore-database.workspace=true
 azothacore-modules.workspace=true
 azothacore-server.workspace=true
 # External crates
+bevy.workspace = true
 clap.workspace = true
 flagset.workspace =true
 rand.workspace = true
