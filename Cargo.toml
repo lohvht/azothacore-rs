@@ -16,6 +16,7 @@ opt-level = 3
 # Local crates
 azothacore-common = { path = "crates/azothacore-common" }
 azothacore-database ={ path = "crates/azothacore-database" }
+azothacore-tests-utils ={ path = "crates/azothacore-tests-utils" }
 azothacore-modules = { path = "azothacore-script-modules/modules" }
 azothacore-server = { path = "crates/azothacore-server" }
 azothacore-tools = { path = "crates/azothacore-tools" }

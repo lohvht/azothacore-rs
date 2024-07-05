@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_default::DefaultFromSerde;
 use serde_inline_default::serde_inline_default;
 
-use crate::AzResult;
+use crate::{AzResult, BASE_DIR};
 
 /// Gets a given config from both the env var and a toml file
 /// For env vars, key paths are split by double underscores "__"
@@ -119,7 +119,8 @@ impl DatabaseType {
     }
 
     pub fn base_files_directory(&self) -> Option<PathBuf> {
-        self.db_module_name().map(|db_module_name| format!("data/sql/base/{db_module_name}").into())
+        self.db_module_name()
+            .map(|db_module_name| format!("{BASE_DIR}/data/sql/base/{db_module_name}").into())
     }
 }
 

@@ -1,5 +1,3 @@
-#![feature(lint_reasons)]
-
 pub mod database_env;
 pub mod database_loader;
 pub mod database_loader_utils;

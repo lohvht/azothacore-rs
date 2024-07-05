@@ -1,5 +1,3 @@
-#![feature(lint_reasons)]
-
 use std::{collections::HashSet, env, path::PathBuf};
 
 use cmake::Config;

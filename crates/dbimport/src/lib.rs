@@ -1,5 +1,3 @@
-#![feature(lint_reasons)]
-
 use std::path::PathBuf;
 
 use azothacore_common::{

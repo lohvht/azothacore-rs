@@ -100,7 +100,7 @@ fn get_sha256_hash<P: AsRef<Path>>(fp: P) -> Result<String, DatabaseLoaderError>
             file:  fp.as_ref().to_string_lossy().to_string(),
             inner: e,
         })
-        .map_err(|e| {
+        .inspect_err(|e| {
             let f = if let DatabaseLoaderError::OpenApplyFile { file, .. } = &e { file } else { "" };
             error!(
                 "Failed to open the sql update {} for reading! \n\
@@ -108,7 +108,6 @@ fn get_sha256_hash<P: AsRef<Path>>(fp: P) -> Result<String, DatabaseLoaderError>
                 try to identify and solve the issue or disable the database updater.",
                 f,
             );
-            e
         })?;
     let mut hasher = Sha256::new();
     hasher.update(file_content.as_bytes());
@@ -179,7 +178,7 @@ impl DatabaseLoader {
         Ok(pool)
     }
 
-    async fn open_database(&self) -> Result<sqlx::Pool<DbDriver>, DatabaseLoaderError> {
+    pub async fn open_database(&self) -> Result<sqlx::Pool<DbDriver>, DatabaseLoaderError> {
         let pool = match PoolOptions::<DbDriver>::new()
             .max_connections(50)
             .idle_timeout(Some(Duration::from_secs(30)))

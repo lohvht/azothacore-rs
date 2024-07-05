@@ -3,6 +3,9 @@ name = "azothacore-server"
 version = "0.0.0"
 edition = "2021"
 
+[dev-dependencies]
+azothacore-tests-utils.workspace = true
+
 [dependencies]
 # Local crates
 azothacore-common.workspace = true

@@ -495,12 +495,15 @@ dependencies = [
  "num-derive",
  "num-traits",
  "parry3d",
+ "proc-macro2",
+ "quote",
  "recastnavigation-sys",
  "serde",
  "serde-inline-default",
  "serde_default",
  "serde_json",
  "structstruck",
+ "syn 2.0.65",
  "thiserror",
  "tokio",
  "tracing",
@@ -514,7 +517,6 @@ version = "0.1.0"
 dependencies = [
  "azothacore-common",
  "bevy",
- "dotenvy",
  "flate2",
  "futures-core",
  "hugsqlx",
@@ -542,6 +544,7 @@ version = "0.0.0"
 dependencies = [
  "azothacore-common",
  "azothacore-database",
+ "azothacore-tests-utils",
  "bevy",
  "bytes",
  "clap 4.5.4",
@@ -567,6 +570,18 @@ dependencies = [
  "tracing",
  "wow-db2",
  "wow-db2-proc-macros",
+]
+
+[[package]]
+name = "azothacore-tests-utils"
+version = "0.1.0"
+dependencies = [
+ "azothacore-common",
+ "azothacore-database",
+ "flagset",
+ "rand",
+ "sqlx",
+ "tokio",
 ]
 
 [[package]]

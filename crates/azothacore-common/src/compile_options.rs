@@ -1,6 +1,8 @@
 use const_format::formatcp;
 use git_version::git_version;
 
+include!(concat!(env!("OUT_DIR"), "/build_compile_options.rs"));
+
 pub const GIT_VERSION: &str = git_version!(
     args = ["--always", "--dirty=-modified", "--abbrev=10"],
     prefix = "git:",
@@ -16,11 +18,13 @@ const fn unwrap_default(o: Option<&'static str>, s: &'static str) -> &'static st
     }
 }
 
+pub const BASE_DIR: &str = unwrap_default(option_env!("BASE_DIR"), CARGO_WORKSPACE_DIR);
+
 #[cfg(target_os = "windows")]
-pub const CONF_DIR: &str = unwrap_default(option_env!("CONF_DIR"), "configs\\");
+pub const CONF_DIR: &str = unwrap_default(option_env!("CONF_DIR"), formatcp!("{BASE_DIR}\\configs\\"));
 
 #[cfg(target_os = "linux")]
-pub const CONF_DIR: &str = unwrap_default(option_env!("CONF_DIR"), "env/etc");
+pub const CONF_DIR: &str = unwrap_default(option_env!("CONF_DIR"), formatcp!("{BASE_DIR}/env/etc"));
 #[cfg(target_os = "windows")]
 pub const CONF_MODULES_DIR: &str = unwrap_default(option_env!("CONF_MODULES_DIR"), formatcp!("{CONF_DIR}\\modules"));
 #[cfg(target_os = "linux")]

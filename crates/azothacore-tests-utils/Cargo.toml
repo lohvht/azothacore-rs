@@ -1,0 +1,12 @@
+[package]
+name = "azothacore-tests-utils"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+azothacore-common.workspace = true
+azothacore-database.workspace = true
+flagset.workspace = true
+rand.workspace = true
+sqlx.workspace = true
+tokio.workspace = true

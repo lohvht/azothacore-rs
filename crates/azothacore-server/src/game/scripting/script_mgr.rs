@@ -211,16 +211,67 @@ impl<S: DatabaseScriptSystems> IntoScript<S, Self> for DatabaseScript {
     }
 }
 
-// pub trait AccountScript: ScriptObject {
-//     fn on_account_login(&self, _account_id: u32) {}
-//     fn on_last_ip_update(&self, _account_id: u32, _ip: &str) {}
-//     fn on_failed_account_login(&self, _account_id: u32) {}
-//     fn on_email_change(&self, _account_id: u32) {}
-//     fn on_failed_email_change(&self, _account_id: u32) {}
-//     fn on_password_change(&self, _account_id: u32) {}
-//     fn on_failed_password_change(&self, _account_id: u32) {}
-//     fn can_account_create_character(&self, _account_id: u32, _char_race: u8, _char_class: u8) {}
-// }
+pub trait AccountScriptSystems: ScriptObjectSystems {
+    fn on_account_login(&self) -> Option<impl System<In = u32, Out = ()>> {
+        None::<FunctionSystem<fn(In<u32>), fn(In<u32>)>>
+    }
+    fn on_last_ip_update(&self) -> Option<impl System<In = (u32, String), Out = ()>> {
+        None::<FunctionSystem<fn(In<(u32, String)>), fn(In<(u32, String)>)>>
+    }
+    fn on_failed_account_login(&self) -> Option<impl System<In = u32, Out = ()>> {
+        None::<FunctionSystem<fn(In<u32>), fn(In<u32>)>>
+    }
+    fn on_email_change(&self) -> Option<impl System<In = u32, Out = ()>> {
+        None::<FunctionSystem<fn(In<u32>), fn(In<u32>)>>
+    }
+    fn on_failed_email_change(&self) -> Option<impl System<In = u32, Out = ()>> {
+        None::<FunctionSystem<fn(In<u32>), fn(In<u32>)>>
+    }
+    fn on_password_change(&self) -> Option<impl System<In = u32, Out = ()>> {
+        None::<FunctionSystem<fn(In<u32>), fn(In<u32>)>>
+    }
+    fn on_failed_password_change(&self) -> Option<impl System<In = u32, Out = ()>> {
+        None::<FunctionSystem<fn(In<u32>), fn(In<u32>)>>
+    }
+    fn can_account_create_character(&self) -> Option<impl System<In = (u32, u8, u8), Out = ()>> {
+        None::<FunctionSystem<fn(In<(u32, u8, u8)>), fn(In<(u32, u8, u8)>)>>
+    }
+}
+
+#[derive(Clone)]
+pub struct AccountScript {
+    pub base: ScriptObject,
+    pub on_account_login: Option<SystemId<u32>>,
+    pub on_last_ip_update: Option<SystemId<(u32, String)>>,
+    pub on_failed_account_login: Option<SystemId<u32>>,
+    pub on_email_change: Option<SystemId<u32>>,
+    pub on_failed_email_change: Option<SystemId<u32>>,
+    pub on_password_change: Option<SystemId<u32>>,
+    pub on_failed_password_change: Option<SystemId<u32>>,
+    pub can_account_create_character: Option<SystemId<(u32, u8, u8)>>,
+}
+
+impl ScriptObjectTrait for AccountScript {
+    fn script_object(&self) -> &ScriptObject {
+        &self.base
+    }
+}
+
+impl<S: AccountScriptSystems> IntoScript<S, Self> for AccountScript {
+    fn create_from_systems(bevy_world: &mut World, s: S) -> Self {
+        Self {
+            on_account_login: s.on_account_login().map(|sys| bevy_world.register_system(sys)),
+            on_last_ip_update: s.on_last_ip_update().map(|sys| bevy_world.register_system(sys)),
+            on_failed_account_login: s.on_failed_account_login().map(|sys| bevy_world.register_system(sys)),
+            on_email_change: s.on_email_change().map(|sys| bevy_world.register_system(sys)),
+            on_failed_email_change: s.on_failed_email_change().map(|sys| bevy_world.register_system(sys)),
+            on_password_change: s.on_password_change().map(|sys| bevy_world.register_system(sys)),
+            on_failed_password_change: s.on_failed_password_change().map(|sys| bevy_world.register_system(sys)),
+            can_account_create_character: s.can_account_create_character().map(|sys| bevy_world.register_system(sys)),
+            base: ScriptObject::create_from_systems(bevy_world, s),
+        }
+    }
+}
 
 // pub trait CommandScript: ScriptObject {
 //     /// Should return a pointer to a valid command table (ChatCommand array) to be used by ChatHandler.
@@ -232,7 +283,7 @@ pub struct ScriptMgr {
     // scheduled_scripts: AtomicI32,
     world:    ScriptRegistry<WorldScript>,
     database: ScriptRegistry<DatabaseScript>,
-    // account:  ScriptRegistry<dyn AccountScript>,
+    account:  ScriptRegistry<AccountScript>,
     // command:  ScriptRegistry<dyn CommandScript>,
 }
 
@@ -242,7 +293,7 @@ impl Default for ScriptMgr {
             // scheduled_scripts: AtomicI32::new(0),
             world:    ScriptRegistry::new(),
             database: ScriptRegistry::new(),
-            // account:  ScriptRegistry::new(),
+            account:  ScriptRegistry::new(),
             // command:  ScriptRegistry::new(),
         }
     }
@@ -374,62 +425,78 @@ impl ScriptMgr {
     }
 }
 
-// /// AccountScript functions
-// impl ScriptMgr {
-//     pub fn register_account_script(&mut self, script: Arc<dyn AccountScript>) {
-//         self.account.add_script(script);
-//     }
+/// AccountScript functions
+impl ScriptMgr {
+    pub fn register_account_script<S: AccountScriptSystems>(&mut self, bevy_world: &mut World, script_sys: S) {
+        registry_add_script(&mut self.account, bevy_world, script_sys);
+    }
 
-//     pub fn on_account_login(&self, account_id: u32) {
-//         for script in self.account.script_pointer_list.values() {
-//             script.on_account_login(account_id);
-//         }
-//     }
+    pub fn on_account_login(&self, commands: &mut Commands, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            if let Some(i) = script.on_account_login {
+                commands.run_system_with_input(i, account_id)
+            }
+        }
+    }
 
-//     // TODO: Impl this azerothcore hook (Not in TC)
-//     pub fn on_last_ip_update(&self, account_id: u32, ip: String) {
-//         for script in self.account.script_pointer_list.values() {
-//             script.on_last_ip_update(account_id, &ip);
-//         }
-//     }
+    // TODO: Impl this azerothcore hook (Not in TC)
+    pub fn on_last_ip_update(&self, commands: &mut Commands, account_id: u32, ip: String) {
+        for script in self.account.script_pointer_list.values() {
+            if let Some(i) = script.on_last_ip_update {
+                commands.run_system_with_input(i, (account_id, ip.clone()))
+            }
+        }
+    }
 
-//     pub fn on_failed_account_login(&self, account_id: u32) {
-//         for script in self.account.script_pointer_list.values() {
-//             script.on_failed_account_login(account_id);
-//         }
-//     }
+    pub fn on_failed_account_login(&self, commands: &mut Commands, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            if let Some(i) = script.on_failed_account_login {
+                commands.run_system_with_input(i, account_id)
+            }
+        }
+    }
 
-//     pub fn on_email_change(&self, account_id: u32) {
-//         for script in self.account.script_pointer_list.values() {
-//             script.on_email_change(account_id);
-//         }
-//     }
+    pub fn on_email_change(&self, commands: &mut Commands, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            if let Some(i) = script.on_email_change {
+                commands.run_system_with_input(i, account_id)
+            }
+        }
+    }
 
-//     pub fn on_failed_email_change(&self, account_id: u32) {
-//         for script in self.account.script_pointer_list.values() {
-//             script.on_failed_email_change(account_id);
-//         }
-//     }
+    pub fn on_failed_email_change(&self, commands: &mut Commands, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            if let Some(i) = script.on_failed_email_change {
+                commands.run_system_with_input(i, account_id)
+            }
+        }
+    }
 
-//     pub fn on_password_change(&self, account_id: u32) {
-//         for script in self.account.script_pointer_list.values() {
-//             script.on_password_change(account_id);
-//         }
-//     }
+    pub fn on_password_change(&self, commands: &mut Commands, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            if let Some(i) = script.on_password_change {
+                commands.run_system_with_input(i, account_id)
+            }
+        }
+    }
 
-//     pub fn on_failed_password_change(&self, account_id: u32) {
-//         for script in self.account.script_pointer_list.values() {
-//             script.on_failed_password_change(account_id);
-//         }
-//     }
+    pub fn on_failed_password_change(&self, commands: &mut Commands, account_id: u32) {
+        for script in self.account.script_pointer_list.values() {
+            if let Some(i) = script.on_failed_password_change {
+                commands.run_system_with_input(i, account_id)
+            }
+        }
+    }
 
-//     // TODO: Impl this azerothcore hook (Not in TC)
-//     pub fn can_account_create_character(&self, account_id: u32, char_race: u8, char_class: u8) {
-//         for script in self.account.script_pointer_list.values() {
-//             script.can_account_create_character(account_id, char_race, char_class);
-//         }
-//     }
-// }
+    // TODO: Impl this azerothcore hook (Not in TC)
+    pub fn can_account_create_character(&self, commands: &mut Commands, account_id: u32, char_race: u8, char_class: u8) {
+        for script in self.account.script_pointer_list.values() {
+            if let Some(i) = script.can_account_create_character {
+                commands.run_system_with_input(i, (account_id, char_race, char_class))
+            }
+        }
+    }
+}
 
 // /// CommandScript functions
 // impl ScriptMgr {

@@ -1,5 +1,3 @@
-#![feature(lint_reasons)]
-
 use std::{collections::BTreeMap, mem};
 
 pub mod wdc1;

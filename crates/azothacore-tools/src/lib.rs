@@ -1,5 +1,3 @@
-#![feature(lint_reasons)]
-
 use azothacore_common::Locale;
 use extractor_common::casc_handles::CascLocale;
 use flagset::FlagSet;

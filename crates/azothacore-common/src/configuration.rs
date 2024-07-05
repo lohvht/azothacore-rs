@@ -208,7 +208,6 @@ where
     fn reload_from_path(&mut self) -> AzResult<()> {
         let new = C::load(&self.filename)?;
         self.config.reload(new);
-        println!("RELOADING! {}", self.filename.display());
         Ok(())
     }
 }

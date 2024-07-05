@@ -3,7 +3,7 @@ use std::path::Path;
 use azothacore_common::{
     az_error,
     banner,
-    bevy_app::{az_startup_succeeded, bevy_app, AzStartupFailedEvent, TokioRuntime},
+    bevy_app::{bevy_app, AzStartupFailedEvent, TokioRuntime},
     configuration::{config_mgr_plugin, ConfigMgr, ConfigMgrSet, DatabaseType},
     log::{logging_plugin, LoggingSetupSet},
     AzResult,
@@ -70,19 +70,16 @@ fn main() {
                 start_db
                     .pipe(handle_startup_errors)
                     .run_if(resource_exists::<ConfigMgr<WorldConfig>>)
-                    .run_if(az_startup_succeeded())
                     .in_set(WorldserverSet::StartDB),
                 set_server_unconnectable
                     .pipe(handle_startup_errors)
                     .run_if(resource_exists::<LoginDatabase>)
                     .run_if(resource_exists::<ConfigMgr<WorldConfig>>)
-                    .run_if(az_startup_succeeded())
                     .in_set(WorldserverSet::SetServerNotConnectable),
                 load_realm_info
                     .pipe(handle_startup_errors)
                     .run_if(resource_exists::<RealmList>)
                     .run_if(resource_exists::<ConfigMgr<WorldConfig>>)
-                    .run_if(az_startup_succeeded())
                     .in_set(WorldserverSet::LoadCurrentRealm),
             ),
         )
