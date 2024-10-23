@@ -11,11 +11,10 @@ use azothacore_common::{
 use azothacore_database::{database_loader::DatabaseLoader, database_loader_utils::DatabaseLoaderError};
 use azothacore_modules::SCRIPTS as MODULES_LIST;
 use azothacore_server::shared::{tokio_signal_handling_bevy_plugin, SignalReceiver};
-use bevy::prelude::*;
+use bevy::prelude::{IntoSystemConfigs, IntoSystemSetConfigs, PreStartup, Res, ResMut, Startup, SystemSet};
 use clap::Parser;
 use dbimport::DbImportConfig;
-use tracing::{error, info};
-
+use tracing::{error, info, info_span};
 fn main() {
     let vm = ConsoleArgs::parse();
     let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
@@ -27,13 +26,7 @@ fn main() {
             config_mgr_plugin::<DbImportConfig, _>(vm.config, false),
             logging_plugin::<DbImportConfig>,
         ))
-        .add_systems(
-            Startup,
-            (
-                show_banner.run_if(resource_exists::<ConfigMgr<DbImportConfig>>).in_set(DbImportSet::ShowBanner),
-                start_db.run_if(resource_exists::<ConfigMgr<DbImportConfig>>).in_set(DbImportSet::StartDB),
-            ),
-        )
+        .add_systems(Startup, (show_banner.in_set(DbImportSet::ShowBanner), start_db.in_set(DbImportSet::StartDB)))
         // Init logging right after config management
         .configure_sets(PreStartup, ConfigMgrSet::<DbImportConfig>::load_initial().before(LoggingSetupSet))
         .update();

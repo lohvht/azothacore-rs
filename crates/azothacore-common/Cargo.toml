@@ -14,6 +14,7 @@ proc-macro2 = "1"
 
 [dependencies]
 # Local crates
+wow-db2.workspace = true
 # External crates
 anyhow = { version = "1" }
 bevy.workspace = true

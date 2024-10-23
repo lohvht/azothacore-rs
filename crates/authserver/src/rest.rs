@@ -24,7 +24,10 @@ use azothacore_database::{
     params,
 };
 use azothacore_server::{game::accounts::battlenet_account_mgr::BattlenetAccountMgr, shared::networking::socket::AddressOrName};
-use bevy::{app::AppExit, prelude::*};
+use bevy::{
+    app::AppExit,
+    prelude::{App, Commands, EventReader, EventWriter, IntoSystemConfigs, PostUpdate, Res, Resource, Startup, SystemSet},
+};
 use hyper::{body::Incoming, service::service_fn, StatusCode};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
@@ -85,20 +88,13 @@ pub enum LoginRESTServiceSystemSets {
 }
 
 pub fn login_rest_service_plugin(app: &mut App) {
-    app.add_systems(
-        Startup,
-        LoginRESTService::start
-            .run_if(resource_exists::<ConfigMgr<AuthserverConfig>>)
-            .run_if(resource_exists::<LoginDatabase>)
-            .run_if(resource_exists::<SslContext>)
-            .in_set(LoginRESTServiceSystemSets::Start),
-    )
-    .add_systems(
-        PostUpdate,
-        LoginRESTService::terminate
-            .run_if(az_startup_succeeded())
-            .in_set(LoginRESTServiceSystemSets::Terminate),
-    );
+    app.add_systems(Startup, LoginRESTService::start.in_set(LoginRESTServiceSystemSets::Start))
+        .add_systems(
+            PostUpdate,
+            LoginRESTService::terminate
+                .run_if(az_startup_succeeded())
+                .in_set(LoginRESTServiceSystemSets::Terminate),
+        );
 }
 
 #[derive(Resource)]

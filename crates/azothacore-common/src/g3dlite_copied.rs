@@ -4,12 +4,12 @@
 //! Generally contains rotation functions
 //!
 
-use nalgebra::{ClosedAdd, ClosedMul, Matrix3, Scalar};
+use nalgebra::{ClosedAddAssign, ClosedMulAssign, Matrix3, Scalar};
 use num::{Float, One, Zero};
 
 pub fn matrix3_from_euler_angles_xyz<F>(f_y_angle: F, f_p_angle: F, f_r_angle: F) -> Matrix3<F>
 where
-    F: Float + Scalar + Zero + One + ClosedAdd + ClosedMul,
+    F: Float + Scalar + Zero + One + ClosedAddAssign + ClosedMulAssign,
 {
     let zero = F::zero();
     let one = F::one();
@@ -45,7 +45,7 @@ where
 
 pub fn matrix3_from_euler_angles_zyx<F>(f_y_angle: F, f_p_angle: F, f_r_angle: F) -> Matrix3<F>
 where
-    F: Float + Scalar + Zero + One + ClosedAdd + ClosedMul,
+    F: Float + Scalar + Zero + One + ClosedAddAssign + ClosedMulAssign,
 {
     let zero = F::zero();
     let one = F::one();

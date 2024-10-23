@@ -84,7 +84,7 @@ structstruck::strike! {
     pub struct ExtractorConfig {
         #[serde_inline_default(env::current_dir().unwrap().to_string_lossy().to_string())]
         pub input_path: String,
-        #[serde_inline_default(env::current_dir().unwrap().to_string_lossy().to_string())]
+        #[serde_inline_default(format!("{}/data", env::current_dir().unwrap().to_string_lossy().to_string()))]
         pub output_path: String,
         #[serde_inline_default(format!("{}/logs", env::current_dir().unwrap().to_string_lossy().to_string()))]
         pub logs_dir: String,
@@ -107,7 +107,7 @@ structstruck::strike! {
         pub vmap_extract_and_generate: struct {
             #[serde_inline_default(false)]
             pub precise_vector_data: bool,
-            #[serde_inline_default(true)]
+            #[serde(default)]
             pub override_cached: bool,
         },
         #[serde_inline_default(MmapPathGenerator::default())]
@@ -115,8 +115,6 @@ structstruck::strike! {
             /// If not specified, run for all
             #[serde(default)]
             pub map_id_tile_x_y: Option<MapIdTileXY>,
-            #[serde(default)]
-            pub file: Option<String>,
             #[serde_inline_default(70.0)]
             pub max_angle: f32,
             #[serde_inline_default(false)]

@@ -6,5 +6,8 @@ edition = "2021"
 [dependencies]
 byteorder = "1"
 flagset.workspace = true
+itertools.workspace = true
+num.workspace = true
 serde.workspace = true
-itertools = "0"
+sqlx.workspace = true
+thiserror.workspace = true

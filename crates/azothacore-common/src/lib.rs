@@ -1,5 +1,3 @@
-#![feature(const_float_bits_conv)]
-
 pub mod banner;
 pub mod bevy_app;
 pub mod bounded_nums;
@@ -14,12 +12,10 @@ pub mod utils;
 
 pub type AzResult<T> = anyhow::Result<T>;
 pub type AzError = anyhow::Error;
-use std::{
-    fmt::{Debug, Display},
-    str::FromStr,
-};
+use std::{collections::HashMap, fmt::Debug};
 
 pub use anyhow::{anyhow as az_error, Context as AzContext};
+use bevy::prelude::Resource;
 pub use compile_options::*;
 use flagset::{flags, FlagSet};
 pub use hex_fmt::HexFmt;
@@ -71,72 +67,7 @@ impl TryFrom<u8> for AccountTypes {
     }
 }
 
-flags! {
-    #[allow(non_camel_case_types)]
-    #[derive(serde::Serialize, serde::Deserialize)]
-    pub enum Locale: u32 {
-        enUS = 0,
-        koKR = 1,
-        frFR = 2,
-        deDE = 3,
-        zhCN = 4,
-        zhTW = 5,
-        esES = 6,
-        esMX = 7,
-        ruRU = 8,
-        none = 9,
-        ptBR = 10,
-        itIT = 11,
-    }
-}
-
-impl Locale {
-    pub fn to_flagset(self) -> FlagSet<Locale> {
-        self.into()
-    }
-}
-
-#[derive(Error, Debug, Clone)]
-#[error("locale string error: got {got}")]
-pub struct LocaleParseError {
-    got: String,
-}
-
-impl FromStr for Locale {
-    type Err = LocaleParseError;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "enUS" => Ok(Locale::enUS),
-            "koKR" => Ok(Locale::koKR),
-            "frFR" => Ok(Locale::frFR),
-            "deDE" => Ok(Locale::deDE),
-            "zhCN" => Ok(Locale::zhCN),
-            "zhTW" => Ok(Locale::zhTW),
-            "esES" => Ok(Locale::esES),
-            "esMX" => Ok(Locale::esMX),
-            "ruRU" => Ok(Locale::ruRU),
-            "none" => Ok(Locale::none),
-            "ptBR" => Ok(Locale::ptBR),
-            "itIT" => Ok(Locale::itIT),
-            _ => Err(LocaleParseError { got: s.to_string() }),
-        }
-    }
-}
-
-impl Locale {
-    /// GetLocaleByName
-    pub fn from_name(name: &str) -> Self {
-        // including enGB case
-        Self::from_str(name).unwrap_or(Locale::enUS)
-    }
-}
-
-impl Display for Locale {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Debug::fmt(self, f)
-    }
-}
+pub use wow_db2::Locale;
 
 flags! {
     pub enum MapLiquidTypeFlag: u8 {
@@ -165,3 +96,12 @@ impl MapLiquidTypeFlag {
         FlagSet::new(1u8 << sound_bank).map_err(|e| az_error!("invalid bits: {}", e))
     }
 }
+
+#[derive(Resource)]
+pub struct ChildMapData(pub HashMap<u32, Vec<u32>>);
+
+deref_boilerplate!(ChildMapData, HashMap<u32, Vec<u32>>, 0);
+
+#[derive(Resource)]
+pub struct ParentMapData(pub HashMap<u32, u32>);
+deref_boilerplate!(ParentMapData, HashMap<u32, u32>, 0);

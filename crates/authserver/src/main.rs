@@ -26,7 +26,28 @@ use azothacore_server::shared::{
     shared_defines::{set_server_process, ServerProcessType},
     tokio_signal_handling_bevy_plugin,
 };
-use bevy::{app::AppExit, prelude::*};
+use bevy::{
+    app::AppExit,
+    prelude::{
+        Commands,
+        EventReader,
+        EventWriter,
+        FixedUpdate,
+        IntoSystemConfigs,
+        IntoSystemSetConfigs,
+        PostUpdate,
+        PreStartup,
+        Real,
+        Res,
+        ResMut,
+        Resource,
+        Startup,
+        SystemSet,
+        Time,
+        Timer,
+        TimerMode,
+    },
+};
 use clap::Parser;
 use tracing::{error, info};
 
@@ -54,13 +75,9 @@ fn main() -> AzResult<()> {
             Startup,
             (
                 (|mut commands: Commands| set_server_process(&mut commands, ServerProcessType::Authserver)).in_set(AuthserverSet::SetProcessType),
-                show_banner
-                    .run_if(resource_exists::<ConfigMgr<AuthserverConfig>>)
-                    .in_set(AuthserverSet::ShowBanner),
-                start_db.run_if(resource_exists::<ConfigMgr<AuthserverConfig>>).in_set(AuthserverSet::StartDB),
-                insert_ban_expiry_timer
-                    .run_if(resource_exists::<ConfigMgr<AuthserverConfig>>)
-                    .in_set(AuthserverSet::InsertBanExpiryTimer),
+                show_banner.in_set(AuthserverSet::ShowBanner),
+                start_db.in_set(AuthserverSet::StartDB),
+                insert_ban_expiry_timer.in_set(AuthserverSet::InsertBanExpiryTimer),
             ),
         )
         .add_systems(FixedUpdate, ban_expiry_task.run_if(az_startup_succeeded()).in_set(AuthserverSet::BanExpiryTask))

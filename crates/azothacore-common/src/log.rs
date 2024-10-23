@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bevy::prelude::*;
+use bevy::prelude::{App, Commands, IntoSystemConfigs, PreStartup, Res, Resource, SystemSet};
 use chrono::Local;
 use flagset::FlagSet;
 use tracing::subscriber::set_global_default;
@@ -223,7 +223,6 @@ pub fn logging_plugin<C: LoggingConfig>(app: &mut App) {
             let wg = init(cfg.retrieve_logs_dir(), cfg.retrieve_appenders(), cfg.retrieve_loggers());
             commands.insert_resource(wg);
         })
-        .run_if(resource_exists::<ConfigMgr<C>>)
         .in_set(LoggingSetupSet),
     );
 }

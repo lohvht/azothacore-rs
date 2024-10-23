@@ -2,29 +2,32 @@ use nalgebra::{Vector3, Vector4};
 use wow_db2::LocalisedString;
 use wow_db2_proc_macros::WDC1;
 
-#[derive(WDC1, Default, Debug)]
-#[layout_hash(0x6A529F37)]
-pub struct ManifestInterfaceActionIcon {
-    #[id]
-    pub id: u32,
-}
+// #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
+// #[layout_hash(0x6A529F37)]
+// pub struct ManifestInterfaceActionIcon {
+//     #[id_inline]
+//     pub id: u32,
+// }
 
-#[derive(WDC1, Default, Debug)]
-#[layout_hash(0x069F44E5)]
-pub struct GarrItemLevelUpgradeData {
-    #[id]
-    pub id: u32,
-    pub i1: u32,
-    pub i2: u32,
-    pub i3: u32,
-    pub i4: u32,
-}
+// #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
+// #[layout_hash(0x069F44E5)]
+// pub struct GarrItemLevelUpgradeData {
+//     #[id_inline]
+//     pub id: u32,
+//     pub i1: u32,
+//     pub i2: u32,
+//     pub i3: u32,
+//     pub i4: u32,
+// }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x2C4BE18C)]
 pub struct Achievement {
+    #[sqlx(json)]
     pub title:            LocalisedString,
+    #[sqlx(json)]
     pub description:      LocalisedString,
+    #[sqlx(json)]
     pub reward:           LocalisedString,
     pub flags:            i32,
     /// -1 = none
@@ -41,13 +44,13 @@ pub struct Achievement {
     pub points:           i8,
     /// need this count of completed criterias (own or referenced achievement criterias)
     pub minimum_criteria: i8,
-    #[id]
+    #[id_inline]
     pub id:               u32,
     pub icon_file_id:     i32,
     pub criteria_tree:    u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x81D6D250)]
 pub struct AnimKit {
     pub id: u32,
@@ -56,7 +59,7 @@ pub struct AnimKit {
     pub low_def_anim_kit_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x50AA43EE)]
 pub struct AreaGroupMember {
     pub id:            u32,
@@ -65,12 +68,14 @@ pub struct AreaGroupMember {
     pub area_group_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0CA01129)]
 pub struct AreaTable {
     pub id: u32,
-    pub zone_name: LocalisedString,
+    pub zone_name: String,
+    #[sqlx(json)]
     pub area_name: LocalisedString,
+    #[sqlx(json)]
     pub flags: [i32; 2],
     pub ambient_multiplier: f32,
     pub continent_id: u16,
@@ -79,6 +84,7 @@ pub struct AreaTable {
     pub ambience_id: u16,
     pub zone_music: u16,
     pub intro_sound: u16,
+    #[sqlx(json)]
     pub liquid_type_id: [u16; 4],
     pub uw_zone_music: u16,
     pub uw_ambience: u16,
@@ -105,9 +111,10 @@ impl AreaTable {
     }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x378573E8)]
 pub struct AreaTrigger {
+    #[sqlx(json)]
     pub pos: Vector3<f32>,
     pub radius: f32,
     pub box_length: f32,
@@ -123,11 +130,11 @@ pub struct AreaTrigger {
     pub phase_use_flags: i8,
     pub shape_type: i8,
     pub flags: i8,
-    #[id]
+    #[id_inline]
     pub id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xCCFBD16E)]
 pub struct ArmorLocation {
     pub id:              u32,
@@ -138,10 +145,11 @@ pub struct ArmorLocation {
     pub modifier:        f32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x76CF31A8)]
 pub struct Artifact {
     pub id: u32,
+    #[sqlx(json)]
     pub name: LocalisedString,
     pub ui_bar_overlay_color: i32,
     pub ui_bar_background_color: i32,
@@ -154,9 +162,10 @@ pub struct Artifact {
     pub spell_visual_kit_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xAEED7395)]
 pub struct ArtifactAppearance {
+    #[sqlx(json)]
     pub name: LocalisedString,
     pub ui_swatch_color: i32,
     pub ui_model_saturation: f32,
@@ -169,30 +178,32 @@ pub struct ArtifactAppearance {
     pub item_appearance_modifier_id: u8,
     pub flags: u8,
     pub override_shapeshift_form_id: u8,
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub unlock_player_condition_id: u32,
     pub ui_item_appearance_id: u32,
     pub ui_alt_item_appearance_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x53DFED74)]
 pub struct ArtifactAppearanceSet {
+    #[sqlx(json)]
     pub name: LocalisedString,
+    #[sqlx(json)]
     pub description: LocalisedString,
     pub ui_camera_id: u16,
     pub alt_hand_ui_camera_id: u16,
     pub display_index: u8,
     pub forge_attachment_override: i8,
     pub flags: u8,
-    #[id]
+    #[id_inline]
     pub id: u32,
     #[parent]
     pub artifact_id: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x21328475)]
 pub struct ArtifactCategory {
     pub id:                  u32,
@@ -200,21 +211,22 @@ pub struct ArtifactCategory {
     pub xp_mult_curve_id:    i16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x45240818)]
 pub struct ArtifactPower {
+    #[sqlx(json)]
     pub pos:                  [f32; 2],
     #[parent]
     pub artifact_id:          u8,
     pub flags:                u8,
     pub max_purchasable_rank: u8,
     pub tier:                 u8,
-    #[id]
+    #[id_inline]
     pub id:                   u32,
     pub label:                i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE179618C)]
 pub struct ArtifactPowerLink {
     pub id:      u32,
@@ -222,14 +234,14 @@ pub struct ArtifactPowerLink {
     pub power_b: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x2D6AF006)]
 pub struct ArtifactPowerPicker {
     pub id:                  u32,
     pub player_condition_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xA87EACC4)]
 pub struct ArtifactPowerRank {
     pub id:                   u32,
@@ -241,14 +253,15 @@ pub struct ArtifactPowerRank {
     pub artifact_power_id:    u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x86397302)]
 pub struct ArtifactQuestXP {
     pub id:         u32,
+    #[sqlx(json)]
     pub difficulty: [u32; 10],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x1A5A50B9)]
 pub struct ArtifactTier {
     pub id: u32,
@@ -259,7 +272,7 @@ pub struct ArtifactTier {
     pub minimum_empower_knowledge: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x52839A77)]
 pub struct ArtifactUnlock {
     pub id:                  u32,
@@ -271,10 +284,11 @@ pub struct ArtifactUnlock {
     pub artifact_id:         u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x51CFEEFF)]
 pub struct AuctionHouse {
     pub id:               u32,
+    #[sqlx(json)]
     pub name:             LocalisedString,
     /// id of faction.dbc for player factions associated with city
     pub faction_id:       u16,
@@ -282,39 +296,41 @@ pub struct AuctionHouse {
     pub consignment_rate: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xEA0AC2AA)]
 pub struct BankBagSlotPrices {
     pub id:   u32,
     pub cost: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xF779B6E5)]
 pub struct BannedAddons {
     pub id:      u32,
-    pub name:    LocalisedString,
-    pub version: LocalisedString,
+    pub name:    String,
+    pub version: String,
     pub flags:   u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x670C71AE)]
 pub struct BarberShopStyle {
+    #[sqlx(json)]
     pub display_name:  LocalisedString,
+    #[sqlx(json)]
     pub description:   LocalisedString,
     pub cost_modifier: f32,
     /// value 0 -> hair, value 2 -> facialhair
-    pub typ:           u8,
+    pub r#type:        u8,
     pub race:          u8,
     pub sex:           u8,
     /// real ID to hair/facial hair
     pub data:          u8,
-    #[id]
+    #[id_inline]
     pub id:            u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xBDE74E1D)]
 pub struct BattlePetBreedQuality {
     pub id:               u32,
@@ -322,7 +338,7 @@ pub struct BattlePetBreedQuality {
     pub quality_enum:     u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x68D5C999)]
 pub struct BattlePetBreedState {
     pub id:                  u32,
@@ -332,10 +348,12 @@ pub struct BattlePetBreedState {
     pub battle_pet_breed_id: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x8A3D97A4)]
 pub struct BattlePetSpecies {
+    #[sqlx(json)]
     pub source_text: LocalisedString,
+    #[sqlx(json)]
     pub description: LocalisedString,
     pub creature_id: i32,
     pub icon_file_data_id: i32,
@@ -343,13 +361,13 @@ pub struct BattlePetSpecies {
     pub flags: u16,
     pub pet_type_enum: u8,
     pub source_type_enum: i8,
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub card_ui_model_scene_id: i32,
     pub loadout_ui_model_scene_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x8F958D5C)]
 pub struct BattlePetSpeciesState {
     pub id:                    u32,
@@ -359,15 +377,20 @@ pub struct BattlePetSpeciesState {
     pub battle_pet_species_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xD8AAA088)]
 pub struct BattlemasterList {
     pub id: u32,
+    #[sqlx(json)]
     pub name: LocalisedString,
+    #[sqlx(json)]
     pub game_type: LocalisedString,
+    #[sqlx(json)]
     pub short_description: LocalisedString,
+    #[sqlx(json)]
     pub long_description: LocalisedString,
     pub icon_file_data_id: i32,
+    #[sqlx(json)]
     pub map_id: [i16; 16],
     pub holiday_world_state: i16,
     pub required_player_condition_id: i16,
@@ -382,26 +405,31 @@ pub struct BattlemasterList {
     pub flags: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x51BF0C33)]
 pub struct BroadcastText {
     pub id:               u32,
+    #[sqlx(json)]
     pub text:             LocalisedString,
+    #[sqlx(json)]
     pub text1:            LocalisedString,
+    #[sqlx(json)]
     pub emote_id:         [u16; 3],
+    #[sqlx(json)]
     pub emote_delay:      [u16; 3],
     pub emotes_id:        u16,
     pub language_id:      u8,
     pub flags:            u8,
     pub condition_id:     i32,
+    #[sqlx(json)]
     pub sound_entries_id: [u32; 2],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x9F4272BF)]
 pub struct Cfg_Regions {
     pub id:                u32,
-    pub tag:               LocalisedString,
+    pub tag:               String,
     /// Date of first raid reset, all other resets are calculated as this date plus interval
     pub raidorigin:        u32,
     pub challenge_origin:  u32,
@@ -409,17 +437,18 @@ pub struct Cfg_Regions {
     pub region_group_mask: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x47D79688)]
 pub struct CharacterFacialHairStyles {
     pub id:           u32,
+    #[sqlx(json)]
     pub geoset:       [i32; 5],
     pub race_id:      u8,
     pub sex_id:       u8,
     pub variation_id: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x4F08B5F3)]
 pub struct CharBaseSection {
     pub id: u32,
@@ -428,10 +457,11 @@ pub struct CharBaseSection {
     pub layout_res_type: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE349E55B)]
 pub struct CharSections {
     pub id:                    u32,
+    #[sqlx(json)]
     pub material_resources_id: [i32; 3],
     pub flags:                 i16,
     pub race_id:               i8,
@@ -441,10 +471,11 @@ pub struct CharSections {
     pub color_index:           i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0EEBEE24)]
 pub struct CharStartOutfit {
     pub id:             u32,
+    #[sqlx(json)]
     pub item_id:        [i32; 24],
     /// Pet Model ID for starting pet
     pub pet_display_id: u32,
@@ -457,34 +488,41 @@ pub struct CharStartOutfit {
     pub race_id:        u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x7A58AA5F)]
 pub struct CharTitles {
     pub id:      u32,
+    #[sqlx(json)]
     pub name:    LocalisedString,
+    #[sqlx(json)]
     pub name1:   LocalisedString,
     pub mask_id: i16,
     pub flags:   i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x1A325E80)]
 pub struct ChatChannels {
     pub id:            u32,
+    #[sqlx(json)]
     pub name:          LocalisedString,
+    #[sqlx(json)]
     pub shortcut:      LocalisedString,
     pub flags:         i32,
     pub faction_group: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6F7AB8E7)]
 pub struct ChrClasses {
-    pub pet_name_token: LocalisedString,
+    pub pet_name_token: String,
+    #[sqlx(json)]
     pub name: LocalisedString,
+    #[sqlx(json)]
     pub name_female: LocalisedString,
+    #[sqlx(json)]
     pub name_male: LocalisedString,
-    pub filename: LocalisedString,
+    pub filename: String,
     pub create_screen_file_data_id: u32,
     pub select_screen_file_data_id: u32,
     pub low_res_screen_file_data_id: u32,
@@ -499,11 +537,11 @@ pub struct ChrClasses {
     pub attack_power_per_agility: u8,
     pub ranged_attack_power_per_agility: u8,
     pub primary_stat_priority: u8,
-    #[id]
+    #[id_inline]
     pub id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xAF977B23)]
 pub struct ChrClassesXPowerTypes {
     pub id:         u32,
@@ -512,21 +550,27 @@ pub struct ChrClassesXPowerTypes {
     pub class_id:   u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x51C511F9)]
 pub struct ChrRaces {
-    pub client_prefix: LocalisedString,
-    pub client_file_string: LocalisedString,
+    pub client_prefix: String,
+    pub client_file_string: String,
+    #[sqlx(json)]
     pub name: LocalisedString,
+    #[sqlx(json)]
     pub name_female: LocalisedString,
+    #[sqlx(json)]
     pub name_lowercase: LocalisedString,
+    #[sqlx(json)]
     pub name_female_lowercase: LocalisedString,
     pub flags: i32,
     pub male_display_id: u32,
     pub female_display_id: u32,
     pub create_screen_file_data_id: i32,
     pub select_screen_file_data_id: i32,
+    #[sqlx(json)]
     pub male_customize_offset: [f32; 3],
+    #[sqlx(json)]
     pub female_customize_offset: [f32; 3],
     pub low_res_screen_file_data_id: i32,
     pub starting_level: i32,
@@ -545,23 +589,29 @@ pub struct ChrRaces {
     pub neutral_race_id: i8,
     pub display_race_id: i8,
     pub char_component_tex_layout_hi_res_id: i8,
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub high_res_male_display_id: u32,
     pub high_res_female_display_id: u32,
     pub heritage_armor_achievement_id: i32,
     pub male_skeleton_file_data_id: i32,
     pub female_skeleton_file_data_id: i32,
+    #[sqlx(json)]
     pub altered_form_start_visual_kit_id: [u32; 3],
+    #[sqlx(json)]
     pub altered_form_finish_visual_kit_id: [u32; 3],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x3D86B8F7)]
 pub struct ChrSpecialization {
+    #[sqlx(json)]
     pub name:                  LocalisedString,
+    #[sqlx(json)]
     pub female_name:           LocalisedString,
+    #[sqlx(json)]
     pub description:           LocalisedString,
+    #[sqlx(json)]
     pub mastery_spell_id:      [i32; 2],
     #[parent]
     pub class_id:              i8,
@@ -569,7 +619,7 @@ pub struct ChrSpecialization {
     pub pet_talent_type:       i8,
     pub role:                  i8,
     pub primary_stat_priority: i8,
-    #[id]
+    #[id_inline]
     pub id:                    u32,
     pub spell_icon_file_id:    i32,
     pub flags:                 u32,
@@ -582,13 +632,14 @@ impl ChrSpecialization {
     }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0062B0F4)]
 pub struct CinematicCamera {
     pub id:            u32,
     /// Sound ID       (voiceover for cinematic)
     pub sound_id:      u32,
     /// Position in map used for basis for M2 co-ordinates
+    #[sqlx(json)]
     pub origin:        Vector3<f32>,
     /// Orientation in map used for basis for M2 co-
     pub origin_facing: f32,
@@ -596,15 +647,16 @@ pub struct CinematicCamera {
     pub file_data_id:  u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x470FDA8C)]
 pub struct CinematicSequences {
     pub id:       u32,
     pub sound_id: u32,
+    #[sqlx(json)]
     pub camera:   [u16; 8],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x032B137B)]
 pub struct ConversationLine {
     pub id: u32,
@@ -618,10 +670,10 @@ pub struct ConversationLine {
     pub end_animation: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x406268DF)]
 pub struct CreatureDisplayInfo {
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub creature_model_scale: f32,
     pub model_id: u16,
@@ -645,10 +697,11 @@ pub struct CreatureDisplayInfo {
     /// scale of not own player pets inside dungeons/raids/scenarios
     pub pet_instance_scale: f32,
     pub mount_poof_spell_visual_kit_id: i32,
+    #[sqlx(json)]
     pub texture_variation_file_data_id: [i32; 3],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6DF98EF6)]
 pub struct CreatureDisplayInfoExtra {
     pub id: u32,
@@ -662,18 +715,21 @@ pub struct CreatureDisplayInfoExtra {
     pub hair_style_id: i8,
     pub hair_color_id: i8,
     pub facial_hair_id: i8,
+    #[sqlx(json)]
     pub custom_display_option: Vector3<u8>,
     pub flags: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE2DC5126)]
 pub struct CreatureFamily {
     pub id:              u32,
+    #[sqlx(json)]
     pub name:            LocalisedString,
     pub min_scale:       f32,
     pub max_scale:       f32,
     pub icon_file_id:    i32,
+    #[sqlx(json)]
     pub skill_line:      [i16; 2],
     pub pet_food_mask:   i16,
     pub min_scale_level: i8,
@@ -681,7 +737,7 @@ pub struct CreatureFamily {
     pub pet_talent_type: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x983BD312)]
 pub struct CreatureModelData {
     pub id: u32,
@@ -692,6 +748,7 @@ pub struct CreatureModelData {
     pub collision_width: f32,
     pub collision_height: f32,
     pub mount_height: f32,
+    #[sqlx(json)]
     pub geo_box: [f32; 6],
     pub world_effect_scale: f32,
     pub attached_effect_scale: f32,
@@ -715,15 +772,16 @@ pub struct CreatureModelData {
     pub creature_geoset_data_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x7BA9D2F8)]
 pub struct CreatureType {
     pub id:    u32,
+    #[sqlx(json)]
     pub name:  LocalisedString,
     pub flags: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xA87A5BB9)]
 pub struct Criteria {
     pub id: u32,
@@ -733,17 +791,18 @@ pub struct Criteria {
     pub modifier_tree_id: u32,
     pub start_timer: u16,
     pub eligibility_world_state_id: i16,
-    pub typ: u8,
+    pub r#type: u8,
     pub start_event: u8,
     pub fail_event: u8,
     pub flags: u8,
     pub eligibility_world_state_value: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0A1B99C2)]
 pub struct CriteriaTree {
     pub id:          u32,
+    #[sqlx(json)]
     pub description: LocalisedString,
     pub amount:      i32,
     pub flags:       i16,
@@ -753,11 +812,13 @@ pub struct CriteriaTree {
     pub order_index: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6CC25CBF)]
 pub struct CurrencyTypes {
     pub id:                     u32,
+    #[sqlx(json)]
     pub name:                   LocalisedString,
+    #[sqlx(json)]
     pub description:            LocalisedString,
     pub max_qty:                u32,
     pub max_earnable_per_week:  u32,
@@ -769,24 +830,25 @@ pub struct CurrencyTypes {
     pub spell_weight:           u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x17EA5154)]
 pub struct Curve {
-    pub id:    u32,
-    pub typ:   u8,
-    pub flags: u8,
+    pub id:     u32,
+    pub r#type: u8,
+    pub flags:  u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xF36752EB)]
 pub struct CurvePoint {
     pub id:          u32,
+    #[sqlx(json)]
     pub pos:         [f32; 2],
     pub curve_id:    u16,
     pub order_index: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x1092C9AF)]
 pub struct DestructibleModelData {
     pub id: u32,
@@ -814,10 +876,11 @@ pub struct DestructibleModelData {
     pub heal_effect: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x92302BB8)]
 pub struct Difficulty {
     pub id: u32,
+    #[sqlx(json)]
     pub name: LocalisedString,
     pub group_size_health_curve_id: u16,
     pub group_size_dmg_curve_id: u16,
@@ -833,9 +896,10 @@ pub struct Difficulty {
     pub order_index: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB04A2596)]
 pub struct DungeonEncounter {
+    #[sqlx(json)]
     pub name:                LocalisedString,
     pub creature_display_id: i32,
     #[parent]
@@ -843,33 +907,35 @@ pub struct DungeonEncounter {
     pub difficulty_id:       i8,
     pub bit:                 i8,
     pub flags:               u8,
-    #[id]
+    #[id_inline]
     pub id:                  u32,
     pub order_index:         i32,
     pub spell_icon_file_id:  i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x8447966A)]
 pub struct DurabilityCosts {
     pub id:                    u32,
+    #[sqlx(json)]
     pub weapon_sub_class_cost: [u16; 21],
+    #[sqlx(json)]
     pub armor_sub_class_cost:  [u16; 8],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6F64793D)]
 pub struct DurabilityQuality {
     pub id:   u32,
     pub data: f32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x14467F27)]
 pub struct Emotes {
     pub id:                    u32,
     pub race_mask:             i64,
-    pub emote_slash_command:   LocalisedString,
+    pub emote_slash_command:   String,
     pub emote_flags:           u32,
     pub spell_visual_kit_id:   u32,
     pub anim_id:               i16,
@@ -879,15 +945,15 @@ pub struct Emotes {
     pub event_sound_id:        u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE85AFA10)]
 pub struct EmotesText {
     pub id:       u32,
-    pub name:     LocalisedString,
+    pub name:     String,
     pub emote_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6DFAF9BC)]
 pub struct EmotesTextSound {
     pub id:             u32,
@@ -899,24 +965,33 @@ pub struct EmotesTextSound {
     pub emotes_text_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6BFE8737)]
 pub struct Faction {
+    #[sqlx(json)]
     pub reputation_race_mask:  [i64; 4],
+    #[sqlx(json)]
     pub name:                  LocalisedString,
+    #[sqlx(json)]
     pub description:           LocalisedString,
-    #[id]
+    #[id_inline]
     pub id:                    u32,
+    #[sqlx(json)]
     pub reputation_base:       [i32; 4],
     /// Faction outputs rep * ParentFactionModOut as spillover reputation
+    #[sqlx(json)]
     pub parent_faction_mod:    [f32; 2],
+    #[sqlx(json)]
     pub reputation_max:        [i32; 4],
     pub reputation_index:      i16,
+    #[sqlx(json)]
     pub reputation_class_mask: [i16; 4],
+    #[sqlx(json)]
     pub reputation_flags:      [u16; 4],
     pub parent_faction_id:     u16,
     pub paragon_faction_id:    u16,
     /// The highest rank the faction will profit from incoming spillover
+    #[sqlx(json)]
     pub parent_faction_cap:    [u8; 2],
     pub expansion:             u8,
     pub flags:                 u8,
@@ -929,13 +1004,15 @@ impl Faction {
     }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6F1D2135)]
 pub struct FactionTemplate {
     pub id:            u32,
     pub faction:       u16,
     pub flags:         u16,
+    #[sqlx(json)]
     pub enemies:       [u16; 4],
+    #[sqlx(json)]
     pub friend:        [u16; 4],
     pub faction_group: u8,
     pub friend_group:  u8,
@@ -998,15 +1075,34 @@ pub struct FactionTemplate {
 //     pub fn should_spar_attack(&self, ) -> bool { return (self.flags & FACTION_TEMPLATE_ENEMY_SPAR) != 0; }
 // }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x9F2098D1)]
 pub struct GameObjectDisplayInfo {
     pub id: u32,
     pub file_data_id: i32,
+    #[sqlx(json)]
     pub geo_box: [f32; 6],
     pub override_loot_effect_scale: f32,
     pub override_name_scale: f32,
     pub object_effect_package_id: i16,
+}
+
+impl GameObjectDisplayInfo {
+    pub fn geo_box_min(&self) -> Vector3<f32> {
+        Vector3::new(
+            self.geo_box[0].min(self.geo_box[3]),
+            self.geo_box[1].min(self.geo_box[4]),
+            self.geo_box[2].min(self.geo_box[5]),
+        )
+    }
+
+    pub fn geo_box_max(&self) -> Vector3<f32> {
+        Vector3::new(
+            self.geo_box[0].max(self.geo_box[3]),
+            self.geo_box[1].max(self.geo_box[4]),
+            self.geo_box[2].max(self.geo_box[5]),
+        )
+    }
 }
 
 // pub struct GameObjectsMeta
@@ -1020,13 +1116,17 @@ pub struct GameObjectDisplayInfo {
 //     }
 // };
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x597E8643)]
 pub struct GameObjects {
+    #[sqlx(json)]
     pub name:            LocalisedString,
+    #[sqlx(json)]
     pub pos:             Vector3<f32>,
+    #[sqlx(json)]
     pub rot:             Vector4<f32>,
     pub scale:           f32,
+    #[sqlx(json)]
     pub prop_value:      [i32; 8],
     #[parent]
     pub owner_id:        u16,
@@ -1035,31 +1135,37 @@ pub struct GameObjects {
     pub phase_group_id:  u16,
     pub phase_use_flags: u8,
     pub type_id:         u8,
-    #[id]
+    #[id_inline]
     pub id:              u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x5DF95DBD)]
 pub struct GarrAbility {
+    #[sqlx(json)]
     pub name: LocalisedString,
+    #[sqlx(json)]
     pub description: LocalisedString,
     pub icon_file_data_id: i32,
     pub flags: u16,
     pub faction_change_garr_ability_id: u16,
     pub garr_ability_category_id: u8,
     pub garr_follower_type_id: u8,
-    #[id]
+    #[id_inline]
     pub id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x200F9858)]
 pub struct GarrBuilding {
     pub id: u32,
+    #[sqlx(json)]
     pub alliance_name: LocalisedString,
+    #[sqlx(json)]
     pub horde_name: LocalisedString,
+    #[sqlx(json)]
     pub description: LocalisedString,
+    #[sqlx(json)]
     pub tooltip: LocalisedString,
     pub horde_game_object_id: i32,
     pub alliance_game_object_id: i32,
@@ -1083,37 +1189,44 @@ pub struct GarrBuilding {
     pub max_assignments: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xF45B6227)]
 pub struct GarrBuildingPlotInst {
+    #[sqlx(json)]
     pub map_offset: [f32; 2],
     pub ui_texture_atlas_member_id: u16,
     pub garr_site_level_plot_inst_id: u16,
     #[parent]
     pub garr_building_id: u8,
-    #[id]
+    #[id_inline]
     pub id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x194CD478)]
 pub struct GarrClassSpec {
+    #[sqlx(json)]
     pub class_spec: LocalisedString,
+    #[sqlx(json)]
     pub class_spec_male: LocalisedString,
+    #[sqlx(json)]
     pub class_spec_female: LocalisedString,
     pub ui_texture_atlas_member_id: u16,
     pub garr_foll_item_set_id: u16,
     pub follower_class_limit: u8,
     pub flags: u8,
-    #[id]
+    #[id_inline]
     pub id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xAAB75E04)]
 pub struct GarrFollower {
+    #[sqlx(json)]
     pub horde_source_text: LocalisedString,
+    #[sqlx(json)]
     pub alliance_source_text: LocalisedString,
+    #[sqlx(json)]
     pub title_name: LocalisedString,
     pub horde_creature_id: i32,
     pub alliance_creature_id: i32,
@@ -1143,11 +1256,11 @@ pub struct GarrFollower {
     pub chr_class_id: u8,
     pub horde_flavor_garr_string_id: u8,
     pub alliance_flavor_garr_string_id: u8,
-    #[id]
+    #[id_inline]
     pub id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x996447F1)]
 pub struct GarrFollowerXAbility {
     pub id:               u32,
@@ -1157,20 +1270,22 @@ pub struct GarrFollowerXAbility {
     pub garr_follower_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE12049E0)]
 pub struct GarrPlot {
     pub id: u32,
+    #[sqlx(json)]
     pub name: LocalisedString,
     pub alliance_construct_obj_id: i32,
     pub horde_construct_obj_id: i32,
     pub ui_category_id: u8,
     pub plot_type: u8,
     pub flags: u8,
+    #[sqlx(json)]
     pub upgrade_requirement: [u32; 2],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x3F77A6FA)]
 pub struct GarrPlotBuilding {
     pub id:               u32,
@@ -1178,18 +1293,19 @@ pub struct GarrPlotBuilding {
     pub garr_building_id: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB708BB37)]
 pub struct GarrPlotInstance {
     pub id:           u32,
-    pub name:         LocalisedString,
+    pub name:         String,
     pub garr_plot_id: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xD3979C38)]
 pub struct GarrSiteLevel {
     pub id:                 u32,
+    #[sqlx(json)]
     pub town_hall_ui_pos:   [f32; 2],
     pub map_id:             u16,
     pub ui_texture_kit_id:  u16,
@@ -1201,10 +1317,11 @@ pub struct GarrSiteLevel {
     pub max_building_level: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC4E74201)]
 pub struct GarrSiteLevelPlotInst {
     pub id:                    u32,
+    #[sqlx(json)]
     pub ui_marker_pos:         [f32; 2],
     #[parent]
     pub garr_site_level_id:    u16,
@@ -1212,25 +1329,25 @@ pub struct GarrSiteLevelPlotInst {
     pub ui_marker_size:        u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x84558CAB)]
 pub struct GemProperties {
     pub id:             u32,
-    pub typ:            u32,
+    pub r#type:         u32,
     pub enchant_id:     u16,
     pub min_item_level: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xEA228DFA)]
 pub struct GlyphBindableSpell {
     pub id:                  u32,
-    pub spell_id:            i32,
+    pub spell_id:            u32,
     #[parent]
-    pub glyph_properties_id: i16,
+    pub glyph_properties_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xD0046829)]
 pub struct GlyphProperties {
     pub id: u32,
@@ -1240,7 +1357,7 @@ pub struct GlyphProperties {
     pub glyph_exclusive_category_id: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xDD6481CE)]
 pub struct GlyphRequiredSpec {
     pub id:                    u32,
@@ -1249,7 +1366,7 @@ pub struct GlyphRequiredSpec {
     pub glyph_properties_id:   u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xCC0CEFF1)]
 pub struct GuildColorBackground {
     pub id:    u32,
@@ -1258,7 +1375,7 @@ pub struct GuildColorBackground {
     pub blue:  u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xCC0CEFF1)]
 pub struct GuildColorBorder {
     pub id:    u32,
@@ -1267,7 +1384,7 @@ pub struct GuildColorBorder {
     pub blue:  u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xCC0CEFF1)]
 pub struct GuildColorEmblem {
     pub id:    u32,
@@ -1276,49 +1393,56 @@ pub struct GuildColorEmblem {
     pub blue:  u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC15D6E9F)]
 pub struct GuildPerkSpells {
     pub id:       u32,
     pub spell_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x36887C6F)]
 pub struct Heirloom {
+    #[sqlx(json)]
     pub source_text: LocalisedString,
-    pub item_id: i32,
-    pub legacy_item_id: i32,
-    pub legacy_upgraded_item_id: i32,
-    pub static_upgraded_item_id: i32,
-    pub upgrade_item_id: Vector3<i32>,
+    pub item_id: u32,
+    pub legacy_item_id: u32,
+    pub legacy_upgraded_item_id: u32,
+    pub static_upgraded_item_id: u32,
+    #[sqlx(json)]
+    pub upgrade_item_id: Vector3<u32>,
+    #[sqlx(json)]
     pub upgrade_item_bonus_list_id: Vector3<u16>,
     pub flags: u8,
     pub source_type_enum: i8,
-    #[id]
+    #[id_inline]
     pub id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x7C3E60FC)]
 pub struct Holidays {
-    #[id]
+    #[id_inline]
     pub id:                     u32,
     /// dates in unix time starting at January, 1, 2000
+    #[sqlx(json)]
     pub date:                   [u32; 16],
+    #[sqlx(json)]
     pub duration:               [u16; 10],
     pub region:                 u16,
     pub looping:                u8,
+    #[sqlx(json)]
     pub calendar_flags:         [u8; 10],
     pub priority:               u8,
     pub calendar_filter_type:   i8,
     pub flags:                  u8,
     pub holiday_name_id:        u32,
     pub holiday_description_id: u32,
+    #[sqlx(json)]
     pub texture_file_data_id:   Vector3<i32>,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x1F7A850F)]
 pub struct ImportPriceArmor {
     pub id:               u32,
@@ -1328,28 +1452,28 @@ pub struct ImportPriceArmor {
     pub plate_modifier:   f32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6F64793D)]
 pub struct ImportPriceQuality {
     pub id:   u32,
     pub data: f32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6F64793D)]
 pub struct ImportPriceShield {
     pub id:   u32,
     pub data: f32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6F64793D)]
 pub struct ImportPriceWeapon {
     pub id:   u32,
     pub data: f32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0DFCC83D)]
 pub struct Item {
     pub id: u32,
@@ -1363,7 +1487,7 @@ pub struct Item {
     pub item_group_sounds_id: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x06D35A59)]
 pub struct ItemAppearance {
     pub id: u32,
@@ -1373,23 +1497,25 @@ pub struct ItemAppearance {
     pub display_type: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x85642CC0)]
 pub struct ItemArmorQuality {
     pub id:         u32,
+    #[sqlx(json)]
     pub qualitymod: [f32; 7],
     pub item_level: i16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC2186F95)]
 pub struct ItemArmorShield {
     pub id:         u32,
+    #[sqlx(json)]
     pub quality:    [f32; 7],
     pub item_level: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x45C396DD)]
 pub struct ItemArmorTotal {
     pub id:         u32,
@@ -1400,32 +1526,34 @@ pub struct ItemArmorTotal {
     pub item_level: i16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x96663ABF)]
 pub struct ItemBagFamily {
     pub id:   u32,
+    #[sqlx(json)]
     pub name: LocalisedString,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE12FB1A0)]
 pub struct ItemBonus {
     pub id: u32,
+    #[sqlx(json)]
     pub value: Vector3<i32>,
     pub parent_item_bonus_list_id: u16,
-    pub typ: u8,
+    pub r#type: u8,
     pub order_index: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xDFBF5AC9)]
 pub struct ItemBonusListLevelDelta {
     pub item_level_delta: i16,
-    #[id]
+    #[id_inline]
     pub id:               u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug, PartialEq, PartialOrd, Ord, Eq)]
 #[layout_hash(0x84FE93B7)]
 pub struct ItemBonusTreeNode {
     pub id: u32,
@@ -1437,89 +1565,95 @@ pub struct ItemBonusTreeNode {
     pub parent_item_bonus_tree_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB6940674)]
 pub struct ItemChildEquipment {
     pub id:                    u32,
-    pub child_item_id:         i32,
+    pub child_item_id:         u32,
     pub child_item_equip_slot: u8,
     #[parent]
-    pub parent_item_id:        i32,
+    pub parent_item_id:        u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xA1E4663C)]
 pub struct ItemClass {
     pub id:             u32,
+    #[sqlx(json)]
     pub class_name:     LocalisedString,
     pub price_modifier: f32,
-    pub class_id:       i8,
+    pub class_id:       u8,
     pub flags:          u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE2FF5688)]
 pub struct ItemCurrencyCost {
     pub id:      u32,
     #[parent(inline)]
-    pub item_id: i32,
+    pub item_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC2186F95)]
 pub struct ItemDamageAmmo {
     pub id:         u32,
+    #[sqlx(json)]
     pub quality:    [f32; 7],
     pub item_level: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC2186F95)]
 pub struct ItemDamageOneHand {
     pub id:         u32,
+    #[sqlx(json)]
     pub quality:    [f32; 7],
     pub item_level: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC2186F95)]
 pub struct ItemDamageOneHandCaster {
     pub id:         u32,
+    #[sqlx(json)]
     pub quality:    [f32; 7],
     pub item_level: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC2186F95)]
 pub struct ItemDamageTwoHand {
     pub id:         u32,
+    #[sqlx(json)]
     pub quality:    [f32; 7],
     pub item_level: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC2186F95)]
 pub struct ItemDamageTwoHandCaster {
     pub id:         u32,
+    #[sqlx(json)]
     pub quality:    [f32; 7],
     pub item_level: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC0D926CC)]
 pub struct ItemDisenchantLoot {
     pub id:             u32,
     pub min_level:      u16,
     pub max_level:      u16,
     pub skill_required: u16,
-    pub subclass:       i8,
+    pub subclass:       u8,
     pub quality:        u8,
-    pub expansion_id:   i8,
+    pub expansion_id:   u8,
     #[parent]
     pub class:          u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xA390FA40)]
 pub struct ItemEffect {
     pub id: u32,
@@ -1535,19 +1669,23 @@ pub struct ItemEffect {
     pub parent_item_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC31F4DEF)]
 pub struct ItemExtendedCost {
     pub id:                    u32,
     /// required item id
+    #[sqlx(json)]
     pub item_id:               [i32; 5],
     /// required curency count
+    #[sqlx(json)]
     pub currency_count:        [u32; 5],
     /// required count of 1st item
+    #[sqlx(json)]
     pub item_count:            [u16; 5],
     /// required personal arena rating
     pub required_arena_rating: u16,
     /// required curency id
+    #[sqlx(json)]
     pub currency_id:           [u16; 5],
     /// arena slot restrictions (min slot value)
     pub arena_bracket:         u8,
@@ -1557,7 +1695,7 @@ pub struct ItemExtendedCost {
     pub required_achievement:  u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x8143060E)]
 pub struct ItemLevelSelector {
     pub id: u32,
@@ -1565,17 +1703,17 @@ pub struct ItemLevelSelector {
     pub item_level_selector_quality_set_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug, PartialEq, PartialOrd, Ord, Eq)]
 #[layout_hash(0xB7174A51)]
 pub struct ItemLevelSelectorQuality {
     pub id: u32,
     pub quality_item_bonus_list_id: i32,
     pub quality: i8,
     #[parent]
-    pub parent_ils_quality_set_id: i16,
+    pub parent_ils_quality_set_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x20055BA8)]
 pub struct ItemLevelSelectorQualitySet {
     pub id:        u32,
@@ -1583,31 +1721,32 @@ pub struct ItemLevelSelectorQualitySet {
     pub ilvl_epic: i16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB6BB188D)]
 pub struct ItemLimitCategory {
     pub id:       u32,
+    #[sqlx(json)]
     pub name:     LocalisedString,
     pub quantity: u8,
     pub flags:    u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xDE8EAD49)]
 pub struct ItemLimitCategoryCondition {
     pub id: u32,
     pub add_quantity: i8,
     pub player_condition_id: u32,
     #[parent]
-    pub parent_item_limit_category_id: i32,
+    pub parent_item_limit_category_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE64FD18B)]
 pub struct ItemModifiedAppearance {
     #[parent]
-    pub item_id: i32,
-    #[id]
+    pub item_id: u32,
+    #[id_inline]
     pub id: u32,
     pub item_appearance_modifier_id: u8,
     pub item_appearance_id: u16,
@@ -1615,7 +1754,7 @@ pub struct ItemModifiedAppearance {
     pub transmog_source_type_enum: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x4BD234D7)]
 pub struct ItemPriceBase {
     pub id:         u32,
@@ -1624,30 +1763,37 @@ pub struct ItemPriceBase {
     pub item_level: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB67375F8)]
 pub struct ItemRandomProperties {
     pub id:          u32,
+    #[sqlx(json)]
     pub name:        LocalisedString,
+    #[sqlx(json)]
     pub enchantment: [u16; 5],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x95CAB825)]
 pub struct ItemRandomSuffix {
     pub id:             u32,
+    #[sqlx(json)]
     pub name:           LocalisedString,
+    #[sqlx(json)]
     pub enchantment:    [u16; 5],
+    #[sqlx(json)]
     pub allocation_pct: [u16; 5],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x2D4B72FA)]
 pub struct ItemSearchName {
     pub allowable_race:      i64,
+    #[sqlx(json)]
     pub display:             LocalisedString,
-    #[id]
+    #[id_inline]
     pub id:                  u32,
+    #[sqlx(json)]
     pub flags:               Vector3<i32>,
     pub item_level:          u16,
     pub overall_quality_id:  u8,
@@ -1661,18 +1807,20 @@ pub struct ItemSearchName {
     pub required_ability:    u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x847FF58A)]
 pub struct ItemSet {
     pub id:                  u32,
+    #[sqlx(json)]
     pub name:                LocalisedString,
+    #[sqlx(json)]
     pub item_id:             [u32; 17],
     pub required_skill_rank: u16,
     pub required_skill:      u32,
     pub set_flags:           u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xF65D0AF8)]
 pub struct ItemSetSpell {
     pub id:          u32,
@@ -1683,16 +1831,22 @@ pub struct ItemSetSpell {
     pub item_set_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x4007DE16)]
 pub struct ItemSparse {
     pub id: u32,
     pub allowable_race: i64,
+    #[sqlx(json)]
     pub display: LocalisedString,
+    #[sqlx(json)]
     pub display1: LocalisedString,
+    #[sqlx(json)]
     pub display2: LocalisedString,
+    #[sqlx(json)]
     pub display3: LocalisedString,
+    #[sqlx(json)]
     pub description: LocalisedString,
+    #[sqlx(json)]
     pub flags: [i32; 4],
     pub price_random_value: f32,
     pub price_variance: f32,
@@ -1702,7 +1856,9 @@ pub struct ItemSparse {
     pub required_ability: u32,
     pub max_count: i32,
     pub stackable: i32,
+    #[sqlx(json)]
     pub stat_percent_editor: [i32; 10],
+    #[sqlx(json)]
     pub stat_percentage_of_socket: [f32; 10],
     pub item_range: f32,
     pub bag_family: u32,
@@ -1714,6 +1870,7 @@ pub struct ItemSparse {
     pub required_skill: u16,
     pub required_skill_rank: u16,
     pub min_faction_id: u16,
+    #[sqlx(json)]
     pub item_stat_value: [i16; 10],
     pub scaling_stat_distribution_id: u16,
     pub item_delay: u16,
@@ -1739,6 +1896,7 @@ pub struct ItemSparse {
     pub required_pvp_medal: u8,
     pub min_reputation: u8,
     pub container_slots: u8,
+    #[sqlx(json)]
     pub stat_modifier_bonus_stat: [i8; 10],
     pub damage_damage_type: u8,
     pub bonding: u8,
@@ -1746,6 +1904,7 @@ pub struct ItemSparse {
     pub page_material_id: u8,
     pub material: u8,
     pub sheathe_type: u8,
+    #[sqlx(json)]
     pub socket_type: Vector3<u8>,
     pub spell_weight_category: u8,
     pub spell_weight: u8,
@@ -1753,7 +1912,7 @@ pub struct ItemSparse {
     pub expansion_id: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB17B7986)]
 pub struct ItemSpec {
     pub id:                u32,
@@ -1766,16 +1925,16 @@ pub struct ItemSpec {
     pub secondary_stat:    u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE499CD2A)]
 pub struct ItemSpecOverride {
     pub id:      u32,
     pub spec_id: u16,
     #[parent]
-    pub item_id: i32,
+    pub item_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x8F3A4137)]
 pub struct ItemUpgrade {
     pub id:                   u32,
@@ -1786,27 +1945,30 @@ pub struct ItemUpgrade {
     pub item_level_increment: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x87C4B605)]
 pub struct ItemXBonusTree {
     pub id:                 u32,
     pub item_bonus_tree_id: u16,
     #[parent]
-    pub item_id:            i32,
+    pub item_id:            u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x5B214E82)]
 pub struct Keychain {
     pub id:  u32,
+    #[sqlx(json)]
     pub key: [u8; 32],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xF02081A0)]
 pub struct LFGDungeons {
     pub id: u32,
+    #[sqlx(json)]
     pub name: LocalisedString,
+    #[sqlx(json)]
     pub description: LocalisedString,
     pub flags: i32,
     pub min_gear: f32,
@@ -1847,31 +2009,37 @@ impl LFGDungeons {
     }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x25025A13)]
 pub struct Light {
     pub id:                 u32,
+    #[sqlx(json)]
     pub game_coords:        Vector3<f32>,
     pub game_falloff_start: f32,
     pub game_falloff_end:   f32,
     pub continent_id:       i16,
+    #[sqlx(json)]
     pub light_params_id:    [u16; 8],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x3313BBF3)]
 pub struct LiquidType {
     pub id:                   u32,
-    pub name:                 LocalisedString,
-    pub texture:              [LocalisedString; 6],
+    pub name:                 String,
+    #[sqlx(json)]
+    pub texture:              [String; 6],
     pub spell_id:             u32,
     pub max_darken_depth:     f32,
     pub fog_darken_intensity: f32,
     pub amb_darken_intensity: f32,
     pub dir_darken_intensity: f32,
     pub particle_scale:       f32,
+    #[sqlx(json)]
     pub color:                [i32; 2],
+    #[sqlx(json)]
     pub float:                [f32; 18],
+    #[sqlx(json)]
     pub int:                  [u32; 4],
     pub flags:                u16,
     pub light_id:             u16,
@@ -1880,48 +2048,62 @@ pub struct LiquidType {
     pub particle_movement:    u8,
     pub particle_tex_slots:   u8,
     pub material_id:          u8,
+    #[sqlx(json)]
     pub frame_count_texture:  [u8; 6],
     pub sound_id:             u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xDAC7F42F)]
 pub struct Lock {
     pub id:     u32,
+    #[sqlx(json)]
     pub index:  [i32; 8],
+    #[sqlx(json)]
     pub skill:  [u16; 8],
-    pub typ:    [u8; 8],
+    #[sqlx(json)]
+    pub r#type: [u8; 8],
+    #[sqlx(json)]
     pub action: [u8; 8],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x25C8D6CC)]
 pub struct MailTemplate {
     pub id:   u32,
+    #[sqlx(json)]
     pub body: LocalisedString,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xF568DF12)]
 pub struct Map {
     pub id:                     u32,
-    pub directory:              LocalisedString,
+    pub directory:              String,
+    #[sqlx(json)]
     pub map_name:               LocalisedString,
     /// Horde
+    #[sqlx(json)]
     pub map_description0:       LocalisedString,
     /// Alliance
+    #[sqlx(json)]
     pub map_description1:       LocalisedString,
+    #[sqlx(json)]
     pub pvp_short_description:  LocalisedString,
+    #[sqlx(json)]
     pub pvp_long_description:   LocalisedString,
+    #[sqlx(json)]
     pub flags:                  [i32; 2],
     pub minimap_icon_scale:     f32,
     /// entrance coordinates in ghost mode  (in most cases = normal entrance)
+    #[sqlx(json)]
     pub corpse:                 [f32; 2],
     pub area_table_id:          u16,
     pub loading_screen_id:      i16,
     /// map_id of entrance map in ghost mode (continent always and in most cases = normal entrance)
     pub corpse_map_id:          i16,
     pub time_of_day_override:   i16,
+    /// Negative => No parent
     pub parent_map_id:          i16,
     pub cosmetic_parent_map_id: i16,
     pub wind_settings_id:       i16,
@@ -1956,7 +2138,7 @@ impl Map {
     }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x62BE0340)]
 pub struct LiquidMaterial {
     pub id:    u32,
@@ -1964,7 +2146,7 @@ pub struct LiquidMaterial {
     pub flags: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xACC168A6)]
 pub struct LiquidObject {
     pub id:             u32,
@@ -2028,12 +2210,12 @@ pub struct LiquidObject {
 //     pub fn is_dynamic_difficulty_map(&self, ) { return (self.flags[0] & MapFlags::CanToggleDifficulty as i32) != 0; }
 //     pub fn is_garrison(&self, ) { return (self.flags[0] & MapFlags::Garrison as i32) != 0; }
 // }
-
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x2B3B759E)]
 pub struct MapDifficulty {
     pub id:                     u32,
     /// m_message_lang (text showed when transfer to map failed)
+    #[sqlx(json)]
     pub message:                LocalisedString,
     pub difficulty_id:          u8,
     pub reset_interval:         u8,
@@ -2058,14 +2240,14 @@ impl MapDifficulty {
     }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x7718AFC2)]
 pub struct ModifierTree {
     pub id:              u32,
     pub asset:           i32,
     pub secondary_asset: i32,
     pub parent:          u32,
-    pub typ:             u8,
+    pub r#type:          u8,
     pub tertiary_asset:  i8,
     pub operator:        i8,
     pub amount:          i8,
@@ -2080,18 +2262,21 @@ pub enum MountFlags {
     HideIfUnknown = 0x40,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x4D812F19)]
 pub struct Mount {
+    #[sqlx(json)]
     pub name:                  LocalisedString,
+    #[sqlx(json)]
     pub description:           LocalisedString,
+    #[sqlx(json)]
     pub source_text:           LocalisedString,
-    pub source_spell_id:       i32,
+    pub source_spell_id:       u32,
     pub mount_fly_ride_height: f32,
     pub mount_type_id:         u16,
     pub flags:                 u16,
     pub source_type_enum:      i8,
-    #[id]
+    #[id_inline]
     pub id:                    u32,
     pub player_condition_id:   u32,
     pub ui_model_scene_id:     i32,
@@ -2103,7 +2288,7 @@ impl Mount {
     }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB0D11D52)]
 pub struct MountCapability {
     pub req_spell_known_id: i32,
@@ -2112,12 +2297,12 @@ pub struct MountCapability {
     pub req_area_id:        u16,
     pub req_map_id:         i16,
     pub flags:              u8,
-    #[id]
+    #[id_inline]
     pub id:                 u32,
     pub req_spell_aura_id:  u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug, PartialEq, PartialOrd, Ord, Eq)]
 #[layout_hash(0xA34A8445)]
 pub struct MountTypeXCapability {
     pub id:                  u32,
@@ -2127,17 +2312,17 @@ pub struct MountTypeXCapability {
     pub order_index:         u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xD59B9FE4)]
 pub struct MountXDisplay {
     pub id: u32,
-    pub creature_display_info_id: i32,
+    pub creature_display_info_id: u32,
     pub player_condition_id: u32,
     #[parent]
-    pub mount_id: i32,
+    pub mount_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xF3E9AE3B)]
 pub struct Movie {
     pub id:                    u32,
@@ -2147,55 +2332,56 @@ pub struct Movie {
     pub key_id:                u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x2EF936CD)]
 pub struct NameGen {
     pub id:      u32,
-    pub name:    LocalisedString,
+    pub name:    String,
     pub race_id: u8,
     pub sex:     u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xDFB56E0E)]
 pub struct NamesProfanity {
     pub id:       u32,
-    pub name:     LocalisedString,
+    pub name:     String,
     pub language: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE4923C1F)]
 pub struct NamesReserved {
     pub id:   u32,
-    pub name: LocalisedString,
+    pub name: String,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC1403093)]
 pub struct NamesReservedLocale {
     pub id:          u32,
-    pub name:        LocalisedString,
+    pub name:        String,
     pub locale_mask: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x9417628C)]
 pub struct OverrideSpellData {
     pub id: u32,
+    #[sqlx(json)]
     pub spells: [i32; 10],
     pub player_action_bar_file_data_id: i32,
     pub flags: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0043219C)]
 pub struct Phase {
     pub id:    u32,
     pub flags: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x66517AF6)]
 pub struct PhaseXPhaseGroup {
     pub id:             u32,
@@ -2204,12 +2390,13 @@ pub struct PhaseXPhaseGroup {
     pub phase_group_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x5B3DA113)]
 pub struct PlayerCondition {
     pub race_mask: i64,
+    #[sqlx(json)]
     pub failure_description: LocalisedString,
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub flags: u8,
     pub min_level: u16,
@@ -2265,49 +2452,73 @@ pub struct PlayerCondition {
     pub power_type_value: u8,
     pub modifier_tree_id: u32,
     pub weapon_subclass_mask: i32,
+    #[sqlx(json)]
     pub skill_id: [u16; 4],
+    #[sqlx(json)]
     pub min_skill: [u16; 4],
+    #[sqlx(json)]
     pub max_skill: [u16; 4],
+    #[sqlx(json)]
     pub min_faction_id: Vector3<u32>,
+    #[sqlx(json)]
     pub min_reputation: Vector3<u8>,
+    #[sqlx(json)]
     pub prev_quest_id: [u16; 4],
+    #[sqlx(json)]
     pub curr_quest_id: [u16; 4],
+    #[sqlx(json)]
     pub current_completed_quest_id: [u16; 4],
+    #[sqlx(json)]
     pub spell_id: [i32; 4],
+    #[sqlx(json)]
     pub item_id: [i32; 4],
+    #[sqlx(json)]
     pub item_count: [u32; 4],
+    #[sqlx(json)]
     pub explored: [u16; 2],
+    #[sqlx(json)]
     pub time: [u32; 2],
+    #[sqlx(json)]
     pub aura_spell_id: [i32; 4],
+    #[sqlx(json)]
     pub aura_stacks: [u8; 4],
+    #[sqlx(json)]
     pub achievement: [u16; 4],
+    #[sqlx(json)]
     pub lfg_status: [u8; 4],
+    #[sqlx(json)]
     pub lfg_compare: [u8; 4],
+    #[sqlx(json)]
     pub lfg_value: [u32; 4],
+    #[sqlx(json)]
     pub area_id: [u16; 4],
+    #[sqlx(json)]
     pub currency_id: [u32; 4],
+    #[sqlx(json)]
     pub currency_count: [u32; 4],
+    #[sqlx(json)]
     pub quest_kill_monster: [u32; 6],
+    #[sqlx(json)]
     pub movement_flags: [i32; 2],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xFD152E5B)]
 pub struct PowerDisplay {
     pub id:                     u32,
-    pub global_string_base_tag: LocalisedString,
+    pub global_string_base_tag: String,
     pub actual_type:            u8,
     pub red:                    u8,
     pub green:                  u8,
     pub blue:                   u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0C3844E1)]
 pub struct PowerType {
     pub id: u32,
-    pub name_global_string_tag: LocalisedString,
-    pub cost_global_string_tag: LocalisedString,
+    pub name_global_string_tag: String,
+    pub cost_global_string_tag: String,
     pub regen_peace: f32,
     pub regen_combat: f32,
     pub max_base_power: i16,
@@ -2325,10 +2536,11 @@ enum PrestigeLevelInfoFlags {
     Disabled = 0x01,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xA7B2D559)]
 pub struct PrestigeLevelInfo {
     pub id: u32,
+    #[sqlx(json)]
     pub name: LocalisedString,
     pub badge_texture_file_data_id: i32,
     pub prestige_level: u8,
@@ -2341,7 +2553,7 @@ impl PrestigeLevelInfo {
     }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x970B5E15)]
 pub struct PVPDifficulty {
     pub id:          u32,
@@ -2354,63 +2566,66 @@ pub struct PVPDifficulty {
     // BattlegroundBracketId GetBracketId() const { return BattlegroundBracketId(RangeIndex); }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xBD449801)]
 pub struct PVPItem {
     pub id:               u32,
-    pub item_id:          i32,
+    pub item_id:          u32,
     pub item_level_delta: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x72F4C016)]
 pub struct PvpReward {
     pub id:             u32,
-    pub honor_level:    i32,
-    pub prestige_level: i32,
-    pub reward_pack_id: i32,
+    pub honor_level:    u32,
+    pub prestige_level: u32,
+    pub reward_pack_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x6EB51740)]
 pub struct PvpTalent {
     pub id:                  u32,
+    #[sqlx(json)]
     pub description:         LocalisedString,
-    pub spell_id:            i32,
-    pub overrides_spell_id:  i32,
-    pub action_bar_spell_id: i32,
-    pub tier_id:             i32,
-    pub column_index:        i32,
-    pub flags:               i32,
-    pub class_id:            i32,
-    pub spec_id:             i32,
-    pub role:                i32,
+    pub spell_id:            u32,
+    pub overrides_spell_id:  u32,
+    pub action_bar_spell_id: u32,
+    pub tier_id:             u32,
+    pub column_index:        u32,
+    pub flags:               u32,
+    pub class_id:            u32,
+    pub spec_id:             u32,
+    pub role:                u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x465C83BC)]
 pub struct PvpTalentUnlock {
     pub id:           u32,
-    pub tier_id:      i32,
-    pub column_index: i32,
-    pub honor_level:  i32,
+    pub tier_id:      u32,
+    pub column_index: u32,
+    pub honor_level:  u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB0E02541)]
 pub struct QuestFactionReward {
     pub id:         u32,
+    #[sqlx(json)]
     pub difficulty: [i16; 10],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x86397302)]
 pub struct QuestMoneyReward {
     pub id:         u32,
+    #[sqlx(json)]
     pub difficulty: [u32; 10],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xCF9401CF)]
 pub struct QuestPackageItem {
     pub id:            u32,
@@ -2420,38 +2635,43 @@ pub struct QuestPackageItem {
     pub item_quantity: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xAD7072C6)]
 pub struct QuestSort {
     pub id:             u32,
+    #[sqlx(json)]
     pub sort_name:      LocalisedString,
     pub ui_order_index: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x70495C9B)]
 pub struct QuestV2 {
     pub id:              u32,
     pub unique_bit_flag: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xCB76B4C0)]
 pub struct QuestXP {
     pub id:         u32,
+    #[sqlx(json)]
     pub difficulty: [u16; 10],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x4E2C0BCC)]
 pub struct RandPropPoints {
     pub id:       u32,
+    #[sqlx(json)]
     pub epic:     [u32; 5],
+    #[sqlx(json)]
     pub superior: [u32; 5],
+    #[sqlx(json)]
     pub good:     [u32; 5],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xDB6CC0AB)]
 pub struct RewardPack {
     pub id: u32,
@@ -2463,7 +2683,7 @@ pub struct RewardPack {
     pub treasure_picker_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x217E6712)]
 pub struct RewardPackXCurrencyType {
     pub id:               u32,
@@ -2473,25 +2693,25 @@ pub struct RewardPackXCurrencyType {
     pub reward_pack_id:   u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x74F6B9BD)]
 pub struct RewardPackXItem {
     pub id:             u32,
-    pub item_id:        i32,
+    pub item_id:        u32,
     pub item_quantity:  i32,
     #[parent]
-    pub reward_pack_id: i32,
+    pub reward_pack_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xFB641AE0)]
 pub struct RulesetItemUpgrade {
     pub id:              u32,
-    pub item_id:         i32,
+    pub item_id:         u32,
     pub item_upgrade_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x5200B7F5)]
 pub struct SandboxScaling {
     pub id:        u32,
@@ -2500,7 +2720,7 @@ pub struct SandboxScaling {
     pub flags:     i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xDED48286)]
 pub struct ScalingStatDistribution {
     pub id: u32,
@@ -2509,21 +2729,24 @@ pub struct ScalingStatDistribution {
     pub max_level: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xD052232A)]
 pub struct Scenario {
     pub id:            u32,
+    #[sqlx(json)]
     pub name:          LocalisedString,
     pub area_table_id: u16,
     pub flags:         u8,
-    pub typ:           u8,
+    pub r#type:        u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x201B0EFC)]
 pub struct ScenarioStep {
     pub id:              u32,
+    #[sqlx(json)]
     pub description:     LocalisedString,
+    #[sqlx(json)]
     pub title:           LocalisedString,
     #[parent]
     pub scenario_id:     u16,
@@ -2542,7 +2765,7 @@ pub struct ScenarioStep {
     // }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC694B81E)]
 pub struct SceneScript {
     pub id:                    u32,
@@ -2550,35 +2773,38 @@ pub struct SceneScript {
     pub next_scene_script_id:  u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB9F8FDF1)]
 pub struct SceneScriptGlobalText {
     pub id:     u32,
-    pub name:   LocalisedString,
-    pub script: LocalisedString,
+    pub name:   String,
+    pub script: String,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x96663ABF)]
 pub struct SceneScriptPackage {
     pub id:   u32,
-    pub name: LocalisedString,
+    pub name: String,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB9F8FDF1)]
 pub struct SceneScriptText {
     pub id:     u32,
-    pub name:   LocalisedString,
-    pub script: LocalisedString,
+    pub name:   String,
+    pub script: String,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x3F7E88AF)]
 pub struct SkillLine {
     pub id:                   u32,
+    #[sqlx(json)]
     pub display_name:         LocalisedString,
+    #[sqlx(json)]
     pub description:          LocalisedString,
+    #[sqlx(json)]
     pub alternate_verb:       LocalisedString,
     pub flags:                u16,
     pub category_id:          i8,
@@ -2587,11 +2813,11 @@ pub struct SkillLine {
     pub parent_skill_line_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x97B5A653)]
 pub struct SkillLineAbility {
     pub race_mask: i64,
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub spell: i32,
     pub supercedes_spell: i32,
@@ -2608,24 +2834,24 @@ pub struct SkillLineAbility {
     pub flags: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x9752C2CE)]
 pub struct SkillRaceClassInfo {
     pub id:            u32,
     pub race_mask:     i64,
     #[parent]
-    pub skill_id:      i16,
+    pub skill_id:      u16,
     pub flags:         u16,
-    pub skill_tier_id: i16,
-    pub availability:  i8,
-    pub min_level:     i8,
-    pub class_mask:    i32,
+    pub skill_tier_id: u16,
+    pub availability:  u8,
+    pub min_level:     u8,
+    pub class_mask:    u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0E9CB7AE)]
 pub struct SoundKit {
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub volume_float: f32,
     pub min_distance: f32,
@@ -2644,30 +2870,35 @@ pub struct SoundKit {
     pub max_instances: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xAE3436F3)]
 pub struct SpecializationSpells {
+    #[sqlx(json)]
     pub description:        LocalisedString,
     pub spell_id:           i32,
     pub overrides_spell_id: i32,
     #[parent]
     pub spec_id:            u16,
     pub display_order:      u8,
-    #[id]
+    #[id_inline]
     pub id:                 u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x2273DFFF)]
 pub struct Spell {
     pub id:               u32,
+    #[sqlx(json)]
     pub name:             LocalisedString,
+    #[sqlx(json)]
     pub name_subtext:     LocalisedString,
+    #[sqlx(json)]
     pub description:      LocalisedString,
+    #[sqlx(json)]
     pub aura_description: LocalisedString,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE05BE94F)]
 pub struct SpellAuraOptions {
     pub id: u32,
@@ -2682,7 +2913,7 @@ pub struct SpellAuraOptions {
     pub spell_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x7CDF3311)]
 pub struct SpellAuraRestrictions {
     pub id: u32,
@@ -2699,7 +2930,7 @@ pub struct SpellAuraRestrictions {
     pub spell_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x4129C6A4)]
 pub struct SpellCastTimes {
     pub id:        u32,
@@ -2708,7 +2939,7 @@ pub struct SpellCastTimes {
     pub per_level: i16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xD8B56E5D)]
 pub struct SpellCastingRequirements {
     pub id:                   u32,
@@ -2721,7 +2952,7 @@ pub struct SpellCastingRequirements {
     pub required_aura_vision: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x14E916CC)]
 pub struct SpellCategories {
     pub id: u32,
@@ -2737,10 +2968,11 @@ pub struct SpellCategories {
     pub spell_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xEA60E384)]
 pub struct SpellCategory {
     pub id:                   u32,
+    #[sqlx(json)]
     pub name:                 LocalisedString,
     pub charge_recovery_time: i32,
     pub flags:                i8,
@@ -2749,17 +2981,18 @@ pub struct SpellCategory {
     pub type_mask:            i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x80FBD67A)]
 pub struct SpellClassOptions {
     pub id:               u32,
     pub spell_id:         i32,
+    #[sqlx(json)]
     pub spell_class_mask: [u32; 4],
     pub spell_class_set:  u8,
     pub modal_next_spell: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xCA8D8B3C)]
 pub struct SpellCooldowns {
     pub id:                     u32,
@@ -2771,7 +3004,7 @@ pub struct SpellCooldowns {
     pub spell_id:               i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0D6C9082)]
 pub struct SpellDuration {
     pub id:                 u32,
@@ -2780,10 +3013,10 @@ pub struct SpellDuration {
     pub duration_per_level: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x3244098B)]
 pub struct SpellEffect {
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub effect: u32,
     pub effect_base_points: i32,
@@ -2809,15 +3042,19 @@ pub struct SpellEffect {
     pub variance: f32,
     pub resource_coefficient: f32,
     pub group_size_base_points_coefficient: f32,
+    #[sqlx(json)]
     pub effect_spell_class_mask: [u32; 4],
+    #[sqlx(json)]
     pub effect_misc_value: [i32; 2],
+    #[sqlx(json)]
     pub effect_radius_index: [u32; 2],
+    #[sqlx(json)]
     pub implicit_target: [u32; 2],
     #[parent]
     pub spell_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xCE628176)]
 pub struct SpellEquippedItems {
     pub id: u32,
@@ -2827,34 +3064,41 @@ pub struct SpellEquippedItems {
     pub equipped_item_class: i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x96663ABF)]
 pub struct SpellFocusObject {
     pub id:   u32,
+    #[sqlx(json)]
     pub name: LocalisedString,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x2FA8EA94)]
 pub struct SpellInterrupts {
     pub id: u32,
     pub difficulty_id: u8,
     pub interrupt_flags: u16,
+    #[sqlx(json)]
     pub aura_interrupt_flags: [u32; 2],
+    #[sqlx(json)]
     pub channel_interrupt_flags: [u32; 2],
     #[parent]
     pub spell_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x80DEA734)]
 pub struct SpellItemEnchantment {
     pub id: u32,
+    #[sqlx(json)]
     pub name: LocalisedString,
+    #[sqlx(json)]
     pub effect_arg: Vector3<u32>,
+    #[sqlx(json)]
     pub effect_scaling_points: Vector3<f32>,
     pub transmog_cost: u32,
     pub icon_file_data_id: u32,
+    #[sqlx(json)]
     pub effect_points_min: Vector3<i16>,
     pub item_visual: u16,
     pub flags: u16,
@@ -2862,6 +3106,7 @@ pub struct SpellItemEnchantment {
     pub required_skill_rank: u16,
     pub item_level: u16,
     pub charges: u8,
+    #[sqlx(json)]
     pub effect: Vector3<u8>,
     pub condition_id: u8,
     pub min_level: u8,
@@ -2871,19 +3116,25 @@ pub struct SpellItemEnchantment {
     pub transmog_player_condition_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB9C16961)]
 pub struct SpellItemEnchantmentCondition {
     pub id:              u32,
+    #[sqlx(json)]
     pub lt_operand:      [u32; 5],
+    #[sqlx(json)]
     pub lt_operand_type: [u8; 5],
+    #[sqlx(json)]
     pub operator:        [u8; 5],
+    #[sqlx(json)]
     pub rt_operand_type: [u8; 5],
+    #[sqlx(json)]
     pub rt_operand:      [u8; 5],
+    #[sqlx(json)]
     pub logic:           [u8; 5],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x153EBA26)]
 pub struct SpellLearnSpell {
     pub id:                 u32,
@@ -2892,7 +3143,7 @@ pub struct SpellLearnSpell {
     pub overrides_spell_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x9E7D1CCD)]
 pub struct SpellLevels {
     pub id:                     u32,
@@ -2905,7 +3156,7 @@ pub struct SpellLevels {
     pub spell_id:               i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xCDC114D5)]
 pub struct SpellMisc {
     pub id: u32,
@@ -2918,12 +3169,13 @@ pub struct SpellMisc {
     pub active_icon_file_data_id: u32,
     pub launch_delay: f32,
     pub difficulty_id: u8,
+    #[sqlx(json)]
     pub attributes: [u32; 14],
     #[parent]
     pub spell_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x8E5E46EC)]
 pub struct SpellPower {
     pub mana_cost:              i32,
@@ -2933,7 +3185,7 @@ pub struct SpellPower {
     pub power_cost_max_pct:     f32,
     pub order_index:            u8,
     pub power_type:             i8,
-    #[id]
+    #[id_inline]
     pub id:                     u32,
     pub mana_cost_per_level:    i32,
     pub mana_per_second:        i32,
@@ -2941,21 +3193,21 @@ pub struct SpellPower {
     ///   only SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL, SPELL_EFFECT_WEAPON_PERCENT_DAMAGE, SPELL_EFFECT_WEAPON_DAMAGE, SPELL_EFFECT_NORMALIZED_WEAPON_DMG
     pub optional_cost:          u32,
     pub power_display_id:       u32,
-    pub alt_power_bar_id:       i32,
+    pub alt_power_bar_id:       u32,
     #[parent]
-    pub spell_id:               i32,
+    pub spell_id:               u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x74714FF7)]
 pub struct SpellPowerDifficulty {
     pub difficulty_id: u8,
     pub order_index:   u8,
-    #[id]
+    #[id_inline]
     pub id:            u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x4BC1931B)]
 pub struct SpellProcsPerMinute {
     pub id:             u32,
@@ -2963,18 +3215,18 @@ pub struct SpellProcsPerMinute {
     pub flags:          u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x2503C18B)]
 pub struct SpellProcsPerMinuteMod {
     pub id: u32,
     pub coeff: f32,
     pub param: i16,
-    pub typ: u8,
+    pub r#type: u8,
     #[parent]
     pub spell_procs_per_minute_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC12E5C90)]
 pub struct SpellRadius {
     pub id:               u32,
@@ -2984,27 +3236,33 @@ pub struct SpellRadius {
     pub radius_max:       f32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xDE2E3F8E)]
 pub struct SpellRange {
     pub id:                 u32,
+    #[sqlx(json)]
     pub display_name:       LocalisedString,
+    #[sqlx(json)]
     pub display_name_short: LocalisedString,
+    #[sqlx(json)]
     pub range_min:          [f32; 2],
+    #[sqlx(json)]
     pub range_max:          [f32; 2],
     pub flags:              u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0463C688)]
 pub struct SpellReagents {
     pub id:            u32,
     pub spell_id:      i32,
+    #[sqlx(json)]
     pub reagent:       [i32; 8],
+    #[sqlx(json)]
     pub reagent_count: [i16; 8],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xF67A5719)]
 pub struct SpellScaling {
     pub id:                     u32,
@@ -3015,20 +3273,24 @@ pub struct SpellScaling {
     pub max_scaling_level:      u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xA461C24D)]
 pub struct SpellShapeshift {
     pub id:                 u32,
+    #[sqlx(json)]
     pub spell_id:           [i32; 2],
+    #[sqlx(json)]
     pub shapeshift_exclude: [i32; 2],
+    #[sqlx(json)]
     pub shapeshift_mask:    [i32; 2],
     pub stance_bar_order:   i8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x130819AF)]
 pub struct SpellShapeshiftForm {
     pub id:                  u32,
+    #[sqlx(json)]
     pub name:                LocalisedString,
     pub damage_variance:     f32,
     pub flags:               i32,
@@ -3037,11 +3299,13 @@ pub struct SpellShapeshiftForm {
     pub creature_type:       i8,
     pub bonus_action_bar:    i8,
     pub attack_icon_file_id: i32,
+    #[sqlx(json)]
     pub creature_display_id: [u32; 4],
+    #[sqlx(json)]
     pub preset_spell_id:     [u32; 8],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x7B330026)]
 pub struct SpellTargetRestrictions {
     pub id:                   u32,
@@ -3056,20 +3320,22 @@ pub struct SpellTargetRestrictions {
     pub spell_id:             i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xEC0C4866)]
 pub struct SpellTotems {
     pub id: u32,
     pub spell_id: i32,
+    #[sqlx(json)]
     pub totem: [i32; 2],
+    #[sqlx(json)]
     pub required_totem_category_id: [u16; 2],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x4F4B8A2A)]
 pub struct SpellXSpellVisual {
     pub spell_visual_id: u32,
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub probability: f32,
     pub caster_player_condition_id: u16,
@@ -3085,7 +3351,7 @@ pub struct SpellXSpellVisual {
     pub spell_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xFB8338FC)]
 pub struct SummonProperties {
     pub id:      u32,
@@ -3096,17 +3362,19 @@ pub struct SummonProperties {
     pub slot:    i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xF0F98B62)]
 pub struct TactKey {
     pub id:  u32,
+    #[sqlx(json)]
     pub key: [u8; 16],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE8850B48)]
 pub struct Talent {
     pub id:                 u32,
+    #[sqlx(json)]
     pub description:        LocalisedString,
     pub spell_id:           u32,
     pub overrides_spell_id: u32,
@@ -3114,19 +3382,25 @@ pub struct Talent {
     pub tier_id:            u8,
     pub column_index:       u8,
     pub flags:              u8,
+    #[sqlx(json)]
     pub category_mask:      [u8; 2],
     pub class_id:           u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB46C6A8B)]
 pub struct TaxiNodes {
     pub id: u32,
+    #[sqlx(json)]
     pub name: LocalisedString,
+    #[sqlx(json)]
     pub pos: Vector3<f32>,
+    #[sqlx(json)]
     pub mount_creature_id: [i32; 2],
+    #[sqlx(json)]
     pub map_offset: [f32; 2],
     pub facing: f32,
+    #[sqlx(json)]
     pub flight_map_offset: [f32; 2],
     pub continent_id: u16,
     pub condition_id: u16,
@@ -3136,26 +3410,27 @@ pub struct TaxiNodes {
     pub special_icon_condition_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xF44E2BF5)]
 pub struct TaxiPath {
     #[parent]
     pub from_taxi_node: u16,
     pub to_taxi_node:   u16,
-    #[id]
+    #[id_inline]
     pub id:             u32,
     pub cost:           u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xD38E8C01)]
 pub struct TaxiPathNode {
+    #[sqlx(json)]
     pub loc:                Vector3<f32>,
     #[parent]
     pub path_id:            u16,
     pub continent_id:       u16,
     pub node_index:         u8,
-    #[id]
+    #[id_inline]
     pub id:                 u32,
     pub flags:              u8,
     pub delay:              u32,
@@ -3163,43 +3438,46 @@ pub struct TaxiPathNode {
     pub departure_event_id: u16,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x20B9177A)]
 pub struct TotemCategory {
     pub id:                  u32,
+    #[sqlx(json)]
     pub name:                LocalisedString,
     pub totem_category_mask: i32,
     pub totem_category_type: u8,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x5409C5EA)]
 pub struct Toy {
+    #[sqlx(json)]
     pub source_text:      LocalisedString,
-    pub item_id:          i32,
+    pub item_id:          u32,
     pub flags:            u8,
     pub source_type_enum: i8,
-    #[id]
+    #[id_inline]
     pub id:               u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xB420EB18)]
 pub struct TransmogHoliday {
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub required_transmog_holiday: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xBEDFD7D1)]
 pub struct TransmogSet {
+    #[sqlx(json)]
     pub name: LocalisedString,
     #[parent]
     pub parent_transmog_set_id: u16,
     pub ui_order: i16,
     pub expansion_id: u8,
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub flags: i32,
     pub tracking_quest_id: u32,
@@ -3208,18 +3486,19 @@ pub struct TransmogSet {
     pub transmog_set_group_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xCD072FE5)]
 pub struct TransmogSetGroup {
+    #[sqlx(json)]
     pub name: LocalisedString,
-    #[id]
+    #[id_inline]
     pub id:   u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x0E96B3A2)]
 pub struct TransmogSetItem {
-    #[id]
+    #[id_inline]
     pub id: u32,
     #[parent]
     pub transmog_set_id: u32,
@@ -3227,38 +3506,46 @@ pub struct TransmogSetItem {
     pub flags: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x99987ED)]
 pub struct TransportAnimation {
     pub id:           u32,
     pub time_index:   u32,
+    #[sqlx(json)]
     pub pos:          Vector3<f32>,
     pub sequence_id:  u8,
     #[parent]
     pub transport_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x72035AA9)]
 pub struct TransportRotation {
     pub id:              u32,
     pub time_index:      u32,
+    #[sqlx(json)]
     pub rot:             Vector4<f32>,
     #[parent]
     pub game_objects_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x626C94CD)]
 pub struct UnitPowerBar {
     pub id:                  u32,
+    #[sqlx(json)]
     pub name:                LocalisedString,
+    #[sqlx(json)]
     pub cost:                LocalisedString,
+    #[sqlx(json)]
     pub out_of_error:        LocalisedString,
+    #[sqlx(json)]
     pub tool_tip:            LocalisedString,
     pub regeneration_peace:  f32,
     pub regeneration_combat: f32,
+    #[sqlx(json)]
     pub file_data_id:        [i32; 6],
+    #[sqlx(json)]
     pub color:               [i32; 6],
     pub start_inset:         f32,
     pub end_inset:           f32,
@@ -3270,7 +3557,7 @@ pub struct UnitPowerBar {
     pub max_power:           u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x1606C582)]
 pub struct Vehicle {
     pub id: u32,
@@ -3286,21 +3573,24 @@ pub struct Vehicle {
     pub facing_limit_right: f32,
     pub facing_limit_left: f32,
     pub camera_yaw_offset: f32,
+    #[sqlx(json)]
     pub seat_id: [u16; 8],
     pub vehicle_ui_indicator_id: u16,
+    #[sqlx(json)]
     pub power_display_id: Vector3<u16>,
     pub flags_b: u8,
     pub ui_locomotion_type: u8,
     pub missile_targeting_id: i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x242E0ECD)]
 pub struct VehicleSeat {
     pub id: u32,
     pub flags: i32,
     pub flags_b: i32,
     pub flags_c: i32,
+    #[sqlx(json)]
     pub attachment_offset: Vector3<f32>,
     pub enter_pre_delay: f32,
     pub enter_speed: f32,
@@ -3325,6 +3615,7 @@ pub struct VehicleSeat {
     pub camera_entering_duration: f32,
     pub camera_exiting_delay: f32,
     pub camera_exiting_duration: f32,
+    #[sqlx(json)]
     pub camera_offset: Vector3<f32>,
     pub camera_pos_chase_rate: f32,
     pub camera_facing_chase_rate: f32,
@@ -3375,13 +3666,14 @@ pub struct VehicleSeat {
     // bool IsEjectable() const { return (FlagsB & VEHICLE_SEAT_FLAG_B_EJECTABLE) != 0; }
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 // #[derive(Default)]
 #[layout_hash(0x4616C893)]
 pub struct WMOAreaTable {
+    #[sqlx(json)]
     pub area_name: LocalisedString,
     ///  used in group WMO
-    pub wmo_group_id: i32,
+    pub wmo_group_id: u32,
     pub ambience_id: u16,
     pub zone_music: u16,
     pub intro_sound: u16,
@@ -3393,7 +3685,7 @@ pub struct WMOAreaTable {
     pub sound_provider_pref_underwater: u8,
     pub flags: u8,
     pub uw_zone_music: u8,
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub inline_wmo_id: u32,
     ///  used in root WMO
@@ -3402,7 +3694,7 @@ pub struct WMOAreaTable {
 }
 
 // impl WDC1 for WMOAreaTable {
-//     pub fn id_index() -> Option<usize> {
+//     pub fn inlined_id_index() -> Option<usize> {
 //         Some(12)
 //     }
 
@@ -3436,7 +3728,7 @@ pub struct WMOAreaTable {
 //     }
 // }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x2E9B9BFD)]
 pub struct WorldEffect {
     pub id: u32,
@@ -3448,10 +3740,10 @@ pub struct WorldEffect {
     pub player_condition_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xC7E90019)]
 pub struct WorldMapArea {
-    pub area_name: LocalisedString,
+    pub area_name: String,
     pub loc_left: f32,
     pub loc_right: f32,
     pub loc_top: f32,
@@ -3466,16 +3758,16 @@ pub struct WorldMapArea {
     pub level_range_max: u8,
     pub bounty_set_id: u8,
     pub bounty_display_location: u8,
-    #[id]
+    #[id_inline]
     pub id: u32,
     pub visibility_player_condition_id: u32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xDC4B6AF3)]
 pub struct WorldMapOverlay {
-    pub texture_name:        LocalisedString,
-    #[id]
+    pub texture_name:        String,
+    #[id_inline]
     pub id:                  u32,
     pub texture_width:       u16,
     pub texture_height:      u16,
@@ -3490,14 +3782,17 @@ pub struct WorldMapOverlay {
     pub hit_rect_right:      i32,
     pub player_condition_id: u32,
     pub flags:               u32,
+    #[sqlx(json)]
     pub area_id:             [u32; 4],
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x99FB4B71)]
 pub struct WorldMapTransforms {
     pub id:                 u32,
+    #[sqlx(json)]
     pub region_min_max:     [f32; 6],
+    #[sqlx(json)]
     pub region_offset:      [f32; 2],
     pub region_scale:       f32,
     #[parent]
@@ -3510,11 +3805,13 @@ pub struct WorldMapTransforms {
     pub priority:           i32,
 }
 
-#[derive(WDC1, Default, Debug)]
+#[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x605EA8A6)]
 pub struct WorldSafeLocs {
     pub id:        u32,
+    #[sqlx(json)]
     pub area_name: LocalisedString,
+    #[sqlx(json)]
     pub loc:       Vector3<f32>,
     pub facing:    f32,
     pub continent: u16,

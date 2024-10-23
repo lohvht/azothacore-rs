@@ -1,5 +1,6 @@
 use std::{io, path::Path};
 
+use bevy::ecs::system::SystemParam;
 use flagset::FlagSet;
 use thiserror::Error;
 
@@ -48,27 +49,7 @@ pub const VMAP_INVALID_HEIGHT_VALUE: f32 = -200000.0;
 
 /// This is the minimum interface to the VMapMgr.
 /// Its the equivalent to IVMapManager / IVMapMgr
-pub trait VMapMgrTrait {
-    // /// The trick to make downcasting back to concrete type possible
-    // fn as_any(&self) -> &dyn Any;
-
-    // /// The trick to make downcasting back to mutable concrete type possible
-    // fn as_any_mut(&mut self) -> &mut dyn Any;
-
-    /// Ensures that checks are being passed in
-    ///
-    /// Enable/disable LOS calculation and model height calculation
-    ///
-    /// `enable_line_of_sight_calc` should be enabled by default.
-    /// If it is enabled in mid game the maps have to loaded manualy
-    ///
-    /// `enable_height_calc` should be enabled by default.
-    /// If it is enabled in mid game the maps have to loaded manually
-    fn init_new(&mut self) {
-        self.init_new_with_options(true, true)
-    }
-
-    fn init_new_with_options(&mut self, enable_line_of_sight_calc: bool, enable_height_calc: bool);
+pub trait VMapMgr: SystemParam {
     /// loadMap in TC / ACore
     fn load_map_tile(&self, p_base_path: &Path, p_map_id: u32, x: u16, y: u16) -> VmapFactoryLoadResult<()>;
     /// existsMap in TC / ACore

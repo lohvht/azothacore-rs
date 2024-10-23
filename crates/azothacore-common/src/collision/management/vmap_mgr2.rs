@@ -1,67 +1,153 @@
 use std::{
     collections::HashMap,
     ffi::OsStr,
+    io,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex, RwLock},
 };
 
+use bevy::{
+    app::{App, Startup},
+    asset::{io::Reader as BevyAssetIoReader, AssetApp, AssetLoader, AssetServer, Assets, AsyncReadExt, LoadContext},
+    ecs::system::SystemParam,
+    prelude::{EventWriter, Handle, IntoSystemConfigs, Res, ResMut, Resource, SystemSet},
+};
 use flagset::FlagSet;
 use tracing::{debug, error, instrument};
 
 use crate::{
-    collision::{
-        management::VMapMgrTrait,
-        maps::map_tree::StaticMapTree,
-        models::{model_instance::ModelInstance, world_model::WorldModel},
-    },
+    bevy_app::{az_startup_succeeded, AzStartupFailedEvent},
+    collision::{management::VMapMgr, maps::map_tree::StaticMapTree, models::world_model::WorldModel},
+    configuration::ConfigMgr,
     deref_boilerplate,
     utils::buffered_file_open,
+    AzError,
+    ChildMapData,
     MapLiquidTypeFlag,
+    ParentMapData,
 };
 
-pub type VmapInstanceMapTrees = HashMap<u32, Option<Arc<RwLock<StaticMapTree>>>>;
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct VMapManager2InitSet;
 
-pub struct VMapMgr2<'liq, 'vd> {
-    enable_line_of_sight_calc: bool,
-    enable_height_calc:        bool,
-    pub get_liquid_flags:      Arc<dyn Fn(u32) -> FlagSet<MapLiquidTypeFlag> + Send + Sync + 'liq>,
-    pub is_vmap_disabled_for:  Arc<dyn Fn(u32, u8) -> bool + Send + Sync + 'vd>,
-
-    /// the caller must pass the list of all mapIds that will be used in the VMapManager2 lifetime
-
-    /// Tree to check collision
-    model_store:        Arc<Mutex<VMapModelStore>>,
-    /// Child map data, containings map_ids to their children IDs.
-    child_map_data:     HashMap<u32, Vec<u32>>,
-    /// Parent map data, containings map_ids to their parent ID.
-    parent_map_data:    Arc<HashMap<u32, u32>>,
-    instance_map_trees: Arc<RwLock<VmapInstanceMapTrees>>,
+pub fn vmap_mgr2_plugin<C, L, V>(app: &mut App)
+where
+    C: VmapConfig,
+    L: LiquidFlagsGetter,
+    V: VmapDisabledChecker,
+{
+    app.insert_resource(VmapInstanceMapTrees(HashMap::default()))
+        .init_asset::<WorldModel>()
+        .init_asset_loader::<WorldModelAssetLoader>()
+        .add_systems(
+            Startup,
+            vmap_mgr2_init_check::<C, L, V>.run_if(az_startup_succeeded()).in_set(VMapManager2InitSet),
+        );
 }
 
-impl<'liq, 'vd> Default for VMapMgr2<'liq, 'vd> {
-    fn default() -> Self {
-        let mut s = Self {
-            enable_line_of_sight_calc: true,
-            enable_height_calc:        true,
-            get_liquid_flags:          Arc::new(|_| None.into()),
-            is_vmap_disabled_for:      Arc::new(|_, _| false),
-            child_map_data:            HashMap::new(),
-            parent_map_data:           Arc::new(HashMap::new()),
-            instance_map_trees:        Arc::new(RwLock::new(HashMap::new())),
-            model_store:               Default::default(),
-        };
-        s.init_new();
-        s
+fn vmap_mgr2_init_check<C: VmapConfig, L: LiquidFlagsGetter, V: VmapDisabledChecker>(
+    cfg: Option<Res<ConfigMgr<C>>>,
+    liq_flags_getter: Option<Res<L>>,
+    vmap_disabled_checker: Option<Res<V>>,
+    child_map_data: Option<Res<ChildMapData>>,
+    parent_map_data: Option<Res<ParentMapData>>,
+    mut ev_startup_failed: EventWriter<AzStartupFailedEvent>,
+) {
+    let mut missing_resources = vec![];
+    if cfg.is_none() {
+        missing_resources.push("ConfigMgr");
+    }
+    if liq_flags_getter.is_none() {
+        missing_resources.push("LiquidFlagsGetter");
+    }
+    if vmap_disabled_checker.is_none() {
+        missing_resources.push("VMapDisableChecker");
+    }
+    if child_map_data.is_none() {
+        missing_resources.push("ChildMapData");
+    }
+    if parent_map_data.is_none() {
+        missing_resources.push("ParentMapData");
+    }
+
+    if !missing_resources.is_empty() {
+        ev_startup_failed.send_default();
+        error!(
+            missing = ?missing_resources,
+            "required resources needed for Vmap management. Possible programming error?"
+        );
     }
 }
 
-#[derive(Default)]
-pub struct VMapModelStore {
-    /// Tree to check collision
-    loaded_model_files: HashMap<String, Arc<WorldModel>>,
+pub trait VmapConfig: Send + Sync + 'static {
+    fn vmaps_dir(&self) -> PathBuf;
+
+    fn enable_line_of_sight_calc(&self) -> bool {
+        true
+    }
+    fn enable_height_calc(&self) -> bool {
+        true
+    }
 }
 
-deref_boilerplate!(VMapModelStore, HashMap<String, Arc<WorldModel>>, loaded_model_files);
+pub trait LiquidFlagsGetter: Resource {
+    fn get_liquid_flags(&self, _liquid_type_id: u32) -> FlagSet<MapLiquidTypeFlag> {
+        None.into()
+    }
+}
+
+pub trait VmapDisabledChecker: Resource {
+    /// DisableMgr::IsVMAPDisabledFor in TC/AC
+    fn is_vmap_disabled_for(&self, _entry: u32, _flags: u8) -> bool {
+        false
+    }
+}
+
+/// The resource that contains vmap management stuff
+#[derive(SystemParam)]
+pub struct VMapMgr2<'w, C, L, V>
+where
+    C: VmapConfig,
+    L: LiquidFlagsGetter,
+    V: VmapDisabledChecker,
+{
+    pub helper:         VMapMgr2Helper<'w, C, L, V>,
+    /// Tree to check collision
+    pub model_store:    VMapModelStore<'w, C>,
+    /// iInstanceMapTrees in TC/AC.
+    instance_map_trees: ResMut<'w, VmapInstanceMapTrees>,
+}
+
+#[derive(Resource)]
+struct VmapInstanceMapTrees(HashMap<u32, StaticMapTree>);
+
+deref_boilerplate!(VmapInstanceMapTrees, HashMap<u32, StaticMapTree>, 0);
+
+/// Helper for vmapmgr2 => Generally contains things that don't require exclusive (i.e. mutable) access
+#[derive(SystemParam)]
+pub struct VMapMgr2Helper<'w, C, L, V>
+where
+    C: VmapConfig,
+    L: LiquidFlagsGetter,
+    V: VmapDisabledChecker,
+{
+    pub cfg_mgr:             Res<'w, ConfigMgr<C>>,
+    pub liquid_flags_getter: Res<'w, L>,
+    _vmap_disabled_checker:  Res<'w, V>,
+    /// Child map data, containings map_ids to their children IDs.
+    _child_map_data:         Res<'w, ChildMapData>,
+    /// Parent map data, containings map_ids to their parent ID.
+    pub parent_map_data:     Res<'w, ParentMapData>,
+}
+
+#[derive(SystemParam)]
+pub struct VMapModelStore<'w, C>
+where
+    C: VmapConfig,
+{
+    cfg_mgr:                Res<'w, ConfigMgr<C>>,
+    pub loaded_model_files: ResMut<'w, Assets<WorldModel>>,
+    asset_loader:           Res<'w, AssetServer>,
+}
 
 /// pushes an extension to the path, making `ext` the new extension
 fn push_extension<P: AsRef<Path>, E: AsRef<OsStr>>(path: P, ext: E) -> PathBuf {
@@ -77,22 +163,25 @@ fn push_extension<P: AsRef<Path>, E: AsRef<OsStr>>(path: P, ext: E) -> PathBuf {
     }
 }
 
-impl VMapModelStore {
-    pub fn acquire_model_instance<P: AsRef<Path>>(&mut self, base_path: P, filename: &str) -> Option<Arc<WorldModel>> {
-        if let Some(model) = self.loaded_model_files.get(filename) {
-            Some(model.clone())
+impl<'w, C> VMapModelStore<'w, C>
+where
+    C: VmapConfig,
+{
+    /// acquireModelInstance in TC/AC
+    pub fn acquire_model_instance(&mut self, filename: &str, load_async: bool) -> Option<Handle<WorldModel>> {
+        let path = push_extension(self.cfg_mgr.vmaps_dir().join(filename), "vmo");
+        if load_async {
+            Some(self.asset_loader.load(path))
+        } else if let Some(h) = self.asset_loader.get_handle(path.to_path_buf()) {
+            Some(h)
         } else {
-            let path = push_extension(base_path.as_ref().join(filename), "vmo");
             match buffered_file_open(&path) {
                 Err(e) => {
                     error!("misc: VMapMgr2: could not load {}; err {e}", path.display());
                     None
                 },
                 Ok(mut f) => match WorldModel::read_file(&mut f) {
-                    Ok(m) => {
-                        let r = self.loaded_model_files.entry(filename.to_string()).or_insert(Arc::new(m));
-                        Some(r.clone())
-                    },
+                    Ok(m) => Some(self.loaded_model_files.add(m)),
                     Err(e) => {
                         debug!("error trying to open world model file: {filename}; e: {e}");
                         None
@@ -101,128 +190,93 @@ impl VMapModelStore {
             }
         }
     }
+}
 
-    pub fn release_model_instance(&mut self, filename: &str) {
-        let should_remove = if let Some(m) = self.loaded_model_files.get(filename) {
-            Arc::strong_count(m) <= 1
-        } else {
-            error!("misc: VMapMgr2: trying to unload non-loaded file {filename}");
-            return;
-        };
+#[derive(Default)]
+pub struct WorldModelAssetLoader;
 
-        if should_remove {
-            debug!("misc: VMapMgr2: unloading file {filename}");
-            self.loaded_model_files.remove(filename);
-        }
+impl AssetLoader for WorldModelAssetLoader {
+    type Asset = WorldModel;
+    type Error = AzError;
+    type Settings = ();
+
+    async fn load<'a>(
+        &'a self,
+        reader: &'a mut BevyAssetIoReader<'_>,
+        _settings: &'a Self::Settings,
+        load_context: &'a mut LoadContext<'_>,
+    ) -> Result<Self::Asset, Self::Error> {
+        let mut bytes = vec![];
+        let filename = load_context.asset_path();
+        reader
+            .read_to_end(&mut bytes)
+            .await
+            .inspect_err(|e| error!("misc: could not load world model {filename}; err {e}"))?;
+        let mut cursor = io::Cursor::new(bytes.as_slice());
+        WorldModel::read_file(&mut cursor).inspect_err(|e| debug!("error trying to open world model file: {filename}; e: {e}"))
+    }
+
+    fn extensions(&self) -> &[&str] {
+        &["vmo"]
     }
 }
 
-impl<'liq, 'vd> VMapMgr2<'liq, 'vd> {
-    pub fn set_callbacks(
-        &mut self,
-        liq_cb: Arc<dyn Fn(u32) -> FlagSet<MapLiquidTypeFlag> + Send + Sync + 'liq>,
-        disable_cb: Arc<dyn Fn(u32, u8) -> bool + Send + Sync + 'vd>,
-    ) {
-        self.get_liquid_flags = liq_cb;
-        self.is_vmap_disabled_for = disable_cb;
-    }
-
-    /// named InitializeThreadUnsafe in TC.
-    /// Initialises the maps that should be loaded / unloaded.
-    pub fn set_map_data(&mut self, map_data: &HashMap<u32, Vec<u32>>) {
-        self.child_map_data = map_data.clone();
-        let mut parent_map_data = HashMap::new();
-        for (map_id, children_map_ids) in self.child_map_data.iter() {
-            self.instance_map_trees.write().unwrap().entry(*map_id).or_insert(None);
-            for child_map_id in children_map_ids.iter() {
-                parent_map_data.entry(*child_map_id).or_insert(*map_id);
-            }
-        }
-        self.parent_map_data = Arc::new(parent_map_data);
-    }
-
-    #[instrument(skip_all, fields(base_path=format!("{}", base_path.as_ref().display()), map_id = map_id))]
-    fn get_or_load_map_tree<P: AsRef<Path>>(&self, map_id: u32, base_path: P) -> super::VmapFactoryLoadResult<Arc<RwLock<StaticMapTree>>> {
-        let instance_tree = match self.instance_map_trees.write().unwrap().get_mut(&map_id) {
-            None => {
-                //TODO: go ahead with the panic for now mimicking `!thread_safe_environment` in TC/ Acore
-                // because Map Data map require reading from child trees too.
-                panic!("Invalid map_id {map_id} passed to VMapMgr2 after startup");
-            },
-            Some(it) => {
-                if it.is_none() {
-                    let new_tree = StaticMapTree::init_from_file(&base_path, map_id)
-                        .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tree: {}", e)))?;
-                    *it = Some(Arc::new(RwLock::new(new_tree)))
-                }
-                it.clone().unwrap_or_else(|| {
-                    panic!(
-                        "expect instance tree to be loaded by this point: map {map_id}; path: {}",
-                        base_path.as_ref().display(),
-                    )
-                })
-            },
-        };
-        Ok(instance_tree)
-    }
-
+impl<'w, C, L, V> VMapMgr2<'w, C, L, V>
+where
+    C: VmapConfig,
+    L: LiquidFlagsGetter,
+    V: VmapDisabledChecker,
+{
     /// load one tile (internal use only)
-    /// loadSingleMap in TC
-    #[instrument(skip_all, fields(base_path=format!("{}", base_path.as_ref().display()), tile = format!("[Map {map_id:04}] [{tile_x:02},{tile_y:02}]")))]
-    pub fn load_single_map_tile<P: AsRef<Path>>(
-        &self,
-        map_id: u32,
-        base_path: P,
-        tile_x: u16,
-        tile_y: u16,
-    ) -> super::VmapFactoryLoadResult<Vec<Arc<ModelInstance>>> {
-        let model_store = self.model_store.clone();
-        let parent_map_data = self.parent_map_data.clone();
-        let instance_tree = self.get_or_load_map_tree(map_id, base_path)?;
+    /// loadSingleMap in TC / _loadMap or loadMap in AC
+    ///
+    #[instrument(skip_all, fields(tile = format!("[Map {map_id:04}] [{tile_x:02},{tile_y:02}]")))]
+    pub fn load_single_map_tile(&mut self, map_id: u32, tile_x: u16, tile_y: u16, load_async: bool) -> super::VmapFactoryLoadResult<&StaticMapTree> {
+        let tree = match self.instance_map_trees.get_mut(&map_id) {
+            None => {
+                let t = StaticMapTree::init_from_file(self.helper.cfg_mgr.vmaps_dir(), map_id)
+                    .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tree: {}", e)))?;
 
-        let mut i_w = instance_tree.write().unwrap();
-        i_w.load_map_tile(tile_x, tile_y, parent_map_data, model_store)
+                self.instance_map_trees.entry(map_id).or_insert(t)
+            },
+            Some(i) => i,
+        };
+
+        tree.load_map_tile(tile_x, tile_y, &self.helper, &mut self.model_store, load_async)
             .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tile: {}", e)))?;
-        Ok(i_w.get_tile_model_instances(tile_x, tile_y))
+
+        let tree = self
+            .instance_map_trees
+            .get(&map_id)
+            .expect("after successful load map tile the tree must definitely exist");
+        Ok(tree)
     }
 
     // unloadSingleMap in TC
-    pub fn unload_single_map_tile(&self, map_id: u32, tile_x: u16, tile_y: u16) {
-        let model_store = self.model_store.clone();
-        let parent_map_data = self.parent_map_data.clone();
-        if let Some(instance_tree) = self.instance_map_trees.write().unwrap().get_mut(&map_id) {
-            let remove_tree = if let Some(itree) = instance_tree {
-                let mut itree_w = itree.write().unwrap();
-                itree_w.unload_map_tile(tile_x, tile_y, model_store, parent_map_data);
-                itree_w.has_no_loaded_tiles()
-            } else {
-                true
-            };
-            if remove_tree {
-                *instance_tree = None;
-            }
+    pub fn unload_single_map_tile(&mut self, map_id: u32, tile_x: u16, tile_y: u16) {
+        let remove_tree = if let Some(instance_tree) = self.instance_map_trees.get_mut(&map_id) {
+            instance_tree.unload_map_tile(tile_x, tile_y, &self.helper);
+            instance_tree.has_no_loaded_values()
+        } else {
+            false
+        };
+
+        if remove_tree {
+            self.instance_map_trees.remove(&map_id);
         }
     }
 
-    pub fn get_parent_map_id(&self, map_id: u32) -> Option<u32> {
-        self.parent_map_data.get(&map_id).cloned()
+    pub fn instance_map_tree(&self, map_id: u32) -> Option<&StaticMapTree> {
+        self.instance_map_trees.get(&map_id)
     }
 }
 
-impl<'liq, 'vd> VMapMgrTrait for VMapMgr2<'liq, 'vd> {
-    // fn as_any(&self) -> &dyn Any {
-    //     self
-    // }
-
-    // fn as_any_mut(&mut self) -> &mut dyn Any {
-    //     self
-    // }
-
-    fn init_new_with_options(&mut self, enable_line_of_sight_calc: bool, enable_height_calc: bool) {
-        self.enable_line_of_sight_calc = enable_line_of_sight_calc;
-        self.enable_height_calc = enable_height_calc;
-    }
-
+impl<'w, C, L, V> VMapMgr for VMapMgr2<'w, C, L, V>
+where
+    C: VmapConfig,
+    L: LiquidFlagsGetter,
+    V: VmapDisabledChecker,
+{
     fn load_map_tile(&self, _p_base_path: &Path, _p_map_id: u32, _x: u16, _y: u16) -> super::VmapFactoryLoadResult<()> {
         todo!()
     }
@@ -271,7 +325,8 @@ impl<'liq, 'vd> VMapMgrTrait for VMapMgr2<'liq, 'vd> {
         _rz: &mut f32,
         _p_modify_dist: f32,
     ) -> bool {
-        let _a = (self.get_liquid_flags)(3);
+        // self.get_liquid_level(p_map_id, x, y, z, req_liquid_type, level, floor, typ)
+        // let _a = (self.get_liquid_flags)(3);
         todo!()
     }
 

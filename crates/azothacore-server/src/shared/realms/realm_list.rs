@@ -18,7 +18,7 @@ use azothacore_database::{
     params,
     DbDriver,
 };
-use bevy::prelude::*;
+use bevy::prelude::{App, Commands, IntoSystemConfigs, Real, Res, ResMut, Resource, Startup, SystemSet, Time, Timer, TimerMode, Update};
 use flagset::FlagSet;
 use futures::StreamExt;
 use ipnet::IpNet;
@@ -347,7 +347,7 @@ pub struct RealmListStartSet;
 pub struct RealmListUpdateSet;
 
 pub fn realm_list_plugin<C: RealmListConfig>(app: &mut App) {
-    app.add_systems(Startup, init_realm_list::<C>.run_if(resource_exists::<ConfigMgr<C>>).in_set(RealmListStartSet))
+    app.add_systems(Startup, init_realm_list::<C>.in_set(RealmListStartSet))
         .add_systems(Update, update_realmlists.run_if(az_startup_succeeded()).in_set(RealmListUpdateSet));
 }
 

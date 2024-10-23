@@ -1,5 +1,4 @@
-use std::sync::Arc;
-
+use bevy::asset::Handle as AssetHandle;
 use flagset::{flags, FlagSet};
 use nalgebra::{Matrix3, Vector3};
 use parry3d::bounding_volume::Aabb;
@@ -73,13 +72,13 @@ pub struct ModelInstance {
     pub spawn:     VmapModelSpawn,
     pub inv_scale: f32,
     pub inv_rot:   Matrix3<f32>,
-    pub model:     Arc<WorldModel>,
+    pub model:     AssetHandle<WorldModel>,
 }
 
 deref_boilerplate!(ModelInstance, VmapModelSpawn, spawn);
 
 impl ModelInstance {
-    pub fn new(spawn: VmapModelSpawn, model: Arc<WorldModel>) -> Self {
+    pub fn new(spawn: VmapModelSpawn, model: AssetHandle<WorldModel>) -> Self {
         let inv_rot = matrix3_from_euler_angles_zyx(spawn.i_rot.y.to_radians(), spawn.i_rot.x.to_radians(), spawn.i_rot.z.to_radians())
             .try_inverse()
             .unwrap();

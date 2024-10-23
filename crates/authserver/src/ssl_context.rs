@@ -6,12 +6,12 @@ use std::{
 };
 
 use azothacore_common::{bevy_app::AzStartupFailedEvent, configuration::ConfigMgr, deref_boilerplate, AzResult, CONF_DIR};
-use bevy::prelude::*;
+use bevy::prelude::{App, Commands, EventWriter, IntoSystemConfigs, Res, Resource, Startup, SystemSet};
 use tokio_native_tls::{
     native_tls::{self, Identity},
     TlsAcceptor,
 };
-use tracing::debug;
+use tracing::{debug, error};
 
 #[derive(Resource, Clone)]
 pub struct SslContext(Arc<TlsAcceptor>);
@@ -57,5 +57,5 @@ fn init_ssl_context<C: SslContextConfig>(mut commands: Commands, cfg: Res<Config
 pub struct SetSslContextSet;
 
 pub fn ssl_context_plugin<C: SslContextConfig>(app: &mut App) {
-    app.add_systems(Startup, init_ssl_context::<C>.run_if(resource_exists::<ConfigMgr<C>>).in_set(SetSslContextSet));
+    app.add_systems(Startup, init_ssl_context::<C>.in_set(SetSslContextSet));
 }

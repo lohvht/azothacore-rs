@@ -39,7 +39,7 @@ mod hotfix_db {
 }
 
 use azothacore_common::deref_boilerplate;
-use bevy::prelude::*;
+use bevy::prelude::Resource;
 pub use character_db::HugSql as CharacterPreparedStmts;
 pub use hotfix_db::HugSql as HotfixPreparedStmts;
 pub use login_db::HugSql as LoginPreparedStmts;

@@ -3,7 +3,7 @@ use azothacore_server::game::{
     scripting::script_mgr::{ScriptMgr, ScriptObjectSystems, WorldScriptSystems},
     world::WorldConfig,
 };
-use bevy::prelude::*;
+use bevy::prelude::{In, IntoSystem, Res, System, World};
 use serde::{Deserialize, Serialize};
 #[derive(Deserialize, Serialize, Clone, Debug)]
 struct MyConfig {
@@ -23,7 +23,7 @@ impl WorldScriptSystems for MyWorld {
     }
 }
 
-pub fn init(bevy_world: &mut bevy::prelude::World, script_mgr: &mut ScriptMgr) {
+pub fn init(bevy_world: &mut World, script_mgr: &mut ScriptMgr) {
     let script = MyWorld {};
 
     script_mgr.register_world_script(bevy_world, script);

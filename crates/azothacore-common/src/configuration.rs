@@ -6,12 +6,12 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use tracing::error;
+use bevy::prelude::{App, Commands, Event, EventReader, EventWriter, FixedUpdate, IntoSystemConfigs, PreStartup, ResMut, Resource, SystemSet};
+use tracing::{error, warn};
 
 #[allow(non_snake_case)]
 mod structs;
 
-use bevy::prelude::*;
 pub use structs::*;
 
 use crate::{
@@ -131,7 +131,7 @@ impl<C> Eq for ConfigMgrSet<C> {}
 /// reload their config file. This is reload will be done during the [FixedUpdate]
 /// schedule and a corresponding [ConfigReloadFinishedEvent<C>] will be emitted
 /// to show that a reload was attempted successfully
-pub fn config_mgr_plugin<C, P>(init_file_name: P, dry_run: bool) -> impl Fn(&mut bevy::prelude::App)
+pub fn config_mgr_plugin<C, P>(init_file_name: P, dry_run: bool) -> impl Fn(&mut App)
 where
     C: Config,
     P: AsRef<Path>,
@@ -205,7 +205,7 @@ impl<C> ConfigMgr<C>
 where
     C: Config,
 {
-    fn reload_from_path(&mut self) -> AzResult<()> {
+    pub fn reload_from_path(&mut self) -> AzResult<()> {
         let new = C::load(&self.filename)?;
         self.config.reload(new);
         Ok(())
@@ -216,6 +216,7 @@ where
 mod tests {
     use std::{thread::sleep, time::Duration};
 
+    use bevy::prelude::{Component, IntoSystemConfigs, IntoSystemSetConfigs, Res, State, Update};
     use figment::Jail;
     use serde::{Deserialize, Serialize};
     use serde_default::DefaultFromSerde;
@@ -239,10 +240,10 @@ mod tests {
             jail.create_file(cfg_path, "integer = 3")?;
 
             let mut app = bevy_app();
-            assert!(app.world.get_resource::<ConfigMgr<TestConfig>>().is_none());
+            assert!(app.world().get_resource::<ConfigMgr<TestConfig>>().is_none());
             app.add_plugins(config_mgr_plugin::<TestConfig, _>(cfg_path, false));
             app.update();
-            assert_eq!(app.world.resource::<ConfigMgr<TestConfig>>().integer, 3);
+            assert_eq!(app.world().resource::<ConfigMgr<TestConfig>>().integer, 3);
             Ok(())
         });
     }
@@ -258,20 +259,20 @@ mod tests {
                     snd.try_send("Reloaded".to_string()).unwrap();
                 }
             };
-            assert!(app.world.get_resource::<ConfigMgr<TestConfig>>().is_none());
+            assert!(app.world().get_resource::<ConfigMgr<TestConfig>>().is_none());
             app.add_plugins(config_mgr_plugin::<TestConfig, _>(cfg_path, false))
                 .add_systems(Update, closure);
             app.update();
-            assert_eq!(app.world.resource::<ConfigMgr<TestConfig>>().integer, 0);
+            assert_eq!(app.world().resource::<ConfigMgr<TestConfig>>().integer, 0);
 
             jail.create_file(cfg_path, "integer = 3")?;
 
-            app.world.send_event(ConfigReloadEvent);
+            app.world_mut().send_event(ConfigReloadEvent);
             // Simulate fixed update
             sleep(Duration::from_secs_f64(2.0 / DEFAULT_FRAME_RATE));
             app.update();
             let res = rcv.try_recv().unwrap();
-            assert_eq!(app.world.resource::<ConfigMgr<TestConfig>>().integer, 3);
+            assert_eq!(app.world().resource::<ConfigMgr<TestConfig>>().integer, 3);
             assert_eq!(res, "Reloaded");
 
             Ok(())
@@ -290,9 +291,9 @@ mod tests {
             .run_if(az_startup_succeeded()),
         );
 
-        assert_eq!(*app.world.resource::<State<AzStartupState>>().get(), AzStartupState::Succeeded);
+        assert_eq!(*app.world().resource::<State<AzStartupState>>().get(), AzStartupState::Succeeded);
         app.update();
-        assert_eq!(*app.world.resource::<State<AzStartupState>>().get(), AzStartupState::DryRun);
+        assert_eq!(*app.world().resource::<State<AzStartupState>>().get(), AzStartupState::DryRun);
         let err = rcv.try_recv();
         assert_eq!(err, Err(TryRecvError::Empty));
     }
@@ -339,7 +340,7 @@ mod tests {
             .configure_sets(PreStartup, ConfigMgrSet::<TestConfig>::load_initial().before(ClosureSet));
 
         app.update();
-        let eref = app.world.entity(rcv.try_recv().unwrap()).get::<A>().unwrap().0;
+        let eref = app.world().entity(rcv.try_recv().unwrap()).get::<A>().unwrap().0;
         assert_eq!(eref, 2);
     }
 }

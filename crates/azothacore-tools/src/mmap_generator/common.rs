@@ -2,6 +2,7 @@ use std::{collections::BTreeMap, fs, path::Path};
 
 use azothacore_common::{recastnavigation_handles::DetourNavMeshParams, AzResult};
 use azothacore_server::game::grid::grid_defines::{ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE, SIZE_OF_GRIDS};
+use bevy::prelude::Component;
 use nalgebra::Vector6;
 use recastnavigation_sys::rcCalcBounds;
 
@@ -32,6 +33,7 @@ pub fn get_tile_bounds(tile_x: u16, tile_y: u16, verts: &[f32], bmin: &mut [f32;
     bmin[2] = bmax[2] - GRID_SIZE;
 }
 
+#[derive(Debug, Component)]
 pub struct TileInfo {
     pub map_id:          u32,
     pub tile_x:          u16,
@@ -71,7 +73,7 @@ pub fn load_off_mesh_connections<P: AsRef<Path>>(map_id: u32, tile_x: u16, tile_
 // see following files:
 // contrib/extractor/system.cpp
 // src/game/Map.cpp
-#[derive(Default)]
+#[derive(Component, Clone, Default)]
 pub struct MeshData {
     pub solid_verts: Vec<f32>,
     pub solid_tris:  Vec<i32>,

@@ -34,6 +34,14 @@ pub fn from_env_toml<C: serde::de::DeserializeOwned, P: AsRef<Path>>(filepath: P
     })?)
 }
 
+pub trait DataDirConfig {
+    fn db2_dir(&self) -> PathBuf;
+    fn cameras_dir(&self) -> PathBuf;
+    fn gt_dir(&self) -> PathBuf;
+    fn maps_dir(&self) -> PathBuf;
+    fn mmaps_dir(&self) -> PathBuf;
+}
+
 #[derive(Deserialize, Serialize, Clone, Copy, Debug, Hash, PartialEq, PartialOrd, Ord, Eq)]
 pub enum LogLevel {
     Disabled = 0,

@@ -297,7 +297,7 @@ impl VmapExtractor {
         info!("Extracting GameObject models...");
 
         let source = storage.open_file("DBFilesClient/GameObjectDisplayInfo.db2", CascLocale::None.into())?;
-        let db2 = wdc1::FileLoader::<GameObjectDisplayInfo>::from_reader(source, locale as u32)?;
+        let db2 = wdc1::FileLoader::<GameObjectDisplayInfo>::from_reader(source, locale)?;
         let recs = db2.produce_data()?;
         let mut model_list = io::BufWriter::new(fs::File::options().append(true).open(&self.gameobject_models_tmp)?);
 
@@ -443,7 +443,7 @@ impl VmapExtractor {
         if let Some(wdt) = wdts.get(&map_id) {
             return Some(wdt.clone());
         }
-        let name = maps.get(&map_id).unwrap().directory.def_str();
+        let name = &maps.get(&map_id).unwrap().directory;
         let storage_path = format!("World/Maps/{name}/{name}.wdt");
         let wdt = match WDTFile::build(storage, &storage_path) {
             Err(_e) => {
@@ -487,7 +487,7 @@ impl VmapExtractor {
             }
         }
         let wdt = wdts.entry(map_id).or_insert(Arc::new(Mutex::new(WdtWithAdts {
-            map_name: name,
+            map_name: name.to_string(),
             _wdt: wdt,
             adt_cache,
         })));
@@ -505,7 +505,7 @@ impl VmapExtractor {
         //map.dbc
         info!("Read Map.dbc file...");
         let source = storage.open_file("DBFilesClient/Map.db2", CascLocale::None.into())?;
-        let db2 = wdc1::FileLoader::<Map>::from_reader(source, locale as u32)?;
+        let db2 = wdc1::FileLoader::<Map>::from_reader(source, locale)?;
         let maps = db2.produce_data()?.map(|r| (r.id, r)).collect::<BTreeMap<_, _>>();
         let maps_that_are_parents = maps.iter().filter_map(|(_, m)| if m.parent_map_id >= 0 { Some(m.parent_map_id.try_into().unwrap()) } else { None } ).collect();
         let maps_len = maps.len();
@@ -521,7 +521,7 @@ impl VmapExtractor {
                     None
                 };
                 let map_id = map.id;
-                let map_name = map.directory.def_str();
+                let map_name = &map.directory;
                 // After populating, then process ADTs
                 info!("[{i}/{maps_len}] - Processing Map file {map_id} - {map_name}");
                 for x in 0..WDT_MAP_SIZE {

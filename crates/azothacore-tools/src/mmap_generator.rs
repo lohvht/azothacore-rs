@@ -1,17 +1,25 @@
-use std::{collections::HashMap, fs, io, sync::Arc, time::Instant};
+use std::{collections::HashMap, fs, io, path::Path};
 
-use azothacore_common::{collision::management::vmap_mgr2::VMapMgr2, utils::buffered_file_open, AzResult, Locale};
+use azothacore_common::{
+    bevy_app::bevy_app,
+    collision::management::vmap_mgr2::{vmap_mgr2_plugin, VMapManager2InitSet, VmapConfig},
+    configuration::{config_mgr_plugin, Config},
+    utils::buffered_file_open,
+    AzResult,
+    ChildMapData,
+    Locale,
+    ParentMapData,
+};
 use azothacore_server::{
     game::map::MapLiquidTypeFlag,
     shared::data_stores::db2_structure::{LiquidType, Map},
 };
+use bevy::{app::Startup, prelude::IntoSystemSetConfigs};
+use map_builder::{mmap_generator_plugin, LiquidTypes, MmapGenerationSets, VmapNotDisabled};
 use tracing::{info, warn};
 use wow_db2::wdc1;
 
-use crate::{
-    extractor_common::{get_dir_contents, ExtractorConfig, MapIdTileXY},
-    mmap_generator::map_builder::MapBuilder,
-};
+use crate::extractor_common::{get_dir_contents, ExtractorConfig};
 mod common;
 mod intermediate_values;
 mod map_builder;
@@ -54,25 +62,44 @@ fn check_directories(args: &ExtractorConfig, first_installed_locale: Locale) -> 
     Ok(())
 }
 
-pub fn main_path_generator(args: &ExtractorConfig, first_installed_locale: Locale) -> AzResult<()> {
+impl Config for ExtractorConfig {}
+
+impl VmapConfig for ExtractorConfig {
+    fn enable_height_calc(&self) -> bool {
+        true
+    }
+
+    fn enable_line_of_sight_calc(&self) -> bool {
+        true
+    }
+
+    fn vmaps_dir(&self) -> std::path::PathBuf {
+        self.output_vmap_output_path()
+    }
+}
+
+pub fn main_path_generator<P: AsRef<Path>>(cfg_file: P, args: &ExtractorConfig, first_installed_locale: Locale) -> AzResult<()> {
     if args.mmap_path_generator.map_id_tile_x_y.is_none() && args.mmap_path_generator.debug_output {
         warn!("You have specifed debug output, but didn't specify a map to generate. This will generate debug output for ALL maps.");
     }
     check_directories(args, first_installed_locale)?;
 
     let liquid_source = buffered_file_open(args.output_dbc_path(first_installed_locale).join("LiquidType.db2"))?;
-    let db2 = wdc1::FileLoader::<LiquidType>::from_reader(liquid_source, first_installed_locale as u32)?;
+    let db2 = wdc1::FileLoader::<LiquidType>::from_reader(liquid_source, first_installed_locale)?;
     let liquid_types = db2.produce_data()?;
 
     let map_source = buffered_file_open(args.output_dbc_path(first_installed_locale).join("Map.db2"))?;
-    let db2 = wdc1::FileLoader::<Map>::from_reader(map_source, first_installed_locale as u32)?;
+    let db2 = wdc1::FileLoader::<Map>::from_reader(map_source, first_installed_locale)?;
     let map_data = db2.produce_data()?;
     let mut map_id_to_child_map_ids = HashMap::new();
+    let mut parent_map_data = HashMap::new();
     for m in map_data {
         map_id_to_child_map_ids.entry(m.id).or_insert(vec![]);
         if m.parent_map_id >= 0 {
-            let child_entries = map_id_to_child_map_ids.entry(m.parent_map_id.try_into().unwrap()).or_default();
+            let parent_id = u32::try_from(m.parent_map_id).unwrap();
+            let child_entries = map_id_to_child_map_ids.entry(parent_id).or_default();
             child_entries.push(m.id);
+            parent_map_data.entry(m.id).or_insert(parent_id);
         }
     }
 
@@ -80,36 +107,20 @@ pub fn main_path_generator(args: &ExtractorConfig, first_installed_locale: Local
         .map(|t| (t.id, MapLiquidTypeFlag::from_liquid_type_sound_bank_unchecked(t.sound_bank)))
         .collect::<HashMap<_, _>>();
 
-    let mut vmgr2 = VMapMgr2::default();
-    vmgr2.set_map_data(&map_id_to_child_map_ids);
-    vmgr2.set_callbacks(
-        Arc::new(move |liq_id| {
-            let ret = liquid_types.get(&liq_id).map_or_else(|| None.into(), |liq_sound_bank| *liq_sound_bank);
+    let mut app = bevy_app();
+    app.insert_resource(ChildMapData(map_id_to_child_map_ids))
+        .insert_resource(ParentMapData(parent_map_data))
+        .insert_resource(VmapNotDisabled)
+        .insert_resource(LiquidTypes(liquid_types))
+        .add_plugins((
+            config_mgr_plugin::<ExtractorConfig, _>(cfg_file.as_ref().to_path_buf(), false),
+            vmap_mgr2_plugin::<ExtractorConfig, LiquidTypes, VmapNotDisabled>,
+            mmap_generator_plugin,
+        ))
+        .configure_sets(Startup, VMapManager2InitSet.before(MmapGenerationSets::DiscoverAndGenerateTilesToWork));
 
-            ret
-        }),
-        Arc::new(|_, _| false),
-    );
-
-    let builder = MapBuilder::build(args, vmgr2)?;
-
-    let start = Instant::now();
-    if let Some(file) = &args.mmap_path_generator.file {
-        builder.build_mesh_from_file(file)?;
-    } else if let Some(MapIdTileXY {
-        map_id,
-        tile_x_y: Some((tile_x, tile_y)),
-    }) = args.mmap_path_generator.map_id_tile_x_y
-    {
-        builder.build_single_tile(map_id, tile_x, tile_y)?;
-    } else if let Some(MapIdTileXY { map_id, .. }) = args.mmap_path_generator.map_id_tile_x_y {
-        builder.build_maps(Some(map_id))?;
-    } else {
-        builder.build_maps(None)?;
-    }
-    let time_run = start.elapsed();
-
-    info!("Finished. MMAPS were built in {}s", time_run.as_secs());
+    let exit = app.run();
+    info!("Generate Mmap done: {exit:?}");
 
     Ok(())
 }

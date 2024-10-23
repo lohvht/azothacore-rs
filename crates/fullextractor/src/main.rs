@@ -48,7 +48,8 @@ fn full_extractor_log_cfg() -> (Vec<LogAppender>, Vec<LogLoggerConfig>) {
 
 fn main() -> AzResult<()> {
     let (las, lcfgs) = full_extractor_log_cfg();
-    let args: ExtractorConfig = from_env_toml(Path::new(CONF_DIR).join(AZOTHA_FULL_EXTRACTOR_CONFIG))?;
+    let p = Path::new(CONF_DIR).join(AZOTHA_FULL_EXTRACTOR_CONFIG);
+    let args: ExtractorConfig = from_env_toml(&p)?;
     let _wg = log::init(&args.logs_dir, &las, &lcfgs);
 
     banner::azotha_banner_show("Azothacore Full Extractor", || {
@@ -121,7 +122,7 @@ fn main() -> AzResult<()> {
 
     if args.run_stage_flags.contains(RunStagesFlag::MmapGeneration) {
         // Mmap generator
-        main_path_generator(&args, first_installed_locale)?;
+        main_path_generator(&p, &args, first_installed_locale)?;
 
         unsafe { libc::malloc_trim(0) };
     }

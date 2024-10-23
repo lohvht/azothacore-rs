@@ -4,7 +4,12 @@ use azothacore_common::{
     bevy_app::{az_startup_succeeded, AzStartupFailedEvent, TokioRuntime},
     configuration::ConfigMgr,
 };
-use bevy::{app::AppExit, ecs::system::CommandQueue, prelude::*, tasks::poll_once};
+use bevy::{
+    app::AppExit,
+    ecs::world::CommandQueue,
+    prelude::{App, Commands, Component, EventReader, EventWriter, IntoSystemConfigs, PostUpdate, Query, Res, Resource, Startup, SystemSet, Update},
+    tasks::poll_once,
+};
 use tokio::{
     net::{TcpListener, TcpStream, ToSocketAddrs},
     sync::{
@@ -186,19 +191,14 @@ where
     C: SocketMgrConfig<S>,
     S: ConnectionComponent,
 {
-    app.add_systems(
-        Startup,
-        start_network::<C, S>
-            .run_if(resource_exists::<ConfigMgr<C>>)
-            .in_set(SocketMgrStartNetworkSet::<C, S>::default()),
-    )
-    .add_systems(
-        Update,
-        receive_spawned_sockets::<S>
-            .run_if(az_startup_succeeded())
-            .in_set(SocketMgrSet::<C>::handle_received_socket()),
-    )
-    .add_systems(PostUpdate, handle_terminate_network::<S>.in_set(SocketMgrSet::<C>::network_termination()));
+    app.add_systems(Startup, start_network::<C, S>.in_set(SocketMgrStartNetworkSet::<C, S>::default()))
+        .add_systems(
+            Update,
+            receive_spawned_sockets::<S>
+                .run_if(az_startup_succeeded())
+                .in_set(SocketMgrSet::<C>::handle_received_socket()),
+        )
+        .add_systems(PostUpdate, handle_terminate_network::<S>.in_set(SocketMgrSet::<C>::network_termination()));
 }
 
 #[derive(Resource)]

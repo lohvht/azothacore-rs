@@ -1,10 +1,8 @@
 use std::{
-    collections::HashMap,
-    ffi::OsStr,
+    collections::{BTreeSet, HashMap},
     fmt::Display,
     io,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
 };
 
 use num::Num;
@@ -15,7 +13,7 @@ use crate::{
     az_error,
     cmp_or_return,
     collision::{
-        management::vmap_mgr2::VMapModelStore,
+        management::vmap_mgr2::{LiquidFlagsGetter, VMapMgr2Helper, VMapModelStore, VmapConfig, VmapDisabledChecker},
         models::model_instance::{ModelInstance, VmapModelSpawn},
         vmap_definitions::VMAP_MAGIC,
     },
@@ -24,82 +22,61 @@ use crate::{
     AzResult,
 };
 
-fn file_stem_if_ext_matched<P: AsRef<Path>>(p: P, extension_to_match: &str) -> AzResult<String> {
-    let file_stem = match p.as_ref().extension() {
-        Some(ext) if ext != extension_to_match => {
-            return Err(az_error!("Path has unexpected extension_to_match; p was {}", p.as_ref().display()));
-        },
-        Some(_ext) => match p.as_ref().with_extension("").file_stem().and_then(OsStr::to_str) {
-            None => {
-                return Err(az_error!("Path does not have a file_stem; p was {}", p.as_ref().display()));
-            },
-            Some(s) => s.to_string(),
-        },
-        None => {
-            return Err(az_error!("Path does not have an extension_to_match; p was {}", p.as_ref().display()));
-        },
-    };
-    Ok(file_stem)
-}
-
 pub struct StaticMapTree {
     map_id:        u32,
     _tree:         Qbvh<usize>,
     /// the tree entries
-    tree_values:   HashMap<usize, Arc<ModelInstance>>,
+    tree_values:   HashMap<usize, (ModelInstance, BTreeSet<(u16, u16)>)>,
     /// mapping between spawn IDs and BH indices
     spawn_indices: HashMap<u32, usize>,
-    /// Store all the map tile idents that are loaded for that map
-    /// some maps are not splitted into tiles and we have to make sure, not removing the map before all tiles are removed
-    /// empty tiles have no tile file, hence map with bool instead of just a set (consistency check)
-    loaded_tiles:  HashMap<(u16, u16), Vec<Arc<ModelInstance>>>,
-    // std::vector<std::pair<int32, int32>> iLoadedPrimaryTiles;
-    base_path:     PathBuf,
 }
 
 impl StaticMapTree {
     // equivalent of InitMap in TC
     pub fn init_from_file<P: AsRef<Path>>(base_path: P, map_id: u32) -> AzResult<Self> {
-        let fname = StaticMapTree::map_file_name(base_path.as_ref(), map_id);
+        let fname = Self::map_file_name(base_path.as_ref(), map_id);
         debug!("StaticMapTree::InitMap() : initializing StaticMapTree '{}'", fname.display());
 
         let mut input = buffered_file_open(&fname)?;
 
-        Self::init_from_reader(base_path.as_ref(), map_id, &mut input)
+        Self::init_from_reader(map_id, &mut input)
     }
 
-    fn init_from_reader<P: AsRef<Path>, R: io::Read>(base_path: P, map_id: u32, r: &mut R) -> AzResult<Self> {
-        let mut r = r;
+    fn init_from_reader<R: io::Read>(map_id: u32, mut r: &mut R) -> AzResult<Self> {
         let (_tree, spawn_indices) = Self::read_map_tree(&mut r)?;
         Ok(Self {
-            base_path: base_path.as_ref().to_owned(),
             map_id,
             _tree,
             tree_values: HashMap::new(),
             spawn_indices,
-            loaded_tiles: HashMap::new(),
         })
     }
 
-    pub fn load_map_tile(
+    /// LoadMapTile in TC / AC
+    pub fn load_map_tile<C, L, V>(
         &mut self,
         tile_x: u16,
         tile_y: u16,
-        parent_map_data: Arc<HashMap<u32, u32>>,
-        model_store: Arc<Mutex<VMapModelStore>>,
-    ) -> AzResult<()> {
+        vm_helper: &VMapMgr2Helper<C, L, V>,
+        vm_store: &mut VMapModelStore<C>,
+        load_async: bool,
+    ) -> AzResult<()>
+    where
+        C: VmapConfig,
+        L: LiquidFlagsGetter,
+        V: VmapDisabledChecker,
+    {
         let packed_id = (tile_x, tile_y);
         let TileFileOpenResult {
             spawns,
             name: file_result_name,
             used_map_id,
-        } = match Self::open_map_tile_spawns_file(&self.base_path, self.map_id, tile_x, tile_y, parent_map_data) {
+        } = match Self::open_map_tile_spawns_file(self.map_id, tile_x, tile_y, vm_helper) {
             Err(e) => {
                 debug!(
                     "Error opening map tile, map may or may not have a map tile - map_id {} [x:{}, y:{}] err {e}",
                     self.map_id, tile_x, tile_y
                 );
-                self.loaded_tiles.insert(packed_id, vec![]);
                 // TC_METRIC_EVENT("map_events", "LoadMapTile",
                 // "Map: " + std::to_string(iMapID) + " TileX: " + std::to_string(tileX) + " TileY: " + std::to_string(tileY));
                 return Err(e);
@@ -108,24 +85,18 @@ impl StaticMapTree {
         };
 
         let mut result = Ok(());
-        let loaded_tile_spawns = self.loaded_tiles.entry(packed_id).or_insert(Vec::with_capacity(spawns.len()));
         for spawn in spawns {
             // update tree
             if let Some(reference_val) = self.spawn_indices.get(&spawn.id) {
-                if let Some(m) = self.tree_values.get_mut(reference_val) {
-                    loaded_tile_spawns.push(m.clone());
+                if let Some((_, loaded_tiles)) = self.tree_values.get_mut(reference_val) {
+                    loaded_tiles.insert(packed_id);
                 } else {
                     // acquire model instance
-                    let model = match model_store.lock().unwrap().acquire_model_instance(&self.base_path, &spawn.name) {
-                        None => {
-                            error!("StaticMapTree::LoadMapTile() : could not acquire WorldModel pointer [{tile_x}, {tile_y}]");
-                            continue;
-                        },
-                        Some(m) => m,
+                    let Some(model) = vm_store.acquire_model_instance(&spawn.name, load_async) else {
+                        continue;
                     };
-                    let m = Arc::new(ModelInstance::new(spawn, model));
-                    loaded_tile_spawns.push(m.clone());
-                    self.tree_values.insert(*reference_val, m);
+                    let m = ModelInstance::new(spawn, model);
+                    self.tree_values.insert(*reference_val, (m, BTreeSet::from([packed_id])));
                 };
             } else if used_map_id == self.map_id {
                 // unknown parent spawn might appear in because it overlaps multiple tiles
@@ -145,47 +116,47 @@ impl StaticMapTree {
         result
     }
 
+    /// UnloadMapTile in TC/AC
     /// unload_map_tile unloads the map tile. returns if the resultant operation has resulted in no
     /// loaded trees
-    pub fn unload_map_tile(&mut self, tile_x: u16, tile_y: u16, model_store: Arc<Mutex<VMapModelStore>>, parent_map_data: Arc<HashMap<u32, u32>>) {
+    pub fn unload_map_tile<C, L, V>(&mut self, tile_x: u16, tile_y: u16, vm: &VMapMgr2Helper<C, L, V>)
+    where
+        C: VmapConfig,
+        L: LiquidFlagsGetter,
+        V: VmapDisabledChecker,
+    {
         let tile_id = (tile_x, tile_y);
-        // Drop the spawns in `loaded_tiles`
-        let had_tile_loaded = match self.loaded_tiles.remove(&tile_id) {
-            None => {
-                error!(
-                    "StaticMapTree::UnloadMapTile() : trying to unload non-loaded tile - Map:{} X:{} Y:{}",
-                    self.map_id, tile_x, tile_y
-                );
-                return;
-            },
-            Some(v) => !v.is_empty(),
-        };
         // file associated with tile
-        if had_tile_loaded {
-            if let Ok(TileFileOpenResult {
-                spawns,
-                name: _tile_file_name,
-                used_map_id,
-            }) = Self::open_map_tile_spawns_file(&self.base_path, self.map_id, tile_x, tile_y, parent_map_data)
-            {
-                for spawn in spawns {
-                    // update tree
-                    if let Some(reference_node) = self.spawn_indices.get(&spawn.id) {
-                        let count = self.tree_values.get(reference_node).map_or(0, Arc::strong_count);
-                        if count == 0 {
+        if let Ok(TileFileOpenResult {
+            spawns,
+            name: _tile_file_name,
+            used_map_id,
+        }) = Self::open_map_tile_spawns_file(self.map_id, tile_x, tile_y, vm)
+        {
+            for spawn in spawns {
+                // update tree
+                if let Some(reference_val) = self.spawn_indices.get(&spawn.id) {
+                    let mut remove_ref = false;
+                    match self.tree_values.get_mut(reference_val) {
+                        None => {
                             error!(
                                 "misc: StaticMapTree::UnloadMapTile() : trying to unload non-referenced model '{}' (ID:{})",
                                 spawn.name, spawn.id,
                             );
-                        } else if count == 1 {
-                            self.tree_values.remove(reference_node);
-                        }
-                        // release model instance
-                        model_store.lock().unwrap().release_model_instance(&spawn.name);
-                    } else if used_map_id == self.map_id {
-                        // logic documented in StaticMapTree::LoadMapTile
-                        break;
+                        },
+                        Some((_, loaded_tiles)) => {
+                            loaded_tiles.remove(&tile_id);
+                            if loaded_tiles.is_empty() {
+                                remove_ref = true;
+                            }
+                        },
                     }
+                    if remove_ref {
+                        self.tree_values.remove(reference_val);
+                    }
+                } else if used_map_id == self.map_id {
+                    // logic documented in StaticMapTree::LoadMapTile
+                    break;
                 }
             }
         }
@@ -193,21 +164,19 @@ impl StaticMapTree {
         //     "Map: " + std::to_string(iMapID) + " TileX: " + std::to_string(tileX) + " TileY: " + std::to_string(tileY));
     }
 
-    pub fn get_tile_model_instances(&self, tile_x: u16, tile_y: u16) -> Vec<Arc<ModelInstance>> {
-        self.loaded_tiles.get(&(tile_x, tile_y)).into_iter().flat_map(|v| v.iter().cloned()).collect()
+    pub fn tile_model_instances(&self, tile_x: u16, tile_y: u16) -> impl Iterator<Item = &ModelInstance> {
+        let tile_id = (tile_x, tile_y);
+        self.tree_values
+            .values()
+            .filter_map(move |(e, tiles)| if tiles.contains(&tile_id) { Some(e) } else { None })
     }
 
-    pub fn has_no_loaded_tiles(&self) -> bool {
-        self.loaded_tiles.is_empty()
+    pub fn has_no_loaded_values(&self) -> bool {
+        self.tree_values.is_empty()
     }
 
     pub fn map_file_name<P: AsRef<Path>, M: Num + Display>(dir: P, map_id: M) -> PathBuf {
         dir.as_ref().join(format!("{map_id:04}.vmtree"))
-    }
-
-    pub fn map_id_from_map_file_map<P: AsRef<Path>>(p: P) -> AzResult<u32> {
-        let map_id = (file_stem_if_ext_matched(p, "vmtree")?).parse::<u32>()?;
-        Ok(map_id)
     }
 
     pub fn get_tile_file_name<P, M, X, Y>(dir: P, map_id: M, x: X, y: Y) -> PathBuf
@@ -252,9 +221,7 @@ impl StaticMapTree {
         Ok(())
     }
 
-    pub fn read_map_tree<R: io::Read>(r: &mut R) -> AzResult<(Qbvh<usize>, HashMap<u32, usize>)> {
-        let mut r = r;
-
+    pub fn read_map_tree<R: io::Read>(mut r: &mut R) -> AzResult<(Qbvh<usize>, HashMap<u32, usize>)> {
         cmp_or_return!(r, VMAP_MAGIC)?;
         cmp_or_return!(r, b"NODE")?;
         let tree = bincode_deserialise(&mut r)?;
@@ -288,21 +255,23 @@ impl StaticMapTree {
         Ok(())
     }
 
-    fn open_map_tile_spawns_file<P>(dir: P, map_id: u32, x: u16, y: u16, parent_map_data: Arc<HashMap<u32, u32>>) -> AzResult<TileFileOpenResult>
+    fn open_map_tile_spawns_file<C, L, V>(map_id: u32, x: u16, y: u16, vm: &VMapMgr2Helper<C, L, V>) -> AzResult<TileFileOpenResult>
     where
-        P: AsRef<Path>,
+        C: VmapConfig,
+        L: LiquidFlagsGetter,
+        V: VmapDisabledChecker,
     {
         let mut tried_map_ids = vec![];
         let mut used_map_id = Some(&map_id);
         while let Some(map_id) = used_map_id {
-            let file_name = Self::get_tile_file_name(&dir, *map_id, x, y);
+            let file_name = Self::get_tile_file_name(vm.cfg_mgr.vmaps_dir(), *map_id, x, y);
             let spawns = match buffered_file_open(&file_name)
                 .map_err(|e| e.into())
                 .and_then(|mut f| Self::read_map_tile_spawns(&mut f))
             {
                 Err(_) => {
                     tried_map_ids.push(*map_id);
-                    used_map_id = parent_map_data.get(map_id);
+                    used_map_id = vm.parent_map_data.get(map_id);
                     continue;
                 },
                 Ok(m) => m,

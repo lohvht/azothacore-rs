@@ -9,8 +9,10 @@ use flagset::{flags, FlagSet};
 
 /// FromI128 attempts to convert i128 to the types that implement this
 /// and default to a sensible default if not possible.
+///
 /// For integral types implementing this, i128 is usually taken from the integer
 /// values.
+///
 /// For other types implementing this, we tend to use the bit-representation
 /// of i128 (ignoring its actual numerical value) instead.
 pub trait FromI128: Copy + PartialOrd + serde::de::DeserializeOwned {

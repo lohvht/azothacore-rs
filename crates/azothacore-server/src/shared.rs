@@ -141,7 +141,7 @@ fn try_receive_signal(
             info!(signal = sig, "Terminating due to receiving a stop signal");
         },
     };
-    app_exit_events.send(AppExit);
+    app_exit_events.send(AppExit::Success);
     // Not entirely necessary but this ensure that if the app has already ran the
     // app exit, we will forcefully panic instead.
     commands.entity(e).remove::<SignalHandlerTokioTask>();

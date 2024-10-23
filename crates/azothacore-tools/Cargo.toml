@@ -11,6 +11,7 @@ casclib-sys.workspace = true
 recastnavigation-sys.workspace = true
 wow-db2.workspace = true
 # External crates
+bevy.workspace = true
 byteorder = "1"
 crossbeam = { version = "0" }
 figment.workspace = true

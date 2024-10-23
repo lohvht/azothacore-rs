@@ -1,19 +1,25 @@
-use std::{path::PathBuf, sync::Arc};
-
 use azothacore_common::{
     az_error,
-    collision::{management::vmap_mgr2::VMapMgr2, maps::map_defines::MmapNavTerrainFlag, models::model_instance::ModelFlags},
+    collision::{management::vmap_mgr2::LiquidFlagsGetter, maps::map_defines::MmapNavTerrainFlag, models::model_instance::ModelFlags},
+    configuration::ConfigMgr,
     g3dlite_copied::matrix3_from_euler_angles_xyz,
     row_vector_to_matrix_index,
     utils::buffered_file_open,
     AzResult,
 };
 use azothacore_server::game::map::{map_file::MapFile, GridMap, MapLiquidTypeFlag};
+use bevy::{ecs::system::SystemParam, prelude::Res};
 use flagset::FlagSet;
 use nalgebra::{DMatrix, SMatrix, Vector3};
-use tracing::{debug, instrument, warn};
+use tracing::debug;
 
-use crate::mmap_generator::common::{MeshData, GRID_PART_SIZE, GRID_SIZE, INVALID_MAP_LIQ_HEIGHT_MAX, V8_SIZE, V8_SIZE_SQ, V9_SIZE, V9_SIZE_SQ};
+use crate::{
+    extractor_common::ExtractorConfig,
+    mmap_generator::{
+        common::{MeshData, GRID_PART_SIZE, GRID_SIZE, INVALID_MAP_LIQ_HEIGHT_MAX, V8_SIZE, V8_SIZE_SQ, V9_SIZE, V9_SIZE_SQ},
+        map_builder::MmapBuilderVmapMgr,
+    },
+};
 
 #[derive(Debug)]
 enum Spot {
@@ -106,16 +112,13 @@ impl Spot {
     }
 }
 
-pub struct TerrainBuilder<'vm> {
-    pub vmaps_path:     PathBuf,
-    pub maps_path:      PathBuf,
-    pub vmap_mgr:       Arc<VMapMgr2<'vm, 'vm>>,
-    pub use_min_height: f32,
-    pub skip_liquid:    bool,
+#[derive(SystemParam)]
+pub struct TerrainBuilder<'w> {
+    pub cfg:      Res<'w, ConfigMgr<ExtractorConfig>>,
+    pub vmap_mgr: MmapBuilderVmapMgr<'w>,
 }
 
 impl TerrainBuilder<'_> {
-    #[instrument(skip(self, mesh_data))]
     pub fn load_map(&self, map_id: u32, tile_x: u16, tile_y: u16, mesh_data: &mut MeshData) -> AzResult<()> {
         if let Err(e) = self.load_map_spot(map_id, tile_x, tile_y, Spot::Entire, mesh_data) {
             tracing::trace!("error loading entire map spot for the map ID {map_id} [{tile_x}:{tile_y}]: err was {e}");
@@ -130,7 +133,6 @@ impl TerrainBuilder<'_> {
         Ok(())
     }
 
-    #[instrument(skip(self, mesh_data))]
     fn load_map_spot(&self, map_id: u32, tile_x: u16, tile_y: u16, portion: Spot, mesh_data: &mut MeshData) -> AzResult<()> {
         let mut tried_map_ids = vec![];
         let mut used_map_id = Some(map_id);
@@ -143,11 +145,11 @@ impl TerrainBuilder<'_> {
                 },
                 Some(i) => i,
             };
-            let map_file_name = GridMap::file_name(&self.maps_path, map_id, tile_y, tile_x);
+            let map_file_name = GridMap::file_name(self.cfg.output_map_path(), map_id, tile_y, tile_x);
             let f = match buffered_file_open(&map_file_name).map_err(|e| e.into()).and_then(|mut f| MapFile::read(&mut f)) {
                 Err(_) => {
                     tried_map_ids.push(map_id);
-                    used_map_id = self.vmap_mgr.get_parent_map_id(map_id);
+                    used_map_id = self.vmap_mgr.helper.parent_map_data.get(&map_id).cloned();
                     continue;
                 },
                 Ok(m) => m,
@@ -157,7 +159,7 @@ impl TerrainBuilder<'_> {
 
         // i.e. Has height
         let have_terrain = map_file.map_height_data.map_heights.is_some();
-        let have_liquid = !self.skip_liquid && map_file.map_liquid_data.is_some();
+        let have_liquid = !self.cfg.mmap_path_generator.skip_liquid && map_file.map_liquid_data.is_some();
 
         if !have_terrain && !have_liquid {
             return Err(az_error!("no data in this map file"));
@@ -224,7 +226,7 @@ impl TerrainBuilder<'_> {
                         {
                             // dummy vert using invalid height
                             mesh_data.liquid_verts.push((x_offset + col as f32 * GRID_PART_SIZE) * -1.0);
-                            mesh_data.liquid_verts.push(self.use_min_height);
+                            mesh_data.liquid_verts.push(self.cfg.db2_and_map_extract.use_min_height);
                             mesh_data.liquid_verts.push((y_offset + row as f32 * GRID_PART_SIZE) * -1.0);
                             continue;
                         }
@@ -309,7 +311,7 @@ impl TerrainBuilder<'_> {
                     let mut valid_count = 0;
                     for idx in 0..3 {
                         let h = lverts_copy[ltris[l_idx + idx] as usize * 3 + 1];
-                        if h != self.use_min_height && h < INVALID_MAP_LIQ_HEIGHT_MAX {
+                        if h != self.cfg.db2_and_map_extract.use_min_height && h < INVALID_MAP_LIQ_HEIGHT_MAX {
                             quad_height += h;
                             valid_count += 1;
                         }
@@ -320,7 +322,7 @@ impl TerrainBuilder<'_> {
                         quad_height /= valid_count as f32;
                         for idx in 0..3 {
                             let h = mesh_data.liquid_verts[ltris[l_idx + idx] as usize * 3 + 1];
-                            if h == self.use_min_height || h > INVALID_MAP_LIQ_HEIGHT_MAX {
+                            if h == self.cfg.db2_and_map_extract.use_min_height || h > INVALID_MAP_LIQ_HEIGHT_MAX {
                                 mesh_data.liquid_verts[ltris[l_idx + idx] as usize * 3 + 1] = quad_height;
                             }
                         }
@@ -340,7 +342,7 @@ impl TerrainBuilder<'_> {
                 // we use only one terrain kind per quad - pick higher one
                 if use_terrain && use_liquid {
                     let mut min_l_level = INVALID_MAP_LIQ_HEIGHT_MAX;
-                    let mut max_l_level = self.use_min_height;
+                    let mut max_l_level = self.cfg.db2_and_map_extract.use_min_height;
                     for x in 0..3 {
                         let h = mesh_data.liquid_verts[ltris[l_idx + x] as usize * 3 + 1];
                         if min_l_level > h {
@@ -352,7 +354,7 @@ impl TerrainBuilder<'_> {
                         }
                     }
 
-                    let mut max_t_level = self.use_min_height;
+                    let mut max_t_level = self.cfg.db2_and_map_extract.use_min_height;
                     let mut min_t_level = INVALID_MAP_LIQ_HEIGHT_MAX;
                     for x in 0..6 {
                         let h = mesh_data.solid_verts[ttris[t_idx + x] as usize * 3 + 1];
@@ -402,17 +404,19 @@ impl TerrainBuilder<'_> {
         }
     }
 
-    #[instrument(skip(self, mesh_data))]
-    pub fn load_vmap(&self, map_id: u32, tile_x: u16, tile_y: u16, mesh_data: &mut MeshData) -> AzResult<()> {
-        for instance in match self.vmap_mgr.load_single_map_tile(map_id, &self.vmaps_path, tile_x, tile_y) {
-            Err(e) => {
-                debug!("Unable to load vmap tile. Tile reference may have been from Map instead; err was {e}");
-                return Ok(());
-            },
-            Ok(t) => t,
-        } {
+    pub fn load_vmap(&mut self, map_id: u32, tile_x: u16, tile_y: u16, mesh_data: &mut MeshData) -> AzResult<()> {
+        if let Err(e) = self.vmap_mgr.load_single_map_tile(map_id, tile_x, tile_y, true) {
+            debug!("Unable to load vmap tile. Tile reference may have been from Map instead; err was {e}");
+            return Ok(());
+        };
+
+        let tree = self.vmap_mgr.instance_map_tree(map_id).unwrap();
+        for instance in tree.tile_model_instances(tile_x, tile_y) {
+            let Some(world_model) = self.vmap_mgr.model_store.loaded_model_files.get(&instance.model) else {
+                continue;
+            };
             // model instances exist in tree even though there are instances of that model in this tile
-            let group_models = &instance.model.group_models;
+            let group_models = world_model.group_models.as_slice();
 
             // all M2s need to have triangle indices reversed
             let is_m2 = instance.flags.contains(ModelFlags::ModM2);
@@ -467,7 +471,7 @@ impl TerrainBuilder<'_> {
                         Ok(f) => (&f.i_height, &f.i_flags, &f.i_corner),
                     };
                     // convert liquid type to NavTerrain
-                    let liquid_flags = (self.vmap_mgr.get_liquid_flags)(liq.i_type);
+                    let liquid_flags = self.vmap_mgr.helper.liquid_flags_getter.get_liquid_flags(liq.i_type);
                     let typ = if (liquid_flags & (MapLiquidTypeFlag::Water | MapLiquidTypeFlag::Ocean)).bits() > 0 {
                         MmapNavTerrainFlag::Water.area_id()
                     } else if (liquid_flags & (MapLiquidTypeFlag::Magma | MapLiquidTypeFlag::Slime)).bits() > 0 {

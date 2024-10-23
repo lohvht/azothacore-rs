@@ -11,7 +11,7 @@ use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
 use flagset::{flags, FlagSet};
 use itertools::{FoldWhile, Itertools};
 
-use crate::{new_localised_string, DB2Field, DB2FieldType, DB2RawRecord};
+use crate::{new_localised_string, DB2Field, DB2FieldType, DB2RawRecord, Locale, DB2};
 
 flags! {
     pub enum WDCFlags: u16 {
@@ -92,9 +92,9 @@ impl WDC1Header {
 
     fn id_index_check<W>(&self) -> io::Result<()>
     where
-        W: WDC1,
+        W: DB2,
     {
-        let (is_none, id_idx) = match W::id_index() {
+        let (is_none, id_idx) = match W::inlined_id_index() {
             None => (true, 0),
             Some(e) => (false, e),
         };
@@ -124,7 +124,7 @@ impl WDC1Header {
 
     fn layout_hash_check<W>(&self) -> io::Result<()>
     where
-        W: WDC1,
+        W: DB2,
     {
         if self.layout_hash != W::layout_hash() {
             return Err(io::Error::new(
@@ -399,22 +399,6 @@ impl RelationshipMapping {
     }
 }
 
-pub trait WDC1: Default {
-    fn layout_hash() -> u32;
-    /// id_index returns Some(x) if the WDC1 trait has an inlined ID index. otherwise return None (i.e. field count doesnt count)
-    ///
-    /// None is similar to `!loadInfo->Meta->HasIndexFieldInData()` in TrinityCore
-    ///
-    /// Some(x) is similar to `loadInfo->Meta->HasIndexFieldInData()` in TrinityCore
-    fn id_index() -> Option<usize>;
-    fn num_fields() -> usize;
-    /// Returns Some(x) if the WDC1 has a non inlined id index.
-    fn non_inline_parent_index_type() -> Option<DB2FieldType>;
-    /// Return a list of field types and their respective arities
-    /// The indices of these fields should correspond to their field index
-    fn db2_fields() -> BTreeMap<usize, (DB2FieldType, usize)>;
-}
-
 #[derive(Debug)]
 struct OffsetMapEntry {
     offset: u32,
@@ -437,10 +421,10 @@ enum FileLoaderData {
 
 pub struct FileLoader<W>
 where
-    W: WDC1,
+    W: DB2,
 {
-    locale:                u32,
-    header:                WDC1Header,
+    locale:                Locale,
+    pub header:            WDC1Header,
     field_data:            Vec<FieldStructure>,
     id_list:               Vec<u32>,
     copy_table:            Vec<DB2RecordCopy>,
@@ -459,9 +443,9 @@ where
 
 impl<W> FileLoader<W>
 where
-    W: WDC1 + From<DB2RawRecord>,
+    W: DB2 + From<DB2RawRecord>,
 {
-    pub fn from_reader<R>(mut rdr: R, locale: u32) -> Result<FileLoader<W>, io::Error>
+    pub fn from_reader<R>(mut rdr: R, locale: Locale) -> Result<FileLoader<W>, io::Error>
     where
         R: io::Read,
     {
@@ -494,7 +478,7 @@ where
                 ));
             }
         }
-        if (header.locale & (1 << locale)) == 0 {
+        if (header.locale & (1 << (locale as u32))) == 0 {
             let header_locale = header.locale;
             return Err(io::Error::new(
                 io::ErrorKind::Other,
@@ -553,13 +537,13 @@ where
             }
         };
 
-        if W::id_index().is_some() && header.id_list_size != 0 {
+        if W::inlined_id_index().is_some() && header.id_list_size != 0 {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!("header mismatch! id_list_size {} should equal to 0 if NonInlinedIDs", header.id_list_size,),
             ));
         }
-        if W::id_index().is_none() && header.id_list_size != header.record_count * 4 {
+        if W::inlined_id_index().is_none() && header.id_list_size != header.record_count * 4 {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 format!(
@@ -720,7 +704,7 @@ where
                     let record_offset_start = offset_map[record_number].offset as usize - self.data_start;
                     let raw_data = &variable_record_data[record_offset_start..record_offset_start + offset_map[record_number].size as usize];
                     let mut offset_relative_to_record = 0;
-                    for (field, (field_type, arity)) in &W::db2_fields() {
+                    for (field, (_, field_type, arity)) in &W::db2_fields() {
                         let arity_map = field_and_array_offsets.entry(*field).or_insert(BTreeMap::new());
                         for arr in 0..*arity {
                             arity_map.entry(arr).or_insert(offset_relative_to_record);
@@ -728,12 +712,12 @@ where
                                 offset_relative_to_record += s;
                             } else {
                                 // sanity check, None should be String only
-                                if !matches!(field_type, DB2FieldType::String) {
+                                if !matches!(field_type, DB2FieldType::LocalisedString) {
                                     return Err(io::Error::new(
                                         io::ErrorKind::Other,
                                         format!(
                                             "SANITY_CHECK: get_raw_record_data failed as field type is invalid. Expected {:?} but got {:?}",
-                                            DB2FieldType::String,
+                                            DB2FieldType::LocalisedString,
                                             field_type,
                                         ),
                                     ));
@@ -766,8 +750,7 @@ where
         Ok(res)
     }
 
-    /// Produces the entire contents of the DB2 file. returning a BTreeMap of db2 ids to their respective records
-    pub fn produce_data(&self) -> io::Result<impl Iterator<Item = W>> {
+    pub fn produce_raw_data(&self) -> io::Result<impl Iterator<Item = DB2RawRecord>> {
         let mut res = BTreeMap::new();
         let mut id_value_to_record_number = BTreeMap::new();
         let max_records = self.get_num_records_to_iterate();
@@ -779,7 +762,7 @@ where
 
             let id_value = self.record_get_id(raw_record, &offset_map_field_and_array_offsets, record_number)?;
             let mut fields = BTreeMap::new();
-            for (field_idx, (typ, arity)) in &W::db2_fields() {
+            for (field_idx, (field_name, typ, arity)) in &W::db2_fields() {
                 let f = match typ {
                     DB2FieldType::I64 => {
                         let mut vs = vec![];
@@ -907,20 +890,27 @@ where
                         }
                         DB2Field::F32(vs)
                     },
-                    DB2FieldType::String => {
+                    DB2FieldType::LocalisedString => {
                         let mut vs = vec![];
                         for array_idx in 0..*arity {
                             let mut s = new_localised_string();
-                            s.set_by_locale_as_num(
-                                self.locale as usize,
-                                self.record_get_string(raw_record, &offset_map_field_and_array_offsets, record_number, *field_idx, array_idx)?,
-                            );
+                            s.set_by_locale(
+                                self.locale,
+                                &self.record_get_string(raw_record, &offset_map_field_and_array_offsets, record_number, *field_idx, array_idx)?,
+                            )?;
                             vs.push(s);
+                        }
+                        DB2Field::LocalisedString(vs)
+                    },
+                    DB2FieldType::String => {
+                        let mut vs = vec![];
+                        for array_idx in 0..*arity {
+                            vs.push(self.record_get_string(raw_record, &offset_map_field_and_array_offsets, record_number, *field_idx, array_idx)?);
                         }
                         DB2Field::String(vs)
                     },
                 };
-                fields.entry(*field_idx).or_insert(f);
+                fields.entry(*field_idx).or_insert((field_name.clone(), f));
             }
             res.entry(record_number).or_insert(DB2RawRecord {
                 id: id_value,
@@ -964,12 +954,38 @@ where
             res.entry(new_record_number).or_insert(copied_row);
             new_record_number += 1;
         }
+
         // TODO: Make produce_data actually lazily returns records.
         // Now its not doing that mostly because DB2's structure doesnt allow
         // for this to be easy.
-        let res = res.into_values().map(|record| W::from(record));
-
+        let res = res.into_values();
         Ok(res)
+    }
+
+    /// Produces the entire contents of the DB2 file
+    pub fn produce_data(&self) -> io::Result<impl Iterator<Item = W>> {
+        Ok(self.produce_raw_data()?.map(|record| W::from(record)))
+    }
+
+    /// similar to LoadStringsFrom => AutoProduceStrings
+    ///
+    /// TODO: hirogoro@28jul2024: For now this calls the underlying `produce_raw_data` as we dont wanna try to duplicate the logic.
+    /// Reimplement the whole produce_raw_data flow to make it easier to lazily load everything
+    pub fn load_strings_into(&self, existing_db2_data: &mut BTreeMap<u32, W>) -> io::Result<()> {
+        for record in self.produce_raw_data()? {
+            let Some(existing) = existing_db2_data.get_mut(&record.id) else {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!(
+                        "record id '{record_id}' does not existing in existing record, please make sure that the underlying DB2s are the same.",
+                        record_id = record.id
+                    ),
+                ));
+            };
+
+            existing.merge_strs(&record);
+        }
+        Ok(())
     }
 }
 
@@ -991,7 +1007,7 @@ macro_rules! read_pallet_value {
 /// Getter methods for getting supported data types
 impl<W> FileLoader<W>
 where
-    W: WDC1,
+    W: DB2,
 {
     fn read_i64(raw: &[u8]) -> io::Result<i64> {
         io::Cursor::new(raw).read_i64::<LittleEndian>()
@@ -1055,7 +1071,7 @@ where
         offset_map_field_and_array_offsets: &BTreeMap<usize, BTreeMap<usize, usize>>,
         record_number: usize,
     ) -> io::Result<u32> {
-        if let Some(id_idx) = W::id_index() {
+        if let Some(id_idx) = W::inlined_id_index() {
             return self.record_get_var_num(record_number, offset_map_field_and_array_offsets, raw_record, id_idx, 0, Self::read_u32);
         }
         Ok(match &self.file_data {

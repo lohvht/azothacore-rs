@@ -196,7 +196,7 @@ fn extract_camera_files(args: &ExtractorConfig, locale: Locale) -> AzResult<()> 
 fn read_cinematic_camera_dbc(storage: &CascStorageHandle, locale: Locale) -> AzResult<Vec<String>> {
     info!("Read CinematicCamera.db2 file...");
     let source = storage.open_file("DBFilesClient/CinematicCamera.db2", CascLocale::None.into())?;
-    let fl = wdc1::FileLoader::<CinematicCamera>::from_reader(source, locale as u32)?;
+    let fl = wdc1::FileLoader::<CinematicCamera>::from_reader(source, locale)?;
     let data = fl.produce_data()?;
 
     let res = data
@@ -276,26 +276,26 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> AzResu
     info!("Extracting maps...");
     info!("Read Map.db2 file...");
     let source = storage.open_file("DBFilesClient/Map.db2", CascLocale::None.into())?;
-    let db2 = wdc1::FileLoader::<MapDb2>::from_reader(source, locale as u32)?;
+    let db2 = wdc1::FileLoader::<MapDb2>::from_reader(source, locale)?;
     let maps = db2.produce_data()?;
     let (num_maps, _) = maps.size_hint();
     info!("Done! ({} maps loaded)", num_maps);
 
     info!("Read LiquidMaterial.db2 file...");
     let source = storage.open_file("DBFilesClient/LiquidMaterial.db2", CascLocale::None.into())?;
-    let db2 = wdc1::FileLoader::<LiquidMaterial>::from_reader(source, locale as u32)?;
+    let db2 = wdc1::FileLoader::<LiquidMaterial>::from_reader(source, locale)?;
     let liquid_materials = db2.produce_data()?.map(|r| (r.id, r)).collect::<BTreeMap<_, _>>();
     info!("Done! ({} LiquidMaterials loaded)", liquid_materials.len());
 
     // info!("Read LiquidObject.db2 file...");
     // let source = storage.open_file("DBFilesClient/LiquidObject.db2", CascLocale::None.into())?;
-    // let db2 = wdc1::FileLoader::<LiquidObject>::from_reader(source, locale as u32)?;
+    // let db2 = wdc1::FileLoader::<LiquidObject>::from_reader(source, locale)?;
     // let liquid_objects = db2.produce_data()?.map(|r| (r.id, r)).collect::<BTreeMap<_, _>>();
     // info!("Done! ({} LiquidObjects loaded)", liquid_objects.len());
 
     info!("Read LiquidType.db2 file...");
     let source = storage.open_file("DBFilesClient/LiquidType.db2", CascLocale::None.into())?;
-    let db2 = wdc1::FileLoader::<LiquidType>::from_reader(source, locale as u32)?;
+    let db2 = wdc1::FileLoader::<LiquidType>::from_reader(source, locale)?;
     let liquid_types = db2.produce_data()?.map(|r| (r.id, r)).collect::<BTreeMap<_, _>>();
     info!("Done! ({} LiquidTypes loaded)", liquid_types.len());
 
@@ -306,7 +306,7 @@ fn extract_maps(args: &ExtractorConfig, locale: Locale, build_no: u32) -> AzResu
 
     for (z, map) in maps.enumerate() {
         let map_id = map.id;
-        let map_name = &map.directory.def_str();
+        let map_name = &map.directory;
         let storage_path = format!("World/Maps/{map_name}/{map_name}.wdt");
         let wdt = match ChunkedFile::build(&storage, &storage_path) {
             Err(_e) => {

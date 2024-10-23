@@ -1,4 +1,4 @@
-use bevy::prelude::*;
+use bevy::prelude::{Commands, Resource};
 use flagset::flags;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
@@ -168,19 +168,21 @@ pub enum DungeonAccessRequirementsPrintMode {
 
 #[cfg(test)]
 mod tests {
+    use bevy::prelude::{App, Commands, Startup};
+
     use super::*;
 
     #[test]
     fn it_sets_server_process() {
         let mut app = App::new();
-        assert!(app.world.get_resource::<ThisServerProcess>().is_none());
+        assert!(app.world().get_resource::<ThisServerProcess>().is_none());
 
         app.add_systems(Startup, |mut commands: Commands| {
             set_server_process(&mut commands, ServerProcessType::Worldserver)
         });
         app.update();
 
-        let res = app.world.resource::<ThisServerProcess>();
+        let res = app.world().resource::<ThisServerProcess>();
         assert_eq!(res.0, ServerProcessType::Worldserver);
     }
 }

@@ -25,12 +25,13 @@ casclib-sys = { path = "crates/casclib-sys" }
 wow-db2 = { path = "crates/wow-db2" }
 wow-db2-proc-macros = { path = "crates/wow-db2-proc-macros" }
 # External crates
-bevy = { version = "0", features = ["multi-threaded"], default-features = false }
 axum = { version = "0" }
 axum-extra = { version = "0", features = ["typed-header"] }
+bevy = { version = "0", features = ["multi_threaded", "bevy_state", "bevy_asset"], default-features = false }
 bytes = { version = "1" }
 chrono = { version = "0" }
 clap =  { version = "4", features = ["string", "derive", "help"] }
+figment = { version = "0", features = ["toml", "env"] }
 flagset = { version = "0", features = ["serde"] }
 flate2 = { version = "1", features = ["zlib-ng-compat"], default-features = false }
 futures = "0"
@@ -38,6 +39,7 @@ futures-core = "0"
 hugsqlx = { version = "0", features = [ "mysql" ] }
 humantime = { version = "2" }
 ipnet = { version = "2" }
+itertools = "0"
 nalgebra = { version = "0", features = [ "serde-serialize" ] }
 num = { version = "0" }
 num-derive = { version = "0" }
@@ -46,6 +48,7 @@ parry3d = { version = "0", features = ["serde-serialize"] }
 prost = { version = "0" }
 rand = { version = "0" }
 recastnavigation-sys = { version = "1", features = [ "detour", "recast", "detour_large_nav_meshes" ] }
+regex = { version = "1" }
 serde = { version = "1", features = ["derive"] }
 serde_default = "0"
 serde_json = "1"
@@ -55,6 +58,5 @@ sqlx = { version = "0", features = [ "runtime-tokio-rustls", "mysql", "chrono" ]
 structstruck = "0"
 thiserror = { version = "1" }
 tokio = { version = "1", features = ["full"] }
-figment = { version = "0", features = ["toml", "env"] }
 tracing = { version = "0" }
 walkdir = { version = "2" }

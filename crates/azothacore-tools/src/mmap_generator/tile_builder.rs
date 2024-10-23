@@ -1,11 +1,6 @@
-use std::{path::PathBuf, sync::Arc};
-
 use azothacore_common::{
     az_error,
-    collision::{
-        management::vmap_mgr2::VMapMgr2,
-        maps::map_defines::{MmapNavTerrainFlag, MmapTileFile},
-    },
+    collision::maps::map_defines::{MmapNavTerrainFlag, MmapTileFile},
     recastnavigation_handles::{detour_create_nav_mesh_data, DetourNavMesh, DetourNavMeshParams, RecastConfig},
     AzResult,
 };
@@ -43,70 +38,21 @@ use recastnavigation_sys::{
 };
 use tracing::{error, info, instrument, warn};
 
-use crate::mmap_generator::{
-    common::{clean_vertices, get_tile_bounds, load_off_mesh_connections, MeshData, GRID_SIZE},
-    intermediate_values::IntermediateValues,
-    terrain_builder::TerrainBuilder,
+use crate::{
+    extractor_common::ExtractorConfig,
+    mmap_generator::{
+        common::{clean_vertices, get_tile_bounds, load_off_mesh_connections, MeshData, GRID_SIZE},
+        intermediate_values::IntermediateValues,
+        terrain_builder::TerrainBuilder,
+    },
 };
 
-#[derive(Clone)]
-pub struct TileBuilderParams {
-    pub mmap_output_path:       PathBuf,
-    pub skip_liquid:            bool,
-    pub debug_mesh_output_path: Option<PathBuf>,
-    pub off_mesh_file_path:     Option<PathBuf>,
-    pub vmaps_path:             PathBuf,
-    pub maps_path:              PathBuf,
-    pub use_min_height:         f32,
-    pub big_base_unit:          bool,
-    pub max_walkable_angle:     f32,
-}
-
-impl TileBuilderParams {
-    pub fn into_builder<'vm>(self, vmap_mgr: Arc<VMapMgr2<'vm, 'vm>>) -> (TileBuilder, TerrainBuilder<'vm>) {
-        let TileBuilderParams {
-            mmap_output_path,
-            skip_liquid,
-            debug_mesh_output_path,
-            vmaps_path,
-            maps_path,
-            use_min_height,
-            off_mesh_file_path,
-            big_base_unit,
-            max_walkable_angle,
-        } = self;
-        let terrain_builder = TerrainBuilder {
-            vmap_mgr,
-            skip_liquid,
-            vmaps_path,
-            maps_path,
-            use_min_height,
-        };
-        let tile_builder = TileBuilder {
-            skip_liquid,
-            off_mesh_file_path,
-            mmap_output_path,
-            debug_mesh_output_path,
-            big_base_unit,
-            max_walkable_angle,
-        };
-        (tile_builder, terrain_builder)
-    }
-}
-
-pub struct TileBuilder {
-    pub skip_liquid:            bool,
-    pub off_mesh_file_path:     Option<PathBuf>,
-    pub big_base_unit:          bool,
-    pub max_walkable_angle:     f32,
-    pub mmap_output_path:       PathBuf,
-    pub debug_mesh_output_path: Option<PathBuf>,
-}
+pub struct TileBuilder;
 
 impl TileBuilder {
-    #[instrument(skip_all, fields(tile = format!("[Map {map_id:04}] [{tile_x:02},{tile_y:02}]")))]
-    pub fn build_tile(&self, terrain_builder: &TerrainBuilder, map_id: u32, tile_x: u16, tile_y: u16, nav_mesh_params: &DetourNavMeshParams) -> AzResult<()> {
-        info!("Start building tile");
+    /// first half of MapBuilder::buildTile in TC / AC
+    /// The step to load map vertices into mesh data
+    pub fn load_map_vertices(terrain_builder: &mut TerrainBuilder, map_id: u32, tile_x: u16, tile_y: u16) -> AzResult<MeshData> {
         // get heightmap data
         let mut mesh_data = MeshData::default();
         terrain_builder.load_map(map_id, tile_x, tile_y, &mut mesh_data)?;
@@ -116,14 +62,38 @@ impl TileBuilder {
 
         // if there is no data, give up now
         if mesh_data.solid_verts.is_empty() && mesh_data.liquid_verts.is_empty() {
-            warn!("No vertices found");
-            return Ok(());
+            return Err(az_error!("No vertices found"));
         }
 
         // remove unused vertices
         clean_vertices(&mut mesh_data.solid_verts, &mut mesh_data.solid_tris);
         clean_vertices(&mut mesh_data.liquid_verts, &mut mesh_data.liquid_tris);
 
+        if mesh_data.solid_verts.is_empty() && mesh_data.liquid_verts.is_empty() {
+            return Err(az_error!("No vertices found after cleaning"));
+        }
+
+        load_off_mesh_connections(
+            map_id,
+            tile_x,
+            tile_y,
+            terrain_builder.cfg.mmap_path_generator.off_mesh_file_path.as_ref(),
+            &mut mesh_data,
+        )?;
+
+        Ok(mesh_data)
+    }
+
+    /// second half of MapBuilder::buildTile in TC / AC
+    /// The step to build the actual mmap vertices using the done mesh data
+    pub fn build_mmap_tile(
+        cfg: &ExtractorConfig,
+        map_id: u32,
+        tile_x: u16,
+        tile_y: u16,
+        nav_mesh_params: &DetourNavMeshParams,
+        mesh_data: &MeshData,
+    ) -> AzResult<()> {
         // gather all mesh data for final data check, and bounds calculation
         let mut all_verts = Vec::with_capacity(mesh_data.solid_verts.len() + mesh_data.liquid_verts.len());
         all_verts.extend_from_slice(&mesh_data.liquid_verts);
@@ -134,10 +104,8 @@ impl TileBuilder {
         let mut bmax = [0.0; 3];
         get_tile_bounds(tile_x, tile_y, &all_verts, &mut bmin, &mut bmax);
 
-        load_off_mesh_connections(map_id, tile_x, tile_y, self.off_mesh_file_path.as_ref(), &mut mesh_data)?;
-
         // build navmesh tile
-        self.build_move_map_tile(map_id, tile_x, tile_y, &mesh_data, &bmin, &bmax, nav_mesh_params)?;
+        Self::build_move_map_tile(cfg, map_id, tile_x, tile_y, mesh_data, &bmin, &bmax, nav_mesh_params)?;
         Ok(())
     }
 
@@ -145,7 +113,7 @@ impl TileBuilder {
     #[expect(clippy::too_many_arguments)]
     #[instrument(skip_all, fields(tile = format!("[Map {map_id:04}] [{tile_x:02},{tile_y:02}]")))]
     pub fn build_move_map_tile(
-        &self,
+        cfg: &ExtractorConfig,
         map_id: u32,
         tile_x: u16,
         tile_y: u16,
@@ -196,11 +164,15 @@ impl TileBuilder {
         // these are WORLD UNIT based metrics
         // this are basic unit dimentions
         // value have to divide GRID_SIZE(533.3333f) ( aka: 0.5333, 0.2666, 0.3333, 0.1333, etc )
-        let BASE_UNIT_DIM: f32 = if self.big_base_unit { GRID_SIZE / 1000.0 } else { GRID_SIZE / 1000.0 / 2.0 };
+        let BASE_UNIT_DIM: f32 = if cfg.mmap_path_generator.big_base_unit {
+            GRID_SIZE / 1000.0
+        } else {
+            GRID_SIZE / 1000.0 / 2.0
+        };
 
         // All are in UNIT metrics!
         let VERTEX_PER_MAP: usize = (GRID_SIZE / BASE_UNIT_DIM + 0.5) as usize;
-        let VERTEX_PER_TILE: usize = if self.big_base_unit { 40 } else { 80 }; // must divide VERTEX_PER_MAP
+        let VERTEX_PER_TILE: usize = if cfg.mmap_path_generator.big_base_unit { 40 } else { 80 }; // must divide VERTEX_PER_MAP
         let TILES_PER_MAP: usize = VERTEX_PER_MAP / VERTEX_PER_TILE;
 
         let mut config = RecastConfig::default();
@@ -210,15 +182,15 @@ impl TileBuilder {
         config.maxVertsPerPoly = DT_VERTS_PER_POLYGON;
         config.cs = BASE_UNIT_DIM;
         config.ch = BASE_UNIT_DIM;
-        config.walkableSlopeAngle = self.max_walkable_angle;
+        config.walkableSlopeAngle = cfg.mmap_path_generator.max_angle;
         config.tileSize = VERTEX_PER_TILE as _;
-        config.walkableRadius = if self.big_base_unit { 1 } else { 2 };
+        config.walkableRadius = if cfg.mmap_path_generator.big_base_unit { 1 } else { 2 };
         config.borderSize = config.walkableRadius + 3;
         config.maxEdgeLen = (VERTEX_PER_TILE + 1) as _; // anything bigger than tileSize
-        config.walkableHeight = if self.big_base_unit { 3 } else { 6 };
+        config.walkableHeight = if cfg.mmap_path_generator.big_base_unit { 3 } else { 6 };
         // a value >= 3|6 allows npcs to walk over some fences
         // a value >= 4|8 allows npcs to walk over all fences
-        config.walkableClimb = if self.big_base_unit { 4 } else { 8 };
+        config.walkableClimb = if cfg.mmap_path_generator.big_base_unit { 4 } else { 8 };
         config.minRegionArea = 60i32.pow(2);
         config.mergeRegionArea = 50i32.pow(2);
         // eliminates most jagged edges (tiny polygons)
@@ -490,9 +462,9 @@ impl TileBuilder {
 
             // write header
             // write data
-            let skip_liquid = self.skip_liquid;
+            let skip_liquid = cfg.mmap_path_generator.skip_liquid;
             let mmtilefile = MmapTileFile::new(!skip_liquid, nav_data_copy);
-            if let Err(e) = mmtilefile.write_to_mmtile(self.mmap_output_path.clone(), map_id, tile_y, tile_x) {
+            if let Err(e) = mmtilefile.write_to_mmtile(cfg.output_mmap_path(), map_id, tile_y, tile_x) {
                 error!("error writing to mmtile file: {e}");
             }
 
@@ -504,7 +476,8 @@ impl TileBuilder {
             break;
         }
 
-        if let Some(p) = &self.debug_mesh_output_path {
+        if cfg.mmap_path_generator.debug_output {
+            let p = cfg.output_meshes_debug_path();
             // restore padding so that the debug visualization is correct
             for i in 0..iv_poly_mesh_ref.nverts as usize {
                 let v = iv_poly_mesh_ref.verts.wrapping_add(i * 3);
@@ -521,8 +494,8 @@ impl TileBuilder {
                 poly_mesh:           Some(iv_poly_mesh_ref),
                 poly_mesh_detail:    Some(iv_poly_mesh_detail_ref),
             };
-            iv.generate_obj_file(p, map_id, tile_x, tile_y, mesh_data);
-            iv.write_iv(p, map_id, tile_x, tile_y);
+            iv.generate_obj_file(&p, map_id, tile_x, tile_y, mesh_data);
+            iv.write_iv(&p, map_id, tile_x, tile_y);
         }
         unsafe {
             rcFreePolyMesh(iv_poly_mesh);

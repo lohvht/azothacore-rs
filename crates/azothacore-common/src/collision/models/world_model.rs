@@ -1,5 +1,6 @@
 use std::{io, marker::PhantomData};
 
+use bevy::{asset::Asset, reflect::TypePath};
 use nalgebra::{DMatrix, Vector3};
 use parry3d::{bounding_volume::Aabb, partitioning::Qbvh, shape::TriMesh};
 
@@ -12,6 +13,7 @@ use crate::{
 };
 
 /// Holds a model (converted M2 or WMO) in its original coordinate space
+#[derive(Asset, TypePath)]
 pub struct WorldModel {
     root_wmoid:       u32,
     pub group_models: Vec<GroupModel>,
@@ -57,9 +59,7 @@ impl WorldModel {
         Ok(())
     }
 
-    pub fn read_file<R: io::Read>(r: &mut R) -> AzResult<Self> {
-        let mut r = r;
-
+    pub fn read_file<R: io::Read>(mut r: &mut R) -> AzResult<Self> {
         cmp_or_return!(r, VMAP_MAGIC)?;
         cmp_or_return!(r, b"WMOD")?;
         let root_wmoid = read_le!(r, u32)?;

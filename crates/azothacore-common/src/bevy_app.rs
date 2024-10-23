@@ -1,8 +1,13 @@
 use bevy::{
-    app::{AppExit, ScheduleRunnerPlugin},
+    asset::AssetPlugin,
     diagnostic::DiagnosticsPlugin,
-    prelude::*,
-    time::TimePlugin,
+    prelude::{App, AppExit, Event, EventReader, EventWriter, Fixed, HierarchyPlugin, NextState, PostStartup, Res, ResMut, Resource, Time, TransformPlugin},
+    state::{
+        app::{AppExtStates, StatesPlugin},
+        condition::in_state,
+        state::{State, States},
+    },
+    MinimalPlugins,
 };
 use tokio::runtime::Runtime;
 use tracing::{error, info};
@@ -52,14 +57,14 @@ pub struct AzStartupDryRunEvent;
 ///
 pub fn bevy_app() -> App {
     let mut app = App::new();
+
     app.add_plugins((
-        TypeRegistrationPlugin,
-        FrameCountPlugin,
-        TimePlugin,
-        ScheduleRunnerPlugin::default(),
+        MinimalPlugins,
+        StatesPlugin,
         TransformPlugin,
         DiagnosticsPlugin,
         HierarchyPlugin,
+        AssetPlugin::default(),
     ))
     .init_state::<AzStartupState>()
     .add_event::<AzStartupFailedEvent>()
@@ -93,7 +98,12 @@ fn check_startup_failures(
         }
     }
     if transiton_state != AzStartupState::Succeeded {
+        let exit = if matches!(transiton_state, AzStartupState::DryRun) {
+            AppExit::Success
+        } else {
+            AppExit::error()
+        };
         next_state.set(transiton_state);
-        ev_app_exit.send(AppExit);
+        ev_app_exit.send(exit);
     }
 }
