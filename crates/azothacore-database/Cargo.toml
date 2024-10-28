@@ -10,6 +10,7 @@ edition = "2021"
 azothacore-common.workspace = true
 # External crates
 bevy.workspace = true
+cfg-if.workspace = true
 flate2.workspace = true
 futures-core.workspace = true
 hugsqlx.workspace = true
@@ -19,3 +20,7 @@ thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 walkdir.workspace = true
+
+[features]
+postgres = []
+mysql = []

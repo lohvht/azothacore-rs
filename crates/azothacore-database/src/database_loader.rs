@@ -11,7 +11,6 @@ use azothacore_common::{
     configuration::{DatabaseInfo, DatabaseType, DbUpdates},
     hex_str,
 };
-use hugsqlx::params;
 use sha2::{Digest, Sha256};
 use sqlx::{
     mysql::MySqlDatabaseError,
@@ -27,6 +26,7 @@ use tracing::{debug, error, info, trace, warn};
 use walkdir::WalkDir;
 
 use crate::{
+    args,
     database_loader_utils::{apply_file, DatabaseLoaderError},
     DbDriver,
     ExtendedDBInfo,
@@ -511,12 +511,9 @@ impl DatabaseLoader {
             (Some(iter), _) => {
                 if iter.state != file.state {
                     info!(">> Updating the state of \"{}\" to \'{:?}\'...", file.path.to_string_lossy(), file.state);
-                    query_with(
-                        "UPDATE `updates` SET `state` = ? where `name` = ?",
-                        params!(file.state.to_string(), file.name()),
-                    )
-                    .execute(&pool)
-                    .await?;
+                    query_with("UPDATE `updates` SET `state` = ? where `name` = ?", args!(file.state.to_string(), file.name())?)
+                        .execute(&pool)
+                        .await?;
                 }
                 info!(">> Update is already applied and matches the hash \'{}\'.", hash);
                 applied.remove(&file.name());
@@ -535,7 +532,7 @@ impl DatabaseLoader {
                     info!(">> Renaming update \"{from}\" to \"{to}\" \'{hash}\'.");
                     let mut txn = pool.begin().await?;
                     query("DELETE FROM `updates` WHERE `name`= ?").bind(&to).execute(&mut *txn).await?;
-                    query_with("UPDATE `updates` SET `name`=? WHERE `name`=?", params!(&to, &from))
+                    query_with("UPDATE `updates` SET `name`=? WHERE `name`=?", args!(&to, &from)?)
                         .execute(&mut *txn)
                         .await?;
                     txn.commit().await?;
@@ -568,7 +565,7 @@ impl DatabaseLoader {
         let speed = now.elapsed();
         query_with(
             "REPLACE INTO `updates` (`name`, `hash`, `state`, `speed`) VALUES (?,?,?,?)",
-            params!(file.name(), file.hash()?, file.state.to_string(), speed.as_millis().to_string()),
+            args!(file.name(), file.hash()?, file.state.to_string(), speed.as_millis().to_string())?,
         )
         .execute(&mut *txn)
         .await?;

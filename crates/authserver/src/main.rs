@@ -16,9 +16,9 @@ use azothacore_common::{
     CONF_DIR,
 };
 use azothacore_database::{
+    args_unwrap,
     database_env::{LoginDatabase, LoginPreparedStmts},
     database_loader::DatabaseLoader,
-    params,
 };
 use azothacore_server::shared::{
     networking::socket_mgr::socket_mgr_plugin,
@@ -112,13 +112,13 @@ fn ban_expiry_task(mut timer: ResMut<BanExpiryTimer>, time: Res<Time<Real>>, log
         return;
     }
     rt.block_on(async {
-        if let Err(e) = LoginDatabase::del_expired_ip_bans(&**login_db, params!()).await {
+        if let Err(e) = LoginDatabase::del_expired_ip_bans(&**login_db, args_unwrap!()).await {
             error!(target:"bnetserver", cause=%e, "del_expired_ip_bans err");
         };
-        if let Err(e) = LoginDatabase::upd_expired_account_bans(&**login_db, params!()).await {
+        if let Err(e) = LoginDatabase::upd_expired_account_bans(&**login_db, args_unwrap!()).await {
             error!(target:"bnetserver", cause=%e, "upd_expired_account_bans err");
         };
-        if let Err(e) = LoginDatabase::del_bnet_expired_account_banned(&**login_db, params!()).await {
+        if let Err(e) = LoginDatabase::del_bnet_expired_account_banned(&**login_db, args_unwrap!()).await {
             error!(target:"bnetserver", cause=%e, "del_bnet_expired_account_banned err");
         };
     });

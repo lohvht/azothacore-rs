@@ -163,7 +163,7 @@ fn push_extension<P: AsRef<Path>, E: AsRef<OsStr>>(path: P, ext: E) -> PathBuf {
     }
 }
 
-impl<'w, C> VMapModelStore<'w, C>
+impl<C> VMapModelStore<'_, C>
 where
     C: VmapConfig,
 {
@@ -221,7 +221,7 @@ impl AssetLoader for WorldModelAssetLoader {
     }
 }
 
-impl<'w, C, L, V> VMapMgr2<'w, C, L, V>
+impl<C, L, V> VMapMgr2<'_, C, L, V>
 where
     C: VmapConfig,
     L: LiquidFlagsGetter,
@@ -271,7 +271,7 @@ where
     }
 }
 
-impl<'w, C, L, V> VMapMgr for VMapMgr2<'w, C, L, V>
+impl<C, L, V> VMapMgr for VMapMgr2<'_, C, L, V>
 where
     C: VmapConfig,
     L: LiquidFlagsGetter,

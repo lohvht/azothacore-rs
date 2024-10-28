@@ -336,7 +336,6 @@ This struct is used to convert raw vector data into balanced BSP-Trees.
 To start the conversion call convertWorld().
 */
 //===============================================
-
 #[expect(dead_code)]
 struct ModelPosition {
     i_rotation: Matrix3<f32>,

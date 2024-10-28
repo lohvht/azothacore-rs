@@ -112,7 +112,7 @@ pub struct AdtChunkMh2oSmLiquidChunk {
     offset_attributes: u32,
 }
 
-#[derive(Default, Clone, Copy, zerocopy_derive::FromZeroes, zerocopy_derive::FromBytes, zerocopy_derive::Unaligned)]
+#[derive(Default, Clone, Copy, zerocopy_derive::FromBytes, zerocopy_derive::Unaligned)]
 #[repr(C)]
 pub struct AdtChunkMh2oLiquidInstance {
     // Index from LiquidType.db2
@@ -163,7 +163,7 @@ impl AdtChunkMh2oLiquidInstance {
     }
 }
 
-#[derive(Default, Clone, Copy, zerocopy_derive::FromZeroes, zerocopy_derive::FromBytes, zerocopy_derive::Unaligned)]
+#[derive(Default, Clone, Copy, zerocopy_derive::FromBytes, zerocopy_derive::Unaligned)]
 #[repr(C)]
 pub struct AdtChunkMh2oLiquidAttributes {
     pub fishable: zerocopy::little_endian::U64,
@@ -199,10 +199,12 @@ impl<'a> From<(&[u8; 4], &'a [u8])> for AdtChunkMh2o<'a> {
     }
 }
 
-impl<'a> AdtChunkMh2o<'a> {
+impl AdtChunkMh2o<'_> {
     pub fn get_liquid_instance(&self, x: usize, y: usize) -> Option<AdtChunkMh2oLiquidInstance> {
         if self.liquid[x][y].used > 0 && self.liquid[x][y].offset_instances > 0 {
             AdtChunkMh2oLiquidInstance::read_from_prefix(&self.raw_data[self.liquid[x][y].offset_instances as usize..])
+                .ok()
+                .map(|s| s.0)
         } else {
             None
         }
@@ -217,7 +219,9 @@ impl<'a> AdtChunkMh2o<'a> {
                 fishable: zerocopy::little_endian::U64::new(u64::MAX),
             }
         } else {
-            AdtChunkMh2oLiquidAttributes::read_from_prefix(&self.raw_data[self.liquid[x][y].offset_attributes as usize..]).unwrap()
+            AdtChunkMh2oLiquidAttributes::read_from_prefix(&self.raw_data[self.liquid[x][y].offset_attributes as usize..])
+                .map(|s| s.0)
+                .unwrap()
         }
     }
 

@@ -14,8 +14,8 @@ use azothacore_common::{
     Locale,
 };
 use azothacore_database::{
+    args,
     database_env::{LoginDatabase, LoginPreparedStmts},
-    params,
     DbDriver,
 };
 use bevy::prelude::{App, Commands, IntoSystemConfigs, Real, Res, ResMut, Resource, Startup, SystemSet, Time, Timer, TimerMode, Update};
@@ -460,12 +460,14 @@ impl RealmList {
         key_data[..32].clone_from_slice(client_secret);
         key_data[32..].clone_from_slice(&server_secret);
 
-        if let Err(e) = LoginDatabase::upd_bnet_game_account_login_info(
-            &login_db,
-            params!(hex_str!(&key_data), client_address.ip_str_or_name(), locale as u8, os, account_name),
-        )
-        .await
-        {
+        let args = match args!(hex_str!(&key_data), client_address.ip_str_or_name(), locale as u8, os, account_name) {
+            Ok(a) => a,
+            Err(e) => {
+                error!(target:"realmlist", "error forming DB args when joining realmn {account_name}: err={e}");
+                return Err(JoinRealmError::General);
+            },
+        };
+        if let Err(e) = LoginDatabase::upd_bnet_game_account_login_info(&login_db, args).await {
             error!(target:"realmlist", "error trying to login for account {account_name}: err={e}");
             return Err(JoinRealmError::General);
         }
@@ -482,7 +484,7 @@ impl RealmList {
         let mut new_sub_regions = BTreeSet::new();
         let mut new_realms = BTreeMap::new();
 
-        let mut result = LoginDatabase::sel_realmlist::<_, LoginDbRealm>(&*login_db, params!()).await;
+        let mut result = LoginDatabase::sel_realmlist::<_, LoginDbRealm>(&*login_db, args!().unwrap()).await;
         while let Some(res) = result.next().await {
             let realm = match res {
                 Err(e) => {

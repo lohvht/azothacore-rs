@@ -15,7 +15,7 @@ pub struct IntermediateValues<'a> {
     pub poly_mesh_detail:    Option<&'a rcPolyMeshDetail>,
 }
 
-impl<'a> IntermediateValues<'a> {
+impl IntermediateValues<'_> {
     pub fn write_iv<P: AsRef<Path>>(&self, meshes_base_dir: P, map_id: u32, tile_x: u16, tile_y: u16) {
         macro_rules! debug_write {
             ( $path_tmpl:expr, $file_extension:expr, $v:expr, $debug_write_func_name:ident ) => {{

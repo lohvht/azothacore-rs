@@ -13,10 +13,10 @@ use azothacore_common::{
     GIT_VERSION,
 };
 use azothacore_database::{
+    args,
     database_env::{CharacterDatabase, HotfixDatabase, LoginDatabase, WorldDatabase},
     database_loader::DatabaseLoader,
     database_loader_utils::DatabaseLoaderError,
-    params,
     query_with,
 };
 use azothacore_modules::SCRIPTS as MODULES_LIST;
@@ -24,7 +24,7 @@ use azothacore_server::{
     game::{
         scripting::script_mgr::ScriptMgr,
         scripts,
-        world::{CurrentRealm, WorldConfig, WorldDbVersion},
+        world::{world_plugin, CurrentRealm, WorldConfig, WorldDbVersion, WorldSets},
     },
     shared::{
         realms::{
@@ -36,10 +36,29 @@ use azothacore_server::{
         SignalReceiver,
     },
 };
-use bevy::{app::AppExit, prelude::*};
+use bevy::{
+    app::AppExit,
+    diagnostic::FrameTimeDiagnosticsPlugin,
+    prelude::{
+        App,
+        Commands,
+        EventReader,
+        EventWriter,
+        In,
+        IntoSystem,
+        IntoSystemConfigs,
+        IntoSystemSetConfigs,
+        PostUpdate,
+        PreStartup,
+        Res,
+        ResMut,
+        Startup,
+        SystemSet,
+    },
+};
 use clap::Parser;
 use flagset::FlagSet;
-use tracing::{error, info};
+use tracing::{error, info, info_span};
 
 fn main() {
     let vm = ConsoleArgs::parse();
@@ -48,52 +67,46 @@ fn main() {
     let mut app = bevy_app();
     app.insert_resource(TokioRuntime(rt))
         .add_plugins((
+            FrameTimeDiagnosticsPlugin,
             tokio_signal_handling_bevy_plugin,
             config_mgr_plugin::<WorldConfig, _>(vm.config, vm.dry_run),
             logging_plugin::<WorldConfig>,
             // Get the list of realms for the server
             realm_list_plugin::<WorldConfig>,
             scripts_plugin,
+            world_plugin,
             // socket_mgr_plugin::<WorldConfig, SessionInner>,
             // bnet_session_handling_plugin,
             // // TODO: Impl me? Init Secret Manager
             // sSecretMgr->Initialize();
         ))
-        .add_systems(
-            PreStartup,
-            (show_banner.run_if(resource_exists::<ConfigMgr<WorldConfig>>).in_set(WorldserverSet::ShowBanner),),
-        )
+        .add_systems(PreStartup, (show_banner.in_set(WorldserverMainSets::ShowBanner),))
         .add_systems(
             Startup,
             (
-                (|mut commands: Commands| set_server_process(&mut commands, ServerProcessType::Worldserver)).in_set(WorldserverSet::SetProcessType),
-                start_db
-                    .pipe(handle_startup_errors)
-                    .run_if(resource_exists::<ConfigMgr<WorldConfig>>)
-                    .in_set(WorldserverSet::StartDB),
+                (|mut commands: Commands| set_server_process(&mut commands, ServerProcessType::Worldserver)).in_set(WorldserverMainSets::SetProcessType),
+                start_db.pipe(handle_startup_errors).in_set(WorldserverMainSets::StartDB),
                 set_server_unconnectable
                     .pipe(handle_startup_errors)
-                    .run_if(resource_exists::<LoginDatabase>)
-                    .run_if(resource_exists::<ConfigMgr<WorldConfig>>)
-                    .in_set(WorldserverSet::SetServerNotConnectable),
-                load_realm_info
-                    .pipe(handle_startup_errors)
-                    .run_if(resource_exists::<RealmList>)
-                    .run_if(resource_exists::<ConfigMgr<WorldConfig>>)
-                    .in_set(WorldserverSet::LoadCurrentRealm),
+                    .in_set(WorldserverMainSets::SetRealmNotConnectable),
+                load_realm_info.pipe(handle_startup_errors).in_set(WorldserverMainSets::LoadCurrentRealm),
             ),
         )
         // Init logging right after config management
         .configure_sets(
             PreStartup,
-            (ConfigMgrSet::<WorldConfig>::load_initial(), LoggingSetupSet, WorldserverSet::ShowBanner).chain(),
+            (ConfigMgrSet::<WorldConfig>::load_initial(), LoggingSetupSet, WorldserverMainSets::ShowBanner).chain(),
         )
         .configure_sets(
             Startup,
-            (
-                (WorldserverSet::StartDB, WorldserverSet::SetServerNotConnectable).chain(),
-                (WorldserverSet::StartDB, RealmListStartSet, WorldserverSet::LoadCurrentRealm).chain(),
-            ),
+            ((
+                WorldserverMainSets::StartDB,
+                WorldserverMainSets::SetRealmNotConnectable,
+                RealmListStartSet,
+                WorldserverMainSets::LoadCurrentRealm,
+                WorldSets::SetInitialWorldSettings,
+            )
+                .chain(),),
         )
         .add_systems(PostUpdate, stop_db)
         .run();
@@ -129,12 +142,12 @@ fn main() {
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum WorldserverSet {
+pub enum WorldserverMainSets {
     ShowBanner,
     SetProcessType,
     StartDB,
     LoadScript,
-    SetServerNotConnectable,
+    SetRealmNotConnectable,
     LoadCurrentRealm,
 }
 
@@ -153,8 +166,8 @@ fn scripts_plugin(app: &mut App) {
     // Adding scripts first, then they can load modules
     let mut script_mgr = ScriptMgr::default();
 
-    scripts::add_scripts(&mut app.world, &mut script_mgr);
-    azothacore_modules::add_scripts(&mut app.world, &mut script_mgr);
+    scripts::add_scripts(app.world_mut(), &mut script_mgr);
+    azothacore_modules::add_scripts(app.world_mut(), &mut script_mgr);
     app.insert_resource(script_mgr);
 }
 
@@ -243,8 +256,12 @@ fn start_db(
         .map_err(|e| az_error!("error clearing online accounts: {e}"))?;
 
     // Insert version info into DB
-    rt.block_on(query_with("UPDATE version SET core_version = ?, core_revision = ?", params!(GIT_VERSION, GIT_HASH)).execute(&*world_db))
-        .map_err(|e| az_error!("error inserting current version info: {e}"))?;
+    rt.block_on(async {
+        query_with("UPDATE version SET core_version = ?, core_revision = ?", args!(GIT_VERSION, GIT_HASH)?)
+            .execute(&*world_db)
+            .await
+    })
+    .map_err(|e| az_error!("error inserting current version info: {e}"))?;
 
     let world_db_version = match rt.block_on(WorldDbVersion::load(&world_db))? {
         Some(c) => c,
@@ -274,18 +291,19 @@ fn start_db(
 
 fn set_server_unconnectable(rt: Res<TokioRuntime>, login_db: Res<LoginDatabase>, cfg: Res<ConfigMgr<WorldConfig>>) -> AzResult<()> {
     info!("setting worldserver as unconnectable");
-    // set server online but not not connectable
-    rt.block_on(
+    // set server not not connectable
+    rt.block_on(async {
         query_with(
             "UPDATE realmlist SET flag = (flag & ~?) | ? WHERE id = ?",
-            params!(
+            args!(
                 FlagSet::from(RealmFlags::Offline).bits(),
                 FlagSet::from(RealmFlags::VersionMismatch).bits(),
                 cfg.RealmID
-            ),
+            )?,
         )
-        .execute(&**login_db),
-    )?;
+        .execute(&**login_db)
+        .await
+    })?;
     Ok(())
 }
 
@@ -335,18 +353,18 @@ async fn clear_online_accounts(login_db: &LoginDatabase, char_db: &CharacterData
     // Reset online status for all accounts with characters on the current realm
     query_with(
         "UPDATE account SET online = 0 WHERE online > 0 AND id IN (SELECT acctid FROM realmcharacters WHERE realmid = ?)",
-        params!(realm_id),
+        args!(realm_id)?,
     )
     .execute(&**login_db)
     .await?;
 
     // Reset online status for all characters
-    query_with("UPDATE characters SET online = ? WHERE online <> ?", params!(false, false))
+    query_with("UPDATE characters SET online = ? WHERE online <> ?", args!(false, false)?)
         .execute(&**char_db)
         .await?;
 
     // Battleground instance ids reset at server restart
-    query_with("UPDATE character_battleground_data SET instanceId = ?", params!(false))
+    query_with("UPDATE character_battleground_data SET instanceId = ?", args!(false)?)
         .execute(&**char_db)
         .await?;
     Ok(())

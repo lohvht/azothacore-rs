@@ -21,8 +21,9 @@ use azothacore_common::{
     Locale,
 };
 use azothacore_database::{
+    args,
+    args_unwrap,
     database_env::{LoginDatabase, LoginPreparedStmts},
-    params,
     DbDriver,
 };
 use azothacore_server::shared::{
@@ -137,10 +138,11 @@ impl AccountInfo {
     }
 
     async fn load_result(login_db: &Pool<DbDriver>, web_credentials: &[u8]) -> sqlx::Result<Option<Self>> {
-        let Some(mut result) = LoginDatabase::sel_bnet_account_info_by_bnet_login_ticket::<_, Self>(login_db, params!(web_credentials)).await? else {
+        let Some(mut result) = LoginDatabase::sel_bnet_account_info_by_bnet_login_ticket::<_, Self>(login_db, args_unwrap!(web_credentials)).await? else {
             return Ok(None);
         };
-        let game_account_infos = LoginDatabase::sel_game_account_info_by_bnet_login_ticket::<_, DbGameAccountInfo>(login_db, params!(web_credentials)).await?;
+        let game_account_infos =
+            LoginDatabase::sel_game_account_info_by_bnet_login_ticket::<_, DbGameAccountInfo>(login_db, args_unwrap!(web_credentials)).await?;
         for db_gai in game_account_infos {
             result.game_accounts.entry(db_gai.id).or_insert_with(|| GameAccountInfo::load_result(db_gai));
         }
@@ -467,7 +469,7 @@ impl Session<'_> {
         if account_info.login_ticket_expiry < unix_now().as_secs() {
             return Err(BattlenetRpcErrorCode::TimedOut);
         }
-        let character_counts_result = LoginDatabase::sel_bnet_character_counts_by_bnet_id(&**self.login_db, params!(account_info.id))
+        let character_counts_result = LoginDatabase::sel_bnet_character_counts_by_bnet_id(&**self.login_db, args_unwrap!(account_info.id))
             .await
             .map_err(map_err_to_internal)?;
         for fields in character_counts_result {
@@ -482,7 +484,7 @@ impl Session<'_> {
                 .entry(BnetRealmHandle::new(fields.get(3), fields.get(4), fields.get(2)).get_address())
                 .or_insert(fields.get(1));
         }
-        let last_player_characters_result = LoginDatabase::sel_bnet_last_player_characters(&**self.login_db, params!(account_info.id))
+        let last_player_characters_result = LoginDatabase::sel_bnet_last_player_characters(&**self.login_db, args_unwrap!(account_info.id))
             .await
             .map_err(map_err_to_internal)?;
         for fields in last_player_characters_result {
@@ -616,8 +618,8 @@ impl SessionInner {
         // CheckIpCallback routine
         let ip_address = name.ip_str_or_name();
         // Verify that this IP is not in the ip_banned table
-        LoginDatabase::del_expired_ip_bans(&*login_db, params!()).await?;
-        for fields in LoginDatabase::sel_ip_info(&*login_db, params!(ip_address)).await? {
+        LoginDatabase::del_expired_ip_bans(&*login_db, args!()?).await?;
+        for fields in LoginDatabase::sel_ip_info(&*login_db, args!(ip_address)?).await? {
             let banned = fields.get::<u32, _>("banned") != 0;
             if banned {
                 let e = az_error!("[CheckIpCallback] Banned ip '{}' tries to login!", name);
@@ -1182,7 +1184,7 @@ impl Session<'_> {
 
         LoginDatabase::upd_bnet_last_login_info(
             &**self.login_db,
-            params!(
+            args_unwrap!(
                 self.remote_name().ip_str_or_name(),
                 self.locale.get().map_or(Locale::enUS as u32, |l| *l as u32),
                 self.os.get(),

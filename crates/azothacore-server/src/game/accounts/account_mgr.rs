@@ -2,8 +2,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use azothacore_common::{hex_str, AccountTypes};
 use azothacore_database::{
+    args,
     database_env::{CharacterDatabase, CharacterPreparedStmts, LoginDatabase, LoginPreparedStmts},
-    params,
     DbAcquire,
     DbExecutor,
 };
@@ -91,8 +91,8 @@ impl AccountMgr {
         login_db
             .transaction(|txn| {
                 Box::pin(async move {
-                    LoginDatabase::ins_account(&mut **txn, params!(username, sha_hash, &email, &email, bnet_account_id, bnet_index)).await?;
-                    LoginDatabase::ins_realm_characters_init(&mut **txn, params!()).await?;
+                    LoginDatabase::ins_account(&mut **txn, args!(username, sha_hash, &email, &email, bnet_account_id, bnet_index)?).await?;
+                    LoginDatabase::ins_realm_characters_init(&mut **txn, args!()?).await?;
                     Ok(())
                 })
             })
@@ -104,13 +104,13 @@ impl AccountMgr {
     //         //         let login_db = &pool;
     //         //         let char_db = CharacterDatabase::get();
     //         //         // Check if accounts exists
-    //         //         let exists = LoginDatabase::sel_account_by_id(login_db, params!(account_id)).await?.is_some();
+    //         //         let exists = LoginDatabase::sel_account_by_id(login_db, args!(account_id)).await?.is_some();
     //         //         if !exists {
     //         //             return Err(AccountOpError::NameNotExist);
     //         //         }
 
     //         //         // Obtain accounts characters
-    //         //         let player_guids = CharacterDatabase::sel_chars_by_account_id::<_, (u64,)>(char_db, params!(account_id)).await;
+    //         //         let player_guids = CharacterDatabase::sel_chars_by_account_id::<_, (u64,)>(char_db, args!(account_id)).await;
 
     //         //         stmt->setUInt32(0, );
 
@@ -135,37 +135,37 @@ impl AccountMgr {
     //         //         }
 
     //         //         // table realm specific but common for all characters of account for realm
-    //         //         stmt = CharacterDatabase::del_tutorials(char_db, params!());
+    //         //         stmt = CharacterDatabase::del_tutorials(char_db, args!());
     //         //         stmt->setUInt32(0, account_id);
     //         //         CharacterDatabase.Execute(stmt);
 
-    //         //         stmt = CharacterDatabase::del_account_data(char_db, params!());
+    //         //         stmt = CharacterDatabase::del_account_data(char_db, args!());
     //         //         stmt->setUInt32(0, account_id);
     //         //         CharacterDatabase.Execute(stmt);
 
-    //         //         stmt = CharacterDatabase::del_character_ban(char_db, params!());
+    //         //         stmt = CharacterDatabase::del_character_ban(char_db, args!());
     //         //         stmt->setUInt32(0, account_id);
     //         //         CharacterDatabase.Execute(stmt);
 
     //         //         SQLTransaction trans = LoginDatabase.BeginTransaction();
 
-    //         //         stmt = LoginDatabase::del_account(login_db, params!());
+    //         //         stmt = LoginDatabase::del_account(login_db, args!());
     //         //         stmt->setUInt32(0, account_id);
     //         //         trans->Append(stmt);
 
-    //         //         stmt = LoginDatabase::del_account_access(login_db, params!());
+    //         //         stmt = LoginDatabase::del_account_access(login_db, args!());
     //         //         stmt->setUInt32(0, account_id);
     //         //         trans->Append(stmt);
 
-    //         //         stmt = LoginDatabase::del_realm_characters(login_db, params!());
+    //         //         stmt = LoginDatabase::del_realm_characters(login_db, args!());
     //         //         stmt->setUInt32(0, account_id);
     //         //         trans->Append(stmt);
 
-    //         //         stmt = LoginDatabase::del_account_banned(login_db, params!());
+    //         //         stmt = LoginDatabase::del_account_banned(login_db, args!());
     //         //         stmt->setUInt32(0, account_id);
     //         //         trans->Append(stmt);
 
-    //         //         stmt = LoginDatabase::del_account_muted(login_db, params!());
+    //         //         stmt = LoginDatabase::del_account_muted(login_db, args!());
     //         //         stmt->setUInt32(0, account_id);
     //         //         trans->Append(stmt);
 
@@ -178,7 +178,7 @@ impl AccountMgr {
     pub async fn change_username_password<'a, A: DbAcquire<'a>>(login_db: A, account_id: u32, new_username: &str, new_password: &str) -> AccountOpResult<()> {
         // Check if accounts exists
         let mut login_db = login_db.acquire().await?;
-        let result = LoginDatabase::sel_account_by_id(&mut *login_db, params!(account_id)).await?.is_some();
+        let result = LoginDatabase::sel_account_by_id(&mut *login_db, args!(account_id)?).await?.is_some();
 
         if !result {
             return Err(AccountOpError::NameNotExist);
@@ -194,7 +194,7 @@ impl AccountMgr {
 
         LoginDatabase::upd_username(
             &mut *login_db,
-            params!(&new_username, Self::calculate_sha_pass_hash(&new_username, &new_password), account_id),
+            args!(&new_username, Self::calculate_sha_pass_hash(&new_username, &new_password), account_id)?,
         )
         .await?;
 
@@ -231,8 +231,8 @@ impl AccountMgr {
         let mut txn = login_db.begin().await?;
 
         let new_sha_hash = Self::calculate_sha_pass_hash(&username, &new_password);
-        LoginDatabase::upd_password(&mut *txn, params!(&new_sha_hash, account_id)).await?;
-        LoginDatabase::upd_vs(&mut *txn, params!("", "", username)).await?;
+        LoginDatabase::upd_password(&mut *txn, args!(&new_sha_hash, account_id)?).await?;
+        LoginDatabase::upd_vs(&mut *txn, args!("", "", username)?).await?;
         txn.commit().await?;
         Ok(())
     }
@@ -264,7 +264,7 @@ impl AccountMgr {
         }
         let new_email = new_email.to_ascii_uppercase();
 
-        LoginDatabase::upd_email(&mut *login_db, params!(&new_email, account_id)).await?;
+        LoginDatabase::upd_email(&mut *login_db, args!(&new_email, account_id)?).await?;
         Ok(())
     }
 
@@ -295,7 +295,7 @@ impl AccountMgr {
         }
         let new_email = new_email.to_ascii_uppercase();
 
-        LoginDatabase::upd_reg_email(&mut *login_db, params!(&new_email, account_id)).await?;
+        LoginDatabase::upd_reg_email(&mut *login_db, args!(&new_email, account_id)?).await?;
 
         Ok(())
     }
@@ -311,11 +311,10 @@ impl AccountMgr {
         let password = password.to_ascii_uppercase();
 
         let pass_hash = Self::calculate_sha_pass_hash(&username, &password);
-        LoginDatabase::sel_check_password(&mut *login_db, params!(account_id, pass_hash))
-            .await
-            .ok()
-            .flatten()
-            .is_some()
+        let Ok(args) = args!(account_id, pass_hash) else {
+            return false;
+        };
+        LoginDatabase::sel_check_password(&mut *login_db, args).await.ok().flatten().is_some()
     }
 
     pub async fn check_email<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32, new_email: &str) -> bool {
@@ -330,30 +329,30 @@ impl AccountMgr {
     }
 
     pub async fn get_id<'e, E: DbExecutor<'e>>(login_db: E, username: &str) -> AccountOpResult<Option<u32>> {
-        let id = LoginDatabase::get_account_id_by_username::<_, (u32,)>(login_db, params!(username)).await?;
+        let id = LoginDatabase::get_account_id_by_username::<_, (u32,)>(login_db, args!(username)?).await?;
         Ok(id.map(|v| v.0))
     }
 
     pub async fn get_security<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32, realm_id: Option<u32>) -> AccountOpResult<AccountTypes> {
         let realm_id_in_db = if let Some(realm_id) = realm_id { i64::from(realm_id) } else { -1 };
-        let sec = LoginDatabase::get_gmlevel_by_realmid::<_, (u8,)>(login_db, params!(account_id, realm_id_in_db)).await?;
+        let sec = LoginDatabase::get_gmlevel_by_realmid::<_, (u8,)>(login_db, args!(account_id, realm_id_in_db)?).await?;
         Ok(sec.and_then(|sec| sec.0.try_into().ok()).unwrap_or(AccountTypes::SecPlayer))
     }
 
     pub async fn get_name<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32) -> AccountOpResult<Option<String>> {
-        let name = LoginDatabase::get_username_by_id::<_, (String,)>(login_db, params!(account_id)).await?;
+        let name = LoginDatabase::get_username_by_id::<_, (String,)>(login_db, args!(account_id)?).await?;
         Ok(name.map(|n| n.0))
     }
 
     pub async fn get_email<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32) -> AccountOpResult<Option<String>> {
-        let email = LoginDatabase::get_email_by_id::<_, (String,)>(login_db, params!(account_id)).await?;
+        let email = LoginDatabase::get_email_by_id::<_, (String,)>(login_db, args!(account_id)?).await?;
 
         Ok(email.map(|n| n.0))
     }
 
     pub async fn get_characters_count<'e, E: DbExecutor<'e>>(char_db: E, account_id: u32) -> AccountOpResult<u64> {
         // check character count
-        let counts = CharacterDatabase::sel_sum_chars::<_, (u64,)>(char_db, params!(account_id)).await?;
+        let counts = CharacterDatabase::sel_sum_chars::<_, (u64,)>(char_db, args!(account_id)?).await?;
 
         Ok(counts.map(|n| n.0).unwrap_or(0))
     }
@@ -369,7 +368,7 @@ impl AccountMgr {
     }
 
     pub async fn is_banned_account<'e, E: DbExecutor<'e>>(login_db: E, name: &str) -> AccountOpResult<bool> {
-        let account_banned = LoginDatabase::sel_account_banned_by_username::<_, (u32, String)>(login_db, params!(name)).await?;
+        let account_banned = LoginDatabase::sel_account_banned_by_username::<_, (u32, String)>(login_db, args!(name)?).await?;
 
         let is_not_banned = account_banned.is_empty();
         Ok(!is_not_banned)
@@ -384,15 +383,15 @@ impl AccountMgr {
         let mut txn = login_db.begin().await?;
         // Delete old security level from DB,
         if let Some(realm_id) = realm_id {
-            LoginDatabase::del_account_access_by_realm(&mut *txn, params!(account_id, realm_id)).await?;
+            LoginDatabase::del_account_access_by_realm(&mut *txn, args!(account_id, realm_id)?).await?;
         } else {
-            LoginDatabase::del_account_access(&mut *txn, params!(account_id)).await?;
+            LoginDatabase::del_account_access(&mut *txn, args!(account_id)?).await?;
         }
         // also retrieve the realm_id to be saved in DB
         let realm_id_in_db = if let Some(realm_id) = realm_id { i64::from(realm_id) } else { -1 };
         let security_level_in_db = security_level.to_num();
         // Add new security level
-        LoginDatabase::ins_account_access(&mut *txn, params!(account_id, security_level_in_db, realm_id_in_db)).await?;
+        LoginDatabase::ins_account_access(&mut *txn, args!(account_id, security_level_in_db, realm_id_in_db)?).await?;
         txn.commit().await?;
         Ok(())
     }
@@ -510,8 +509,8 @@ mod tests {
         let mut login_db = login_db.acquire().await.unwrap();
 
         // Setup a dummy bnet account ID
-        LoginDatabase::ins_bnet_account(&mut *login_db, params!(&email, "dummy")).await.unwrap();
-        let (bnet_id,) = LoginDatabase::sel_bnet_account_id_by_email(&mut *login_db, params!(email))
+        LoginDatabase::ins_bnet_account(&mut *login_db, args!(&email, "dummy").unwrap()).await.unwrap();
+        let (bnet_id,) = LoginDatabase::sel_bnet_account_id_by_email(&mut *login_db, args!(email).unwrap())
             .await
             .ok()
             .flatten()
@@ -848,7 +847,7 @@ mod tests {
             &password,
         )
         .await;
-        LoginDatabase::ins_account_banned(&mut *txn, params!(banned_account_id, 300, "ban_author", "ban_reason"))
+        LoginDatabase::ins_account_banned(&mut *txn, args!(banned_account_id, 300, "ban_author", "ban_reason").unwrap())
             .await
             .unwrap();
 

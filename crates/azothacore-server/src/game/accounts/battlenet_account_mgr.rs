@@ -1,7 +1,7 @@
 use azothacore_common::hex_str;
 use azothacore_database::{
+    args,
     database_env::{LoginDatabase, LoginPreparedStmts},
-    params,
     DbAcquire,
     DbExecutor,
 };
@@ -42,7 +42,7 @@ impl BattlenetAccountMgr {
         }
 
         let pass_hash = Self::calculate_sha_pass_hash(&email, &password);
-        if let Err(e) = LoginDatabase::ins_bnet_account(&mut *login_db, params!(&email, pass_hash)).await {
+        if let Err(e) = LoginDatabase::ins_bnet_account(&mut *login_db, args!(&email, pass_hash)?).await {
             warn!(target:"sql::sql", cause=%e, "error when creating bnet account from DB");
             return Err(e.into());
         }
@@ -77,7 +77,7 @@ impl BattlenetAccountMgr {
         }
 
         let pass_hash = Self::calculate_sha_pass_hash(&username, &new_password);
-        LoginDatabase::upd_bnet_password(&mut *login_db, params!(pass_hash, account_id)).await?;
+        LoginDatabase::upd_bnet_password(&mut *login_db, args!(pass_hash, account_id)?).await?;
 
         Ok(())
     }
@@ -92,11 +92,8 @@ impl BattlenetAccountMgr {
         let password = password.to_ascii_uppercase();
 
         let pass_hash = Self::calculate_sha_pass_hash(&username, &password);
-        LoginDatabase::sel_bnet_check_password(&mut *login_db, params!(account_id, pass_hash))
-            .await
-            .ok()
-            .flatten()
-            .is_some()
+        let Ok(args) = args!(account_id, pass_hash) else { return false };
+        LoginDatabase::sel_bnet_check_password(&mut *login_db, args).await.ok().flatten().is_some()
     }
 
     pub async fn link_with_game_account<'a, A: DbAcquire<'a>>(login_db: A, email: &str, game_account_name: &str) -> AccountOpResult<()> {
@@ -122,7 +119,7 @@ impl BattlenetAccountMgr {
 
         let next_index_to_use = max_index + 1;
 
-        LoginDatabase::upd_bnet_game_account_link(&mut *login_db, params!(bnetaccount_id, next_index_to_use, game_account_id)).await?;
+        LoginDatabase::upd_bnet_game_account_link(&mut *login_db, args!(bnetaccount_id, next_index_to_use, game_account_id)?).await?;
 
         Ok(())
     }
@@ -139,29 +136,29 @@ impl BattlenetAccountMgr {
             return Err(AccountOpError::AccountBadLink);
         }
 
-        LoginDatabase::upd_bnet_game_account_link(&mut *login_db, params!(None::<u32>, None::<u8>, game_account_id)).await?;
+        LoginDatabase::upd_bnet_game_account_link(&mut *login_db, args!(None::<u32>, None::<u8>, game_account_id)?).await?;
 
         Ok(())
     }
 
     pub async fn get_id<'e, E: DbExecutor<'e>>(login_db: E, username: &str) -> AccountOpResult<Option<u32>> {
-        let id = LoginDatabase::sel_bnet_account_id_by_email::<_, (u32,)>(login_db, params!(username)).await?;
+        let id = LoginDatabase::sel_bnet_account_id_by_email::<_, (u32,)>(login_db, args!(username)?).await?;
 
         Ok(id.map(|v| v.0))
     }
 
     pub async fn get_name<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32) -> AccountOpResult<Option<String>> {
-        let name = LoginDatabase::sel_bnet_account_email_by_id::<_, (String,)>(login_db, params!(account_id)).await?;
+        let name = LoginDatabase::sel_bnet_account_email_by_id::<_, (String,)>(login_db, args!(account_id)?).await?;
         Ok(name.map(|v| v.0))
     }
 
     pub async fn get_id_by_game_account<'e, E: DbExecutor<'e>>(login_db: E, game_account_id: u32) -> AccountOpResult<Option<u32>> {
-        let id = LoginDatabase::sel_bnet_account_id_by_game_account::<_, (Option<u32>,)>(login_db, params!(game_account_id)).await?;
+        let id = LoginDatabase::sel_bnet_account_id_by_game_account::<_, (Option<u32>,)>(login_db, args!(game_account_id)?).await?;
         Ok(id.and_then(|v| v.0))
     }
 
     pub async fn get_max_index<'e, E: DbExecutor<'e>>(login_db: E, account_id: u32) -> AccountOpResult<Option<u8>> {
-        let max_index = LoginDatabase::sel_bnet_max_account_index::<_, (Option<u8>,)>(login_db, params!(account_id)).await?;
+        let max_index = LoginDatabase::sel_bnet_max_account_index::<_, (Option<u8>,)>(login_db, args!(account_id)?).await?;
         Ok(max_index.map(|v| v.0.unwrap_or_default()))
     }
 

@@ -42,7 +42,7 @@ pub fn cstr_bytes_to_string(raw: &[u8]) -> io::Result<String> {
 /// This string is taken from the last part of the path-like string.
 pub fn get_fixed_plain_name(p: &str) -> String {
     let mut found_ext = false;
-    let plain_name_after_slash = match p.rsplit_once(&['\\', '/']) {
+    let plain_name_after_slash = match p.rsplit_once(['\\', '/']) {
         None => p.to_owned(),
         Some((_, s2)) => s2.to_owned(),
     };

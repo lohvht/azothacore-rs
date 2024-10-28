@@ -1,10 +1,5 @@
 use std::{
     collections::{HashMap, HashSet},
-    sync::{
-        atomic::{AtomicU32, Ordering},
-        mpsc::{channel, TryRecvError},
-        Arc,
-    },
     time::Instant,
 };
 
@@ -488,7 +483,7 @@ fn build_mmap_tile_work(
     for e in tile_infos.iter().map(|v| v.0) {
         commands.entity(e).insert(AttemptedBuildMmapTile);
     }
-    tile_infos.par_iter().for_each(|(e, ti, md)| {
+    tile_infos.par_iter().for_each(|(_, ti, md)| {
         info!("building tile for Map {:04} - {:02},{:02}", ti.map_id, ti.tile_x, ti.tile_y);
         if let Err(e) = TileBuilder::build_mmap_tile(&cfg, ti.map_id, ti.tile_x, ti.tile_y, &ti.nav_mesh_params, md) {
             warn!(

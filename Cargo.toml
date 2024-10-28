@@ -15,7 +15,7 @@ opt-level = 3
 [workspace.dependencies]
 # Local crates
 azothacore-common = { path = "crates/azothacore-common" }
-azothacore-database ={ path = "crates/azothacore-database" }
+azothacore-database ={ path = "crates/azothacore-database", features = [ "mysql" ] }
 azothacore-tests-utils ={ path = "crates/azothacore-tests-utils" }
 azothacore-modules = { path = "azothacore-script-modules/modules" }
 azothacore-server = { path = "crates/azothacore-server" }
@@ -29,6 +29,7 @@ axum = { version = "0" }
 axum-extra = { version = "0", features = ["typed-header"] }
 bevy = { version = "0", features = ["multi_threaded", "bevy_state", "bevy_asset"], default-features = false }
 bytes = { version = "1" }
+cfg-if = { version = "1" }
 chrono = { version = "0" }
 clap =  { version = "4", features = ["string", "derive", "help"] }
 figment = { version = "0", features = ["toml", "env"] }

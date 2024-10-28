@@ -5,7 +5,6 @@ pub mod database_loader_utils;
 use std::{ops, path::PathBuf};
 
 use azothacore_common::configuration::{DatabaseInfo, DatabaseType, DbUpdates};
-pub use hugsqlx::params;
 use sqlx::{pool::PoolConnection, MySqlConnection};
 pub use sqlx::{query, query_as, query_as_with, query_with};
 
@@ -65,4 +64,47 @@ impl ExtendedDBInfo {
             .db_module_name()
             .expect("get db_module_name by db type failed, db type is expected to be one of the given DB and not All")
     }
+}
+
+cfg_if::cfg_if! {
+if #[cfg(feature = "postgres")] {
+    pub type DbArguments = sqlx::postgres::PgArguments;
+} else if #[cfg(feature = "mysql")] {
+    pub type DbArguments = sqlx::mysql::MySqlArguments;
+} else {
+    pub type DbArguments = sqlx::sqlite::SqliteArguments;
+}
+}
+
+#[macro_export]
+macro_rules! args {
+    ($($arg:expr),*) => {
+        {
+            #[allow(unused_imports)]
+            use sqlx::Arguments;
+            use $crate::DbArguments;
+
+            #[allow(unused_labels)]
+            'ret: {
+                #[allow(unused_mut)]
+                let mut args = DbArguments::default();
+                $(
+                    let res = args.add($arg);
+                    if let Err(e) = res {
+                        break 'ret Err(sqlx::Error::Encode(e));
+                    }
+                )*
+                Ok::<_, sqlx::Error>(args)
+            }
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! args_unwrap {
+    ($($arg:expr),*) => {
+        {
+            $crate::args!($($arg),*)
+        }.unwrap()
+    };
 }
