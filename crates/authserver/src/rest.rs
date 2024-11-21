@@ -20,8 +20,8 @@ use azothacore_common::{
     utils::unix_now,
 };
 use azothacore_database::{
+    args_unwrap,
     database_env::{LoginDatabase, LoginPreparedStmts},
-    params,
 };
 use azothacore_server::{game::accounts::battlenet_account_mgr::BattlenetAccountMgr, shared::networking::socket::AddressOrName};
 use bevy::{
@@ -269,7 +269,7 @@ impl LoginRESTService {
         }
 
         let result = handle_resp_error!(
-            LoginDatabase::sel_bnet_game_account_list(&**login_db, params!(basic_auth.username())).await,
+            LoginDatabase::sel_bnet_game_account_list(&**login_db, args_unwrap!(basic_auth.username())).await,
             StatusCode::INTERNAL_SERVER_ERROR
         );
 
@@ -376,7 +376,7 @@ impl LoginRESTService {
         }
 
         let fields = match handle_login_err!(
-            LoginDatabase::sel_bnet_authentication(&**login_db, params!(&login)).await,
+            LoginDatabase::sel_bnet_authentication(&**login_db, args_unwrap!(&login)).await,
             "DB error for post login"
         ) {
             None => {
@@ -403,7 +403,7 @@ impl LoginRESTService {
                 login_ticket = Some(format!("AZ-{}", hex_str!(OsRng.gen::<[u8; 20]>())));
             }
             let new_expiry = now + cfg.LoginREST.TicketDuration.as_secs();
-            let res = LoginDatabase::upd_bnet_authentication(&**login_db, params!(&login_ticket, new_expiry, account_id)).await;
+            let res = LoginDatabase::upd_bnet_authentication(&**login_db, args_unwrap!(&login_ticket, new_expiry, account_id)).await;
             if res.is_ok() {
                 return (
                     StatusCode::OK,
@@ -425,7 +425,7 @@ impl LoginRESTService {
             }
             let mut trans = handle_login_err!(login_db.begin().await, "unable to open a transaction to update wrong password counts");
             handle_login_err!(
-                LoginDatabase::upd_bnet_failed_logins(&mut *trans, params!(account_id)).await,
+                LoginDatabase::upd_bnet_failed_logins(&mut *trans, args_unwrap!(account_id)).await,
                 "unable to update bnet failed logins"
             );
 
@@ -437,17 +437,17 @@ impl LoginRESTService {
             let ban_time = cfg.WrongPass.BanTime.as_secs();
             if matches!(cfg.WrongPass.BanType, WrongPassBanType::BanAccount) {
                 handle_login_err!(
-                    LoginDatabase::ins_bnet_account_auto_banned(&mut *trans, params!(account_id, ban_time)).await,
+                    LoginDatabase::ins_bnet_account_auto_banned(&mut *trans, args_unwrap!(account_id, ban_time)).await,
                     "unable to insert bnet auto ban"
                 );
             } else {
                 handle_login_err!(
-                    LoginDatabase::ins_ip_auto_banned(&mut *trans, params!(source_ip.to_string(), ban_time)).await,
+                    LoginDatabase::ins_ip_auto_banned(&mut *trans, args_unwrap!(source_ip.to_string(), ban_time)).await,
                     "unable to insert IP ban"
                 );
             }
             handle_login_err!(
-                LoginDatabase::upd_bnet_reset_failed_logins(&mut *trans, params!(account_id)).await,
+                LoginDatabase::upd_bnet_reset_failed_logins(&mut *trans, args_unwrap!(account_id)).await,
                 "unable to reset account failed logins"
             );
 
@@ -466,7 +466,7 @@ impl LoginRESTService {
         }
 
         let mut login_refresh_result = LoginRefreshResult::default();
-        let login_ticket_expiry = match LoginDatabase::sel_bnet_existing_authentication(&**login_db, params!(basic_auth.username())).await {
+        let login_ticket_expiry = match LoginDatabase::sel_bnet_existing_authentication(&**login_db, args_unwrap!(basic_auth.username())).await {
             Err(e) => {
                 error!(target:"server::rest", username=basic_auth.username(), "unable to select existing bnet authentications; err={e}");
                 login_refresh_result.is_expired = Some(true);
@@ -483,7 +483,7 @@ impl LoginRESTService {
         let now = unix_now().as_secs();
         if login_ticket_expiry > now {
             let new_expiry = now + cfg.LoginREST.TicketDuration.as_secs();
-            match LoginDatabase::upd_bnet_existing_authentication(&**login_db, params!(new_expiry, basic_auth.username())).await {
+            match LoginDatabase::upd_bnet_existing_authentication(&**login_db, args_unwrap!(new_expiry, basic_auth.username())).await {
                 Err(e) => {
                     error!(target:"server::rest", username=basic_auth.username(), "update bnet authentication failed: err={e}");
                     login_refresh_result.is_expired = Some(true);

@@ -1,4 +1,6 @@
-use std::{ops, sync::RwLock};
+use std::ops;
+
+use bevy::prelude::Resource;
 
 #[derive(Clone, Copy)]
 pub struct MoveSpeed {
@@ -55,4 +57,6 @@ impl ops::Mul<f32> for MoveSpeed {
 }
 
 pub static BASE_MOVE_SPEED: MoveSpeed = MoveSpeed::new();
-pub static PLAYER_BASE_MOVE_SPEED: RwLock<MoveSpeed> = RwLock::new(MoveSpeed::new());
+
+#[derive(Resource)]
+pub struct PlayerBaseMoveSpeed(pub MoveSpeed);

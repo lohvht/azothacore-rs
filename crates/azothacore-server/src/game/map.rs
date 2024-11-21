@@ -3,12 +3,14 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use azothacore_common::utils::buffered_file_open;
 pub use azothacore_common::{AzResult, MapLiquidTypeFlag};
 use flagset::FlagSet;
+use map_file::MapFile;
 use nalgebra::DMatrix;
 use num::Num;
 
-use super::grid::grid_defines::ADT_CELLS_PER_GRID;
+use crate::game::grid::grid_defines::ADT_CELLS_PER_GRID;
 
 pub mod map_file;
 
@@ -53,13 +55,25 @@ pub struct MapLiquidDataEntryFlags {
 pub struct GridMap {}
 
 impl GridMap {
-    pub fn file_name<P, M, X, Y>(maps_dir: P, map_id: M, y: Y, x: X) -> PathBuf
+    /// replaces Map::ExistMap in TC/AC
+    pub fn exists<P, M, X, Y>(maps_dir: P, map_id: M, gx: X, gy: Y) -> AzResult<()>
     where
         P: AsRef<Path>,
         M: Num + Display,
         X: Num + Display,
         Y: Num + Display,
     {
-        maps_dir.as_ref().join(format!("{map_id:04}_{y:02}_{x:02}.map"))
+        let file_name = GridMap::file_name(maps_dir, map_id, gx, gy);
+        MapFile::header_check(&mut buffered_file_open(&file_name)?)
+    }
+
+    pub fn file_name<P, M, X, Y>(maps_dir: P, map_id: M, gx: X, gy: Y) -> PathBuf
+    where
+        P: AsRef<Path>,
+        M: Num + Display,
+        X: Num + Display,
+        Y: Num + Display,
+    {
+        maps_dir.as_ref().join(format!("{map_id:04}_{gx:02}_{gy:02}.map"))
     }
 }

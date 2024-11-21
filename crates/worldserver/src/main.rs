@@ -19,12 +19,11 @@ use azothacore_database::{
     database_loader_utils::DatabaseLoaderError,
     query_with,
 };
-use azothacore_modules::SCRIPTS as MODULES_LIST;
+use azothacore_modules::{modules_plugin, ModulesInitSet, MODULES_LIST};
 use azothacore_server::{
     game::{
-        scripting::script_mgr::ScriptMgr,
-        scripts,
-        world::{CurrentRealm, WorldConfig, WorldDbVersion},
+        scripting::{script_mgr::ScriptMgr, scripts_plugin, ScriptsInitSet},
+        world::{world_plugin, CurrentRealm, WorldConfig, WorldDbVersion, WorldSets},
     },
     shared::{
         realms::{
@@ -40,7 +39,6 @@ use bevy::{
     app::AppExit,
     diagnostic::FrameTimeDiagnosticsPlugin,
     prelude::{
-        App,
         Commands,
         EventReader,
         EventWriter,
@@ -73,47 +71,43 @@ fn main() {
             logging_plugin::<WorldConfig>,
             // Get the list of realms for the server
             realm_list_plugin::<WorldConfig>,
+            modules_plugin,
             scripts_plugin,
+            world_plugin,
             // socket_mgr_plugin::<WorldConfig, SessionInner>,
             // bnet_session_handling_plugin,
             // // TODO: Impl me? Init Secret Manager
             // sSecretMgr->Initialize();
         ))
-        .add_systems(
-            PreStartup,
-            (show_banner.run_if(resource_exists::<ConfigMgr<WorldConfig>>).in_set(WorldserverSet::ShowBanner),),
-        )
+        .add_systems(PreStartup, (show_banner.in_set(WorldserverMainSets::ShowBanner),))
         .add_systems(
             Startup,
             (
-                (|mut commands: Commands| set_server_process(&mut commands, ServerProcessType::Worldserver)).in_set(WorldserverSet::SetProcessType),
-                start_db
-                    .pipe(handle_startup_errors)
-                    .run_if(resource_exists::<ConfigMgr<WorldConfig>>)
-                    .in_set(WorldserverSet::StartDB),
+                (|mut commands: Commands| set_server_process(&mut commands, ServerProcessType::Worldserver)).in_set(WorldserverMainSets::SetProcessType),
+                start_db.pipe(handle_startup_errors).in_set(WorldserverMainSets::StartDB),
                 set_server_unconnectable
                     .pipe(handle_startup_errors)
-                    .run_if(resource_exists::<LoginDatabase>)
-                    .run_if(resource_exists::<ConfigMgr<WorldConfig>>)
-                    .in_set(WorldserverSet::SetServerNotConnectable),
-                load_realm_info
-                    .pipe(handle_startup_errors)
-                    .run_if(resource_exists::<RealmList>)
-                    .run_if(resource_exists::<ConfigMgr<WorldConfig>>)
-                    .in_set(WorldserverSet::LoadCurrentRealm),
+                    .in_set(WorldserverMainSets::SetRealmNotConnectable),
+                load_realm_info.pipe(handle_startup_errors).in_set(WorldserverMainSets::LoadCurrentRealm),
             ),
         )
         // Init logging right after config management
         .configure_sets(
             PreStartup,
-            (ConfigMgrSet::<WorldConfig>::load_initial(), LoggingSetupSet, WorldserverSet::ShowBanner).chain(),
+            (ConfigMgrSet::<WorldConfig>::load_initial(), LoggingSetupSet, WorldserverMainSets::ShowBanner).chain(),
         )
         .configure_sets(
             Startup,
-            (
-                (WorldserverSet::StartDB, WorldserverSet::SetServerNotConnectable).chain(),
-                (WorldserverSet::StartDB, RealmListStartSet, WorldserverSet::LoadCurrentRealm).chain(),
-            ),
+            ((
+                ModulesInitSet,
+                ScriptsInitSet,
+                WorldserverMainSets::StartDB,
+                WorldserverMainSets::SetRealmNotConnectable,
+                RealmListStartSet,
+                WorldserverMainSets::LoadCurrentRealm,
+                WorldSets::SetInitialWorldSettings,
+            )
+                .chain(),),
         )
         .add_systems(PostUpdate, stop_db)
         .run();
@@ -149,12 +143,12 @@ fn main() {
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum WorldserverSet {
+pub enum WorldserverMainSets {
     ShowBanner,
     SetProcessType,
     StartDB,
     LoadScript,
-    SetServerNotConnectable,
+    SetRealmNotConnectable,
     LoadCurrentRealm,
 }
 
@@ -168,22 +162,12 @@ fn show_banner(cfg: Res<ConfigMgr<WorldConfig>>) {
     });
 }
 
-fn scripts_plugin(app: &mut App) {
-    info!(target:"server::loading", "Initializing Scripts...");
-    // Adding scripts first, then they can load modules
-    let mut script_mgr = ScriptMgr::default();
-
-    scripts::add_scripts(&mut app.world, &mut script_mgr);
-    azothacore_modules::add_scripts(&mut app.world, &mut script_mgr);
-    app.insert_resource(script_mgr);
-}
-
 /// Initialize connection to the database
 fn start_db(
     mut commands: Commands,
     mut cfg: ResMut<ConfigMgr<WorldConfig>>,
     rt: Res<TokioRuntime>,
-    script_mgr: Res<ScriptMgr>,
+    script_mgr: ScriptMgr,
     mut signal: ResMut<SignalReceiver>,
 ) -> AzResult<()> {
     let top_span = info_span!(target:"server::worldserver", "start_db");
