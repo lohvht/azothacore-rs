@@ -1,10 +1,18 @@
 [package]
-name = "skeleton-module"
+name = "azothacore-modules"
 version = "0.0.0"
 edition = "2021"
 
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[build-dependencies]
+convert_case = "0"
+prettyplease = "0"
+proc-macro2 = "1"
+quote = "1"
+syn = "2"
+
 [dependencies]
-# Local crates
 azothacore-common.workspace = true
 azothacore-server.workspace = true
 # External crates

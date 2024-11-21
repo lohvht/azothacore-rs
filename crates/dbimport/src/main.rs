@@ -9,7 +9,7 @@ use azothacore_common::{
     CONF_DIR,
 };
 use azothacore_database::{database_loader::DatabaseLoader, database_loader_utils::DatabaseLoaderError};
-use azothacore_modules::SCRIPTS as MODULES_LIST;
+use azothacore_modules::MODULES_LIST;
 use azothacore_server::shared::{tokio_signal_handling_bevy_plugin, SignalReceiver};
 use bevy::prelude::{IntoSystemConfigs, IntoSystemSetConfigs, PreStartup, Res, ResMut, Startup, SystemSet};
 use clap::Parser;

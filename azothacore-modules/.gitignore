@@ -1,0 +1,10 @@
+# Ignore everthing else
+*
+
+# Don't ignore changes to the `src` directory and `skeleton` example module
+!Cargo.toml
+!.gitignore
+!build.rs
+!mod-skeleton-example/**
+!src/**
+!**/

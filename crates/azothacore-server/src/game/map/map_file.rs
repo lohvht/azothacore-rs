@@ -123,12 +123,17 @@ const MAP_MAGIC: &[u8] = b"MAPSv2.1";
 
 // Methods to pack into MapFile
 impl MapFile {
-    pub fn read<R: io::Read + io::Seek>(mut rdr: &mut R) -> AzResult<Self> {
+    pub fn header_check<R: io::Read + io::Seek>(rdr: &mut R) -> AzResult<()> {
         cmp_or_return!(
             rdr,
             MAP_MAGIC,
             "Mapfile magic does not match, please ensure that this is the right file. got {}, want {}"
         )?;
+        Ok(())
+    }
+
+    pub fn read<R: io::Read + io::Seek>(mut rdr: &mut R) -> AzResult<Self> {
+        Self::header_check(&mut rdr)?;
         let ret = bincode_deserialise(&mut rdr)?;
 
         sanity_check_read_all_bytes_from_reader!(rdr)?;

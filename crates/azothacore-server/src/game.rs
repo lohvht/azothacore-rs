@@ -1,5 +1,5 @@
 pub mod accounts;
-pub mod battleground;
+pub mod battlegrounds;
 pub mod entities;
 pub mod globals;
 pub mod grid;

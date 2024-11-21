@@ -539,7 +539,14 @@ dependencies = [
  "azothacore-common",
  "azothacore-server",
  "bevy",
- "skeleton-module",
+ "convert_case",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "serde",
+ "syn 2.0.85",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -1615,6 +1622,9 @@ dependencies = [
 [[package]]
 name = "connection-patcher"
 version = "0.1.0"
+dependencies = [
+ "bevy",
+]
 
 [[package]]
 name = "console"
@@ -4790,18 +4800,6 @@ dependencies = [
  "num-traits",
  "paste",
  "wide",
-]
-
-[[package]]
-name = "skeleton-module"
-version = "0.0.0"
-dependencies = [
- "azothacore-common",
- "azothacore-server",
- "bevy",
- "serde",
- "tokio",
- "tracing",
 ]
 
 [[package]]

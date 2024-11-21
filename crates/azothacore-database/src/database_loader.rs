@@ -154,7 +154,7 @@ impl DatabaseLoader {
             .map(|e| {
                 let mut p = Path::new(DATABASE_FILES_SRC_ROOT).to_path_buf();
 
-                p.extend(&["azothacore-script-modules", e, "data/sql", self.database_config.db_module_name()]);
+                p.extend(&["azothacore-modules", e, "data/sql", self.database_config.db_module_name()]);
                 p
             })
             .collect()

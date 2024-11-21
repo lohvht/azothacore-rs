@@ -1,12 +1,14 @@
 use std::{
+    mem,
     net::IpAddr,
     path::{Path, PathBuf},
     time::Duration,
 };
 
 use azothacore_common::{
-    bounded_nums::{LowerBoundedNum, RangedBoundedNum, UpperBoundedNum},
-    configuration::{from_env_toml, Config, DatabaseInfo, DbUpdates, LogAppender, LogFlags, LogLevel, LogLoggerConfig},
+    bounded_nums::{LowerBoundedNum, LowerBoundedNumMissingDefault, RangedBoundedNum, UpperBoundedNum},
+    collision::management::vmap_mgr2::VmapConfig,
+    configuration::{from_env_toml, Config, DataDirConfig, DatabaseInfo, DbUpdates, LogAppender, LogFlags, LogLevel, LogLoggerConfig},
     durationb,
     durationb_days,
     durationb_hours,
@@ -18,6 +20,7 @@ use azothacore_common::{
     AccountTypes,
     AzResult,
     Locale,
+    BASE_DIR,
 };
 use flagset::FlagSet;
 use serde::{Deserialize, Serialize};
@@ -27,7 +30,7 @@ use tracing::error;
 
 use crate::{
     game::{
-        battleground::BattlegroundQueueInvitationType,
+        battlegrounds::BattlegroundQueueInvitationType,
         entities::{
             object::object_defines::{
                 CONTACT_DISTANCE,
@@ -40,7 +43,10 @@ use crate::{
             player::MAX_MONEY_AMOUNT,
         },
         globals::object_mgr::{MAX_CHARTER_NAME, MAX_PET_NAME, MAX_PLAYER_NAME},
-        grid::{grid_defines::MIN_GRID_DELAY, DEFAULT_VISIBILITY_NOTIFY_PERIOD},
+        grid::{
+            grid_defines::{MIN_GRID_DELAY, MIN_MAP_UPDATE_DELAY},
+            DEFAULT_VISIBILITY_NOTIFY_PERIOD,
+        },
         world::{
             ArenaQueueAnnouncerDetail,
             CharDeleteMethod,
@@ -188,6 +194,8 @@ pub fn default_worldserver_log_configs() -> Vec<LogLoggerConfig> {
     ]
 }
 
+type GtZeroOrOneF32 = LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>;
+
 structstruck::strike! {
 #[strikethrough[serde_inline_default]]
 #[strikethrough[derive(DefaultFromSerde, Deserialize, Serialize, Clone, Debug, PartialEq)]]
@@ -197,8 +205,11 @@ pub struct WorldConfig {
     #[serde_inline_default(DatabaseInfo::default_with_info("azcore_characters"))] pub CharacterDatabaseInfo: DatabaseInfo,
     #[serde_inline_default(DatabaseInfo::default_with_info("azcore_hotfixes"))] pub HotfixDatabaseInfo: DatabaseInfo,
     #[serde(default)] pub Updates: DbUpdates,
-    #[serde_inline_default("data".into())] pub DataDir: PathBuf,
-    #[serde_inline_default("logs".into())] pub LogsDir: PathBuf,
+    /// Default Message of the Day, displayed at login.
+    /// This value is the fallback for when no other Motd can be found in the `azcore_auth.motd` table.
+    #[serde_inline_default("Welcome to a Azothacore Server.".into())] Motd: String,
+    #[serde_inline_default(format!("{BASE_DIR}/data").into())] pub DataDir: PathBuf,
+    #[serde_inline_default(format!("{BASE_DIR}/logs").into())] pub LogsDir: PathBuf,
     #[serde(default="default_worldserver_log_appenders")] pub Appender: Vec<LogAppender>,
     #[serde(default="default_worldserver_log_configs")] pub Logger: Vec<LogLoggerConfig>,
     /// Time between realm list updates.
@@ -208,146 +219,206 @@ pub struct WorldConfig {
     #[serde(default)] pub ClientCacheVersion: u32,
     #[serde(default)] pub HotfixCacheVersion: u32,
     #[serde_inline_default(Locale::enUS)] pub DBCLocale: Locale,
-    /// Read the player limit from the config file
-    #[serde_inline_default(100)] pub PlayerLimit: usize,
+    /// Maximum number of players in the world. Excluding Mods, GMs and Admins.
+    /// If you want to block players and only allow Mods, GMs or Admins to join the
+    /// server, use the DB field "auth.realmlist.allowedSecurityLevel".
+    ///
+    /// Put zero to disable a limit.
+    #[serde_inline_default(0usize)] pub PlayerLimit: usize,
     #[serde(default)] pub PlayerStart: pub struct WorldConfigPlayerStart {
-        /// Get string for new logins (newly created characters)
+        /// String to be displayed at first login of newly created characters - default empty for disabled
         #[serde(default)] pub String: String,
         #[serde(default)] pub AllReputation: bool,
         #[serde(default)] pub CustomSpells: bool,
         #[serde(default)] pub MapsExplored: bool,
     },
-    /// Send server info on login?
+    /// Display core version (`.server info`) on login.
     #[serde(default)] pub SendServerInfoOnLogin: bool,
     /// Server rates - Read all rates from the config file
     #[serde(default)] pub Rate: pub struct WorldConfigRate {
-        #[serde(default)] pub Health: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub Mana: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
+        #[serde(default)] pub Health: GtZeroOrOneF32,
+        #[serde(default)] pub Mana: GtZeroOrOneF32,
+        /// Multiplier to configure health and power increase or decrease.
         #[serde(default)] pub Power: pub struct WorldConfigRatePower {
-            #[serde(default)] pub RageGain: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub RageLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub RunicPowerGain: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub RunicPowerLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Focus: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Energy: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub ComboPointLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub SoulShardsLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub LunarPowerLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub HolyPowerLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub MaelstromLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub ChiLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub InsanityLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub ArcaneChargesLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub FuryLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub PainLoss: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
+            #[serde(default)] pub RageGain: GtZeroOrOneF32,
+            #[serde(default)] pub RageLoss: GtZeroOrOneF32,
+            #[serde(default)] pub RunicPowerGain: GtZeroOrOneF32,
+            #[serde(default)] pub RunicPowerLoss: GtZeroOrOneF32,
+            #[serde(default)] pub Focus: GtZeroOrOneF32,
+            #[serde(default)] pub Energy: GtZeroOrOneF32,
+            #[serde(default)] pub ComboPointLoss: GtZeroOrOneF32,
+            #[serde(default)] pub SoulShardsLoss: GtZeroOrOneF32,
+            #[serde(default)] pub LunarPowerLoss: GtZeroOrOneF32,
+            #[serde(default)] pub HolyPowerLoss: GtZeroOrOneF32,
+            #[serde(default)] pub MaelstromLoss: GtZeroOrOneF32,
+            #[serde(default)] pub ChiLoss: GtZeroOrOneF32,
+            #[serde(default)] pub InsanityLoss: GtZeroOrOneF32,
+            #[serde(default)] pub ArcaneChargesLoss: GtZeroOrOneF32,
+            #[serde(default)] pub FuryLoss: GtZeroOrOneF32,
+            #[serde(default)] pub PainLoss: GtZeroOrOneF32,
         },
-        #[serde(default)] pub SkillDiscovery: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
+        /// Multiplier for skill discovery.
+        #[serde(default)] pub SkillDiscovery: GtZeroOrOneF32,
+        /// Drop rates for money and items based on quality.
         #[serde(default)] pub DropItem: pub struct WorldConfigRateDropItem {
-            #[serde(default)] pub Poor: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Normal: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Uncommon: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Rare: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Epic: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Legendary: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Artifact: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Referenced: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub ReferencedAmount: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub GroupAmount: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
+            #[serde(default)] pub Poor: GtZeroOrOneF32,
+            #[serde(default)] pub Normal: GtZeroOrOneF32,
+            #[serde(default)] pub Uncommon: GtZeroOrOneF32,
+            #[serde(default)] pub Rare: GtZeroOrOneF32,
+            #[serde(default)] pub Epic: GtZeroOrOneF32,
+            #[serde(default)] pub Legendary: GtZeroOrOneF32,
+            #[serde(default)] pub Artifact: GtZeroOrOneF32,
+            #[serde(default)] pub Referenced: GtZeroOrOneF32,
+            #[serde(default)] pub ReferencedAmount: GtZeroOrOneF32,
+            #[serde(default)] pub GroupAmount: GtZeroOrOneF32,
         },
-        #[serde(default)] pub DropMoney: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub RewardQuestMoney: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub RewardBonusMoney: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
+        #[serde(default)] pub DropMoney: GtZeroOrOneF32,
+        #[serde(default)] pub RewardQuestMoney: GtZeroOrOneF32,
+        #[serde(default)] pub RewardBonusMoney: GtZeroOrOneF32,
         #[serde(default)] pub BuyValueItem: pub struct WorldConfigRateValueItem {
-            #[serde_inline_default(1.0)] pub Poor: f32,
-            #[serde_inline_default(1.0)] pub Normal: f32,
-            #[serde_inline_default(1.0)] pub Uncommon: f32,
-            #[serde_inline_default(1.0)] pub Rare: f32,
-            #[serde_inline_default(1.0)] pub Epic: f32,
-            #[serde_inline_default(1.0)] pub Legendary: f32,
-            #[serde_inline_default(1.0)] pub Artifact: f32,
-            #[serde_inline_default(1.0)] pub Heirloom: f32,
+            #[serde(default)] pub Poor: GtZeroOrOneF32,
+            #[serde(default)] pub Normal: GtZeroOrOneF32,
+            #[serde(default)] pub Uncommon: GtZeroOrOneF32,
+            #[serde(default)] pub Rare: GtZeroOrOneF32,
+            #[serde(default)] pub Epic: GtZeroOrOneF32,
+            #[serde(default)] pub Legendary: GtZeroOrOneF32,
+            #[serde(default)] pub Artifact: GtZeroOrOneF32,
+            #[serde(default)] pub Heirloom: GtZeroOrOneF32,
         },
         #[serde(default)] pub SellValueItem: WorldConfigRateValueItem,
+        /// Experience rates
         #[serde(default)] pub XP: pub struct WorldConfigRateExperience {
-            #[serde_inline_default(1.00)] pub Kill: f32,
-            #[serde_inline_default(1.00)] pub BattlegroundKill: f32,
-            #[serde_inline_default(1.00)] pub Quest: f32,
-            #[serde_inline_default(1.00)] pub QuestDF: f32,
-            #[serde_inline_default(1.00)] pub Explore: f32,
-            #[serde_inline_default(1.00)] pub Pet: f32,
-            #[serde_inline_default(0.05)] pub PetLevelXP: f32,
-            #[serde_inline_default(1.00)] pub BattlegroundKillAV: f32,
-            #[serde_inline_default(1.00)] pub BattlegroundKillWSG: f32,
-            #[serde_inline_default(1.00)] pub BattlegroundKillAB: f32,
-            #[serde_inline_default(1.00)] pub BattlegroundKillEOTS: f32,
-            #[serde_inline_default(1.00)] pub BattlegroundKillSOTA: f32,
-            #[serde_inline_default(1.00)] pub BattlegroundKillIC: f32,
+            #[serde(default)] pub Kill: GtZeroOrOneF32,
+            #[serde(default)] pub Quest: GtZeroOrOneF32,
+            #[serde(default)] pub QuestDF: GtZeroOrOneF32,
+            #[serde(default)] pub Explore: GtZeroOrOneF32,
+            #[serde(default)] pub Pet: GtZeroOrOneF32,
+            #[serde(default)] pub PetLevelXP: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(0.05) }>,
+            /// Experience rate for honorable kills in Alterac Valley (AV). Not affected by Rate.XP.Kill. Only works if Battleground.GiveXPForKills = true
+            #[serde(default)] pub BattlegroundKillAV: GtZeroOrOneF32,
+            /// Experience rate for honorable kills in Warsong Gulch (WSG). Not affected by Rate.XP.Kill. Only works if Battleground.GiveXPForKills = true
+            #[serde(default)] pub BattlegroundKillWSG: GtZeroOrOneF32,
+            /// Experience rate for honorable kills in Arathi Basin (AB). Not affected by Rate.XP.Kill. Only works if Battleground.GiveXPForKills = true
+            #[serde(default)] pub BattlegroundKillAB: GtZeroOrOneF32,
+            /// Experience rate for honorable kills in Eye of the Storm (EOTS). Not affected by Rate.XP.Kill. Only works if Battleground.GiveXPForKills = true
+            #[serde(default)] pub BattlegroundKillEOTS: GtZeroOrOneF32,
+            /// Experience rate for honorable kills in Strand of the Ancients (SOTA). Not affected by Rate.XP.Kill. Only works if Battleground.GiveXPForKills = true
+            #[serde(default)] pub BattlegroundKillSOTA: GtZeroOrOneF32,
+            /// Experience rate for honorable kills in Isle of Conquest (IC). Not affected by Rate.XP.Kill. Only works if Battleground.GiveXPForKills = true
+            #[serde(default)] pub BattlegroundKillIC: GtZeroOrOneF32,
         },
-        #[serde(default)] pub RepairCost: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(1.0) }>,
+        #[serde(default)] pub RepairCost: GtZeroOrOneF32,
         #[serde(default)] pub Reputation: pub struct WorldConfigRateReputation {
-            #[serde(default)] pub Gain: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub LowLevelKill: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub LowLevelQuest: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
+            /// Reputation gain rate
+            #[serde(default)] pub Gain: GtZeroOrOneF32,
+            /// Reputation gain from killing low level (grey) creatures.
+            #[serde(default)] pub LowLevelKill: GtZeroOrOneF32,
+            /// Reputation gain rate from quests
+            #[serde(default)] pub LowLevelQuest: GtZeroOrOneF32,
+            /// Reputation bonus rate for recruit-a-friend.
             #[serde(default)] pub RecruitAFriendBonus: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(0.1) }>,
         },
         #[serde(default)] pub Creature: pub struct WorldConfigRateCreature {
-            #[serde(default)] pub Aggro: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
+            #[serde(default)] pub Aggro: GtZeroOrOneF32,
+            /// Mulitplier for creature melee damage
             #[serde(default)] pub Damage: pub struct WorldConfigRateCreatureStatsRate {
-                #[serde(default)] pub Normal: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-                #[serde(default)] pub Elite: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-                #[serde(default)] pub Rare: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-                #[serde(default)] pub RareElite: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-                #[serde(default)] pub WORLDBOSS: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
+                #[serde(default)] pub Normal: GtZeroOrOneF32,
+                #[serde(default)] pub Elite: GtZeroOrOneF32,
+                #[serde(default)] pub Rare: GtZeroOrOneF32,
+                #[serde(default)] pub RareElite: GtZeroOrOneF32,
+                #[serde(default)] pub WORLDBOSS: GtZeroOrOneF32,
             },
+            /// Mulitplier for creature health.
             #[serde(default)] pub HP: WorldConfigRateCreatureStatsRate,
+            /// Mulitplier for creature spell damage.
             #[serde(default)] pub SpellDamage: WorldConfigRateCreatureStatsRate,
         },
+        /// Resting points grow rates.
         #[serde(default)] pub Rest: pub struct WorldConfigRateRest {
-            #[serde(default)] pub InGame: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub OfflineInTavernOrCity: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub OfflineInWilderness: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
+            #[serde(default)] pub InGame: GtZeroOrOneF32,
+            #[serde(default)] pub OfflineInTavernOrCity: GtZeroOrOneF32,
+            #[serde(default)] pub OfflineInWilderness: GtZeroOrOneF32,
         },
-        #[serde(default)] FallDamage: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
+        /// Damage after fall rate.
+        #[serde(default)] FallDamage: GtZeroOrOneF32,
         #[serde(default)] pub Auction: pub struct WorldConfigRateAuction {
-            #[serde(default)] pub Time: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Deposit: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub Cut: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
+            #[serde(default)] pub Time: GtZeroOrOneF32,
+            #[serde(default)] pub Deposit: GtZeroOrOneF32,
+            #[serde(default)] pub Cut: GtZeroOrOneF32,
         },
-        #[serde(default)] pub Honor: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub ArenaPoints: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub InstanceResetTime: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub Talent: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub TalentPet: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub MoveSpeed: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub CorpseDelayLooted: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(0.5) }>,
+        #[serde(default)] pub Honour: GtZeroOrOneF32,
+        /// Multiplier for the rate between global raid/heroic instance resets
+        /// (dbc value). Higher value increases the time between resets,
+        /// lower value lowers the time, you need clean instance_reset in
+        /// characters db in order to let new values work.
+        #[serde(default)] pub InstanceResetTime: GtZeroOrOneF32,
+        /// Movement speed rate.
+        #[serde(default)] pub MoveSpeed: GtZeroOrOneF32,
+        #[serde(default)] pub CorpseDelayLooted: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(0.5) }>,
         #[serde(default)] pub MissChanceMultiplier: pub struct WorldConfigRateMissChanceMultiplier {
             #[serde(default)] pub TargetCreature: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(11.00) }>,
             #[serde(default)] pub TargetPlayer: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(7.00) }>,
             #[serde(default)] pub OnlyAffectsPlayer: bool,
         },
         #[serde(default)] pub Quest: pub struct WorldConfigRateQuest {
-            #[serde(default)] pub MoneyReward: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-            #[serde(default)] pub MaxLevelReward: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
+            #[serde(default)] pub MoneyReward: LowerBoundedNumMissingDefault<f32, { f32b!(0.0) }, { f32b!(0.0) }, { f32b!(1.0) }>,
+            #[serde(default)] pub MaxLevelReward: LowerBoundedNumMissingDefault<f32, { f32b!(0.0) }, { f32b!(0.0) }, { f32b!(1.0) }>,
         },
     },
+    /// Max distance from movement target point (+moving unit size) and targeted
+    /// object (+size) after that new target movement point calculated.
+    /// valid between [CONTACT_DISTANCE] and [NOMINAL_MELEE_RANGE]. defaults to 1.5
+    ///
+    /// [CONTACT_DISTANCE] - Minimum, Contact Range, More sensitive reaction to target movement
+    /// [NOMINAL_MELEE_RANGE] - Maximum, Melee attack range, Less CPU usage
     #[serde(default)] pub TargetPosRecalculateRange: RangedBoundedNum<f32, { f32b!(CONTACT_DISTANCE) }, { f32b!(NOMINAL_MELEE_RANGE) }, { f32b!(1.5) }>,
     #[serde(default)] pub DurabilityLoss: pub struct WorldConfigDurabilityLoss {
+        /// Durability loss percentage on death.
         #[serde(default)] pub OnDeath: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, { f32b!(0.1) }>,
-        #[serde(default)] pub ChanceDamage: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, {f32b!(0.5) } >,
-        #[serde(default)] pub ChanceAbsorb: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, {f32b!(0.5) } >,
-        #[serde(default)] pub ChanceParry: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, {f32b!(0.05) } >,
-        #[serde(default)] pub ChanceBlock: RangedBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }, {f32b!(0.05) } >,
+        /// Chance to lose durability on one equipped item from damage
+        ///
+        /// default - 100/0.5 = 200, Each 200 damage one equipped item will use durability
+        #[serde(default)] pub ChanceDamage: LowerBoundedNumMissingDefault<f32, { f32b!(0.0) }, { f32b!(0.0) }, { f32b!(0.5) }>,
+        /// Chance to lose durability on one equipped armor item when absorbing damage.
+        ///
+        /// default - 100/0.5 = 200, Each 200 absorbed damage one equipped item will lose durability
+        #[serde(default)] pub ChanceAbsorb: LowerBoundedNumMissingDefault<f32, { f32b!(0.0) }, { f32b!(0.0) }, { f32b!(0.5) }>,
+        /// Chance to lose durability on main weapon when parrying attacks.
+        ///
+        /// default - 100/0.05 = 2000, Each 2000 parried damage the main weapon will lose durability
+        #[serde(default)] pub ChanceParry: LowerBoundedNumMissingDefault<f32, { f32b!(0.0) }, { f32b!(0.0) }, { f32b!(0.05) }>,
+        /// Chance to lose durability on shield when blocking attacks.
+        ///
+        /// default - 100/0.05 = 2000, Each 2000 blocked damage the shield will lose durability
+        #[serde(default)] pub ChanceBlock: LowerBoundedNumMissingDefault<f32, { f32b!(0.0) }, { f32b!(0.0) }, { f32b!(0.05) }>,
+        /// Durability loss on death during PvP.
         #[serde(default)] pub InPvP: bool,
     },
+    /// Configure the use of the addon channel through the server (some client side
+    /// addons will not work correctly with disabled addon channel)
     #[serde_inline_default(true)] pub AddonChannel: bool,
+    /// Clean out deprecated achievements, skills, spells and talents from the db.
     #[serde(default)] pub CleanCharacterDB: bool,
+    /// Store custom chat channel settings like password, automatic ownership handout
+    /// or ban list in the database. Needs to be enabled to save custom
+    /// world/trade/etc. channels that have automatic ownership handout disabled.
+    /// (`.channel set ownership $channel off`)
     #[serde(default)] pub PreserveCustomChannels: bool,
+    /// Unload grids to save memory. Can be disabled if enough memory is available
+    /// to speed up moving players to new grids.
     #[serde_inline_default(true)] pub GridUnload: bool,
+    /// Load all grids for base maps upon load. Requires GridUnload to be 0.
+    /// This will take around 5GB of ram upon server load, and will take some time
+    /// to initially load the server.
     #[serde(default)] pub BaseMapLoadAllGrids: bool,
+    /// Load all grids for instance maps upon load. Requires GridUnload to be 0.
+    /// Upon loading an instance map, all creatures/objects in the map will be pre-loaded
     #[serde(default)] pub InstanceMapLoadAllGrids: bool,
     #[serde(default)] pub PlayerSave: pub struct WorldConfigPlayerSave {
+        /// Save player stats only on logout.
         #[serde_inline_default(true)] pub SaveOnlyOnLogout: bool,
         #[serde(default)] pub StatsInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_s!(15 * 60) } >,
+        /// Minimum level for saving character stats in the database for external usage. default 0 disables saving
         #[serde(default)] pub StatsMinLevel: RangedBoundedNum<u32, 0, { LEVEL_LIMIT_MAX as i128 }, 0>,
     },
     #[serde_inline_default(true)] pub CloseIdleConnections: bool,
@@ -397,15 +468,31 @@ pub struct WorldConfig {
         #[serde(default)] pub LowerSecurity: bool,
         #[serde(default)] pub ForceShutdownThreshold: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_s!(30) } >,
     },
+    /// Max distance to creature for group member to get experience at creature death.
     #[serde(default)] pub MaxGroupXPDistance: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(74.0) }>,
+    /// Max distance between character and and group to gain the Recruit-A-Friend
+    /// XP multiplier.
     #[serde(default)] pub MaxRecruitAFriendBonusDistance: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(100.0) }>,
+    /// The maximum distance in yards that a "monster" creature can see
+    /// regardless of level difference (through CreatureAI::IsVisible).
+    /// Increases CONFIG_SIGHT_MONSTER to 50 yards. Used to be 20 yards.
     #[serde(default)] pub MonsterSight: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(50.0) }>,
     #[serde(default)] pub Compression: RangedBoundedNum<u32, 1, 9, 1>,
+    /// Determines the character clean flags that remain set after cleanups.
+    /// This is a bitmask value, check the enum value [crate::shared::shared_defines::CleaningFlag] for more
+    /// information.
     #[serde(default)] pub PersistentCharacterCleanFlags: FlagSet<CleaningFlag>,
     #[serde(default)] pub Auction: pub struct WorldConfigAuction {
+        /// Sets the minimum time a single player character can perform a getall scan.
+        /// The value is only held in memory so a server restart will clear it.
+        /// Setting this to zero, will disable GetAll functions completely.
         #[serde(default)] pub GetAllScanDelay: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(15) } >,
+        /// Sets the minimum time that the client must wait between
+        /// auction search operations. This can be increased if somehow Auction House activity is causing
+        /// too much load.
         #[serde(default)] pub SearchDelay: RangedBoundedNum<Duration, { durationb_ms!(100) }, { durationb_ms!(10000) }, { durationb_ms!(300) } >,
     },
+    /// Level requirements for several functions, such as chatting in channels, whispers, trade, send mail etc.
     #[serde(default)] pub LevelReq: pub struct WorldConfigLevelReq {
         #[serde(default)] pub ChatChannel: RangedBoundedNum<u32, 1, { LEVEL_LIMIT_MAX as i128 }, 1>,
         #[serde(default)] pub ChatWhisper: RangedBoundedNum<u32, 1, { LEVEL_LIMIT_MAX as i128 }, 1>,
@@ -417,17 +504,32 @@ pub struct WorldConfig {
         #[serde(default)] pub Auction: RangedBoundedNum<u32, 1, { LEVEL_LIMIT_MAX as i128 }, 1>,
         #[serde(default)] pub Mail: RangedBoundedNum<u32, 1, { LEVEL_LIMIT_MAX as i128 }, 1>,
     },
-    #[serde(default)] pub PreserveCustomChannelDuration: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_days!(14) }>,
+    /// Time that needs to pass before the customs chat channels get
+    /// cleaned up from the database. Only channels with ownership handout enabled
+    /// (default behavior) will be cleaned.
+    #[serde(default)] pub PreserveCustomChannelDuration: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_s!(0) }>,
+    /// Allows to skip queue after being disconnected for a given number of seconds.
     #[serde(default)] pub DisconnectToleranceInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_days!(14) }>,
-    #[serde(default)] pub GridCleanUpDelay: LowerBoundedNum<Duration, { durationb!(MIN_GRID_DELAY) }, { durationb_mins!(5) }>,
+    /// Time (in milliseconds) grid clean up delay.
+    #[serde(default)] pub GridCleanUpDelay: LowerBoundedNumMissingDefault<Duration, { durationb!(MIN_GRID_DELAY) }, { durationb!(MIN_GRID_DELAY) }, { durationb_mins!(5) }>,
+    /// Time for player save interval.
     #[serde(default)] pub PlayerSaveInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(15) }>,
-    #[serde(default)] pub MapUpdateInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_ms!(100) }>,
+    /// Time for map update interval.
+    #[serde(default)] pub MapUpdateInterval:  LowerBoundedNumMissingDefault<Duration, { durationb!(MIN_MAP_UPDATE_DELAY) }, { durationb!(MIN_MAP_UPDATE_DELAY) }, { durationb_ms!(100) }>,
+    /// Time for weather update interval.
     #[serde(default)] pub ChangeWeatherInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(10) }>,
+    /// TCP port to reach the world server.
     #[serde_inline_default(8085)] pub WorldServerPort: u32,
+    /// TCP port to for second world connection.
     #[serde_inline_default(8086)] pub InstanceServerPort: u16,
+    /// Time after which a connection being idle on the character
+    /// selection screen is disconnected.
     #[serde(default)] pub SocketTimeOutTime: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(15) }>,
+    /// Time after which an idle connection is dropped while
+    /// logged into the world.
+    /// The client sends keepalive packets every 30 seconds. Values <= 30s are not recommended.
     #[serde(default)] pub SocketTimeOutTimeActive: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(1) }>,
-    #[serde(default)] pub SessionAddDelay: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_ms!(10) }>,
+    /// Server realm type.
     #[serde_inline_default(RealmType::Normal)] pub GameType: RealmType,
     #[serde_inline_default(RealmZone::Development)] pub RealmZone: RealmZone,
     #[serde_inline_default(None.into())] pub StrictPlayerNames: FlagSet<StrictName>,
@@ -461,7 +563,7 @@ pub struct WorldConfig {
     },
     #[serde(default)] pub CharactersPerRealm: UpperBoundedNum<u32, { MAX_CHARACTERS_PER_REALM as i128 }, { MAX_CHARACTERS_PER_REALM as i128 }>,
     #[serde_inline_default(50)] pub CharactersPerAccount: u32,
-    #[serde_inline_default(50)] pub MaxWhoListReturns: u32,
+    #[serde_inline_default(49)] pub MaxWhoListReturns: u32,
     // NOTE: HEROIC_CHARACTERS_PER_REALM in AC
     #[serde(default)] pub DemonHuntersPerRealm: UpperBoundedNum<u32, { MAX_CHARACTERS_PER_REALM as i128 }, 0>,
     #[serde(default)] pub SkipCinematics: SkipCinematics,
@@ -477,11 +579,6 @@ pub struct WorldConfig {
     #[serde(default)] pub StartDeathKnightPlayerMoney: RangedBoundedNum<u32, 0, { MAX_MONEY_AMOUNT as i128 }, 2000>,
     // NOTE: START_HEROIC_PLAYER_MONEY in AC
     #[serde(default)] pub StartDemonHunterPlayerMoney: RangedBoundedNum<u32, 0, { MAX_MONEY_AMOUNT as i128 }, 2000>,
-    #[serde_inline_default(75000)] pub MaxHonorPoints: u32,
-    #[serde_inline_default(75000)] pub MaxHonorPointsMoneyPerPoint: u32,
-    #[serde_inline_default(0)] pub StartHonorPoints: u32,
-    #[serde_inline_default(10000)] pub MaxArenaPoints: u32,
-    #[serde_inline_default(0)] pub StartArenaPoints: u32,
     #[serde(default)] pub Currency: pub struct WorldConfigCurrency {
         /// run weekly on at 6am on wednesdays
         #[serde_inline_default(String::from("* 0 6 * * 3"))] pub ResetCron: String,
@@ -543,10 +640,10 @@ pub struct WorldConfig {
         #[serde(default)] pub Milling: bool,
     },
     #[serde(default)] pub SkillGain: pub struct WorldConfigSkillGain {
-        #[serde(default)] pub Crafting: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub Defense: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub Gathering: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
-        #[serde(default)] pub Weapon: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(1.0) }>,
+        #[serde(default)] pub Crafting: GtZeroOrOneF32,
+        #[serde(default)] pub Defense: GtZeroOrOneF32,
+        #[serde(default)] pub Gathering: GtZeroOrOneF32,
+        #[serde(default)] pub Weapon: GtZeroOrOneF32,
     },
     #[serde_inline_default(Some(2.into()))] pub MaxOverspeedPings: Option<LowerBoundedNum<u32, 2, 2>>,
     #[serde_inline_default(true)] pub ActivateWeather: bool,
@@ -599,6 +696,7 @@ pub struct WorldConfig {
         #[serde(default)] pub PrematureFinishTimer: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(5) }>,
         #[serde(default)] pub InvitationType: BattlegroundQueueInvitationType,
         #[serde(default)] pub PremadeGroupWaitForMatch: Option<LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(30) }>>,
+        /// Give experience for honorable kills in battlegrounds.
         #[serde(default)] pub GiveXPForKills: bool,
         #[serde(default)] pub ReportAFKNumber: RangedBoundedNum<u32, 1, 9, 3>,
         #[serde(default)] pub ReportAFKTimer: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(4) }>,
@@ -726,7 +824,11 @@ pub struct WorldConfig {
     #[serde(default)] pub ShowKickInWorld: bool,
     #[serde(default)] pub ShowMuteInWorld: bool,
     #[serde(default)] pub ShowBanInWorld: bool,
+    /// Duration interval to write update time diffs to the log file.
+    /// Update diff can be used as a performance indicator. Diff < 300ms: good
+    /// performance. Diff > 600ms. bad performance, may be caused by high CPU usage.
     #[serde(default)] pub RecordUpdateTimeDiffInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(5) }>,
+    /// Only record update time diff which is greater than this value.
     #[serde(default)] pub MinRecordUpdateTimeDiff: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_ms!(100) }>,
     #[serde_inline_default(1)] MapUpdateThreads: u32,
     #[serde_inline_default(None)] CommandLookupMaxResults: Option<u32>,
@@ -1000,8 +1102,6 @@ impl Config for WorldConfig {
         clamp_cfg_max!(cfg, StartPlayerLevel, MaxPlayerLevel);
         clamp_cfg!(cfg, StartDeathKnightPlayerLevel, StartPlayerLevel, MaxPlayerLevel);
         clamp_cfg!(cfg, StartDemonHunterPlayerLevel, StartPlayerLevel, MaxPlayerLevel);
-        clamp_cfg_max!(cfg, StartHonorPoints, MaxHonorPoints);
-        clamp_cfg_max!(cfg, StartArenaPoints, MaxArenaPoints);
         clamp_cfg_max!(cfg, Currency.StartApexisCrystals, Currency.MaxApexisCrystals);
         clamp_cfg_max!(cfg, Currency.StartJusticePoints, Currency.MaxJusticePoints);
         clamp_cfg_max!(cfg, RecruitAFriend.MaxLevel, MaxPlayerLevel);
@@ -1022,6 +1122,74 @@ impl Config for WorldConfig {
             clamp_cfg_max!(|>, below, below, "NoGrayAggroBelow", above, "NoGrayAggroAbove");
         }
         Ok(cfg)
+    }
+
+    fn reload(&mut self, new: Self) {
+        let old = mem::replace(self, new);
+        if self.WorldServerPort != old.WorldServerPort {
+            error!(target:"server.loading", "WorldServerPort option can't be changed on reload, using current value ({}).", old.WorldServerPort);
+            self.WorldServerPort = old.WorldServerPort
+        }
+        if self.InstanceServerPort != old.InstanceServerPort {
+            error!(target:"server.loading", "InstanceServerPort option can't be changed on reload, using current value ({}).", old.InstanceServerPort);
+            self.InstanceServerPort = old.InstanceServerPort
+        }
+        if self.GameType != old.GameType {
+            error!(target:"server.loading", "GameType option can't be changed on reload, using current value ({:?}).", old.GameType);
+            self.GameType = old.GameType;
+        }
+        if self.RealmZone != old.RealmZone {
+            error!(target:"server.loading", "RealmZone option can't be changed on reload, using current value ({:?}).", old.RealmZone);
+            self.RealmZone = old.RealmZone;
+        }
+        if self.MaxPlayerLevel != old.MaxPlayerLevel {
+            error!(target:"server.loading", "MaxPlayerLevel option can't be changed at config reload, using current value ({}).", old.MaxPlayerLevel);
+            self.MaxPlayerLevel = old.MaxPlayerLevel;
+        }
+        if self.Expansion != old.Expansion {
+            error!(target:"server.loading", "Expansion option can't be changed at config reload, using current value ({:?}).", old.Expansion);
+            self.Expansion = old.Expansion;
+        }
+        if self.DataDir != old.DataDir {
+            error!(target:"server.loading", "DataDir option can't be changed at config reload, using current value ({:?}).", old.DataDir);
+            self.DataDir = old.DataDir;
+        }
+    }
+}
+
+impl DataDirConfig for WorldConfig {
+    fn db2_dir(&self) -> PathBuf {
+        self.DataDir.join("dbc")
+    }
+
+    fn cameras_dir(&self) -> PathBuf {
+        self.DataDir.join("cameras")
+    }
+
+    fn gt_dir(&self) -> PathBuf {
+        self.DataDir.join("gt")
+    }
+
+    fn maps_dir(&self) -> PathBuf {
+        self.DataDir.join("maps")
+    }
+
+    fn mmaps_dir(&self) -> PathBuf {
+        self.DataDir.join("mmaps")
+    }
+}
+
+impl VmapConfig for WorldConfig {
+    fn vmaps_dir(&self) -> PathBuf {
+        self.DataDir.join("vmaps")
+    }
+
+    fn enable_height_calc(&self) -> bool {
+        self.vmap.enableHeight
+    }
+
+    fn enable_line_of_sight_calc(&self) -> bool {
+        self.vmap.enableLOS
     }
 }
 

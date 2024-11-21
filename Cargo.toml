@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["crates/*", "azothacore-script-modules/*", "xtask"]
+members = ["crates/*", "azothacore-modules", "xtask"]
 
 # Enable a small amount of optimization in debug mode
 [profile.dev]
@@ -17,7 +17,7 @@ opt-level = 3
 azothacore-common = { path = "crates/azothacore-common" }
 azothacore-database ={ path = "crates/azothacore-database", features = [ "mysql" ] }
 azothacore-tests-utils ={ path = "crates/azothacore-tests-utils" }
-azothacore-modules = { path = "azothacore-script-modules/modules" }
+azothacore-modules = { path = "azothacore-modules" }
 azothacore-server = { path = "crates/azothacore-server" }
 azothacore-tools = { path = "crates/azothacore-tools" }
 bnet-rpc = { path = "crates/bnet-rpc" }

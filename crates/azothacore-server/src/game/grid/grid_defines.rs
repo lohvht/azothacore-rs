@@ -59,3 +59,122 @@ pub const MAP_RESOLUTION: usize = ADT_GRID_SIZE;
 
 pub const MAP_SIZE: f32 = SIZE_OF_GRIDS * MAX_NUMBER_OF_GRIDS as f32;
 pub const MAP_HALFSIZE: f32 = MAP_SIZE / 2.0;
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+pub struct CoordPair<const LIMIT: usize> {
+    pub x_coord: usize,
+    pub y_coord: usize,
+}
+
+impl<const LIMIT: usize> CoordPair<LIMIT> {
+    pub fn dec_x(&mut self, val: usize) {
+        if self.x_coord > val {
+            self.x_coord -= val;
+        } else {
+            self.x_coord = 0;
+        }
+    }
+
+    pub fn inc_x(&mut self, val: usize) {
+        self.x_coord = (self.x_coord + val).min(LIMIT - 1);
+    }
+
+    pub fn dec_y(&mut self, val: usize) {
+        if self.y_coord > val {
+            self.y_coord -= val;
+        } else {
+            self.y_coord = 0;
+        }
+    }
+
+    pub fn inc_y(&mut self, val: usize) {
+        self.y_coord = (self.y_coord + val).min(LIMIT - 1);
+    }
+
+    pub fn is_coord_valid(&self) -> bool {
+        self.x_coord < LIMIT && self.y_coord < LIMIT
+    }
+
+    pub fn normalize(mut self) -> Self {
+        self.x_coord = self.x_coord.min(LIMIT - 1);
+        self.y_coord = self.y_coord.min(LIMIT - 1);
+        self
+    }
+
+    pub fn get_id(&self) -> usize {
+        self.y_coord * LIMIT + self.x_coord
+    }
+}
+
+pub type GridCoord = CoordPair<MAX_NUMBER_OF_GRIDS>;
+pub type CellCoord = CoordPair<TOTAL_NUMBER_OF_CELLS_PER_MAP>;
+
+fn compute<const LIMIT: usize, const CENTER_VAL: usize>(x: f32, y: f32, center_offset: f32, size: f32) -> CoordPair<LIMIT> {
+    // calculate and store temporary values in double format for having same result as same mySQL calculations
+    let x_offset = (f64::from(x) - f64::from(center_offset)) / f64::from(size);
+    let y_offset = (f64::from(y) - f64::from(center_offset)) / f64::from(size);
+
+    let x_coord = (x_offset + 0.5) as usize + CENTER_VAL;
+    let y_coord = (y_offset + 0.5) as usize + CENTER_VAL;
+    CoordPair::<LIMIT> { x_coord, y_coord }
+}
+
+/// ComputeGridCoord
+pub fn compute_grid_coord(x: f32, y: f32) -> GridCoord {
+    compute::<MAX_NUMBER_OF_GRIDS, CENTER_GRID_ID>(x, y, CENTER_GRID_OFFSET, SIZE_OF_GRIDS)
+}
+
+/// ComputeCellCoord
+pub fn compute_cell_coord(x: f32, y: f32) -> CellCoord {
+    compute::<TOTAL_NUMBER_OF_CELLS_PER_MAP, CENTER_GRID_CELL_ID>(x, y, CENTER_GRID_CELL_OFFSET, SIZE_OF_GRID_CELL)
+}
+
+pub fn compute_cell_coord2(x: f32, y: f32, x_off: &mut f32, y_off: &mut f32) -> CellCoord {
+    let x_offset = (f64::from(x) - f64::from(CENTER_GRID_CELL_OFFSET)) / f64::from(SIZE_OF_GRID_CELL);
+    let y_offset = (f64::from(y) - f64::from(CENTER_GRID_CELL_OFFSET)) / f64::from(SIZE_OF_GRID_CELL);
+
+    let x_coord = (x_offset + 0.5) as usize + CENTER_GRID_CELL_ID;
+    let y_coord = (y_offset + 0.5) as usize + CENTER_GRID_CELL_ID;
+    *x_off = (x_offset as f32 - x_coord as f32 + CENTER_GRID_CELL_ID as f32) * SIZE_OF_GRID_CELL;
+    *y_off = (y_offset as f32 - y_coord as f32 + CENTER_GRID_CELL_ID as f32) * SIZE_OF_GRID_CELL;
+    CellCoord { x_coord, y_coord }
+}
+
+pub fn normalize_map_coord(c: &mut f32) {
+    if *c > MAP_HALFSIZE - 0.5 {
+        *c = MAP_HALFSIZE - 0.5;
+    } else if *c < -(MAP_HALFSIZE - 0.5) {
+        *c = -(MAP_HALFSIZE - 0.5);
+    }
+}
+
+pub fn is_valid_map_coord1(c: f32) -> bool {
+    c.is_finite() && c.abs() <= (MAP_HALFSIZE - 0.5)
+}
+
+pub fn is_valid_map_coord2(x: f32, y: f32) -> bool {
+    is_valid_map_coord1(x) && is_valid_map_coord1(y)
+}
+
+pub fn is_valid_map_coord3(x: f32, y: f32, z: f32) -> bool {
+    is_valid_map_coord2(x, y) && is_valid_map_coord1(z)
+}
+
+pub fn is_valid_map_coord4(x: f32, y: f32, z: f32, o: f32) -> bool {
+    is_valid_map_coord3(x, y, z) && is_valid_map_coord1(o)
+}
+
+// x:  17066.66656 compute_grid_coord => 63; Map::GetGrid => 0
+// y: -17066.66656 compute_grid_coord => 0 ; Map::GetGrid => 63
+
+// x: 0 compute_grid_coord => 32; Map::GetGrid => 32
+// y: 0 compute_grid_coord => 32; Map::GetGrid => 32
+
+// x: 7000 compute_grid_coord => 45.12500080156255; Map::GetGrid => 18.87499917968745
+// y: -150 compute_grid_coord => 31.71874996367187; Map::GetGrid => 32.28125001757813
+
+// x: 15999 compute_grid_coord => 61.99812685613293; Map::GetGrid => 2.001873125117070
+// y: -11222 compute_grid_coord => 10.95874866617179; Map::GetGrid => 53.04125131507821
+
+// (17066.66656 - 266.66666) / 533.3333 + 0.5 + 32
+// 32 - (17066.66656 / 533.3333)
