@@ -204,7 +204,7 @@ pub struct WorldConfig {
     #[serde_inline_default(DatabaseInfo::default_with_info("azcore_world"))] pub WorldDatabaseInfo: DatabaseInfo,
     #[serde_inline_default(DatabaseInfo::default_with_info("azcore_characters"))] pub CharacterDatabaseInfo: DatabaseInfo,
     #[serde_inline_default(DatabaseInfo::default_with_info("azcore_hotfixes"))] pub HotfixDatabaseInfo: DatabaseInfo,
-    #[serde(default)] pub Updates: DbUpdates,
+    #[serde_inline_default(DbUpdates{EnableDatabases: None.into(), ..Default::default() })] pub Updates: DbUpdates,
     /// Default Message of the Day, displayed at login.
     /// This value is the fallback for when no other Motd can be found in the `azcore_auth.motd` table.
     #[serde_inline_default("Welcome to a Azothacore Server.".into())] Motd: String,
@@ -233,6 +233,8 @@ pub struct WorldConfig {
         #[serde(default)] pub MapsExplored: bool,
     },
     /// Display core version (`.server info`) on login.
+    ///
+    /// Server.LoginInfo OR CONFIG_ENABLE_SINFO_LOGIN in TC/AC
     #[serde(default)] pub SendServerInfoOnLogin: bool,
     /// Server rates - Read all rates from the config file
     #[serde(default)] pub Rate: pub struct WorldConfigRate {
@@ -273,8 +275,6 @@ pub struct WorldConfig {
             #[serde(default)] pub GroupAmount: GtZeroOrOneF32,
         },
         #[serde(default)] pub DropMoney: GtZeroOrOneF32,
-        #[serde(default)] pub RewardQuestMoney: GtZeroOrOneF32,
-        #[serde(default)] pub RewardBonusMoney: GtZeroOrOneF32,
         #[serde(default)] pub BuyValueItem: pub struct WorldConfigRateValueItem {
             #[serde(default)] pub Poor: GtZeroOrOneF32,
             #[serde(default)] pub Normal: GtZeroOrOneF32,
@@ -354,14 +354,16 @@ pub struct WorldConfig {
         #[serde(default)] pub InstanceResetTime: GtZeroOrOneF32,
         /// Movement speed rate.
         #[serde(default)] pub MoveSpeed: GtZeroOrOneF32,
-        #[serde(default)] pub CorpseDelayLooted: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(0.5) }>,
+        #[serde(default)] pub CorpseDecayLooted: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(0.5) }>,
         #[serde(default)] pub MissChanceMultiplier: pub struct WorldConfigRateMissChanceMultiplier {
             #[serde(default)] pub TargetCreature: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(11.00) }>,
             #[serde(default)] pub TargetPlayer: LowerBoundedNum<f32, { f32b!(0.0) }, { f32b!(7.00) }>,
             #[serde(default)] pub OnlyAffectsPlayer: bool,
         },
         #[serde(default)] pub Quest: pub struct WorldConfigRateQuest {
+            /// Rate.Quest.Money.Reward in TC / Rate.RewardQuestMoney in AC
             #[serde(default)] pub MoneyReward: LowerBoundedNumMissingDefault<f32, { f32b!(0.0) }, { f32b!(0.0) }, { f32b!(1.0) }>,
+            /// Rate.Quest.Money.Max.Level.Reward in TC / Rate.RewardBonusMoney in AC
             #[serde(default)] pub MaxLevelReward: LowerBoundedNumMissingDefault<f32, { f32b!(0.0) }, { f32b!(0.0) }, { f32b!(1.0) }>,
         },
     },
@@ -620,10 +622,6 @@ pub struct WorldConfig {
     #[serde_inline_default(true)] pub EnableLowLevelRegenBoost: bool,
     #[serde(default)] pub MailDeliveryDelay: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_hours!(1) }>,
     #[serde(default)] pub UpdateUptimeInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(10) }>,
-    #[serde(default)] pub LogDB: pub struct WorldConfigLogDB {
-        #[serde(default)] pub ClearInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(10) }>,
-        #[serde(default)] pub ClearTime: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_days!(14) }>,
-    },
     #[serde_inline_default(25)] pub TeleportTimeoutNear: u32,
     #[serde_inline_default(45)] pub TeleportTimeoutFar: u32,
     #[serde(default)] pub MaxAllowedMMRDrop: LowerBoundedNum<u32, 0, 500>,
@@ -798,6 +796,7 @@ pub struct WorldConfig {
     // pub daily_rbg_min_level_ap_reward: u32, daily_rbg_min_level_ap_reward: cfg_mgr.get("DailyRBGArenaPoints.MinLevel", || 101),
     #[serde(default)] pub AuctionHouseSearchTimeout: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_s!(1) }>,
     #[serde(default)] pub MoveMaps: pub struct WorldConfigMoveMaps {
+        /// mmap.enablePathFinding in TC
         #[serde_inline_default(true)] pub Enabled: bool,
     },
     #[serde(default)] pub vmap: pub struct WorldConfigVmap {

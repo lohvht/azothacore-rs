@@ -19,7 +19,7 @@ struct MyWorld;
 impl Script for MyWorld {}
 
 impl WorldScript for MyWorld {
-    fn on_after_config_load(&self) -> Option<impl System<In = bool, Out = ()>> {
+    fn on_after_config_load(&self) -> Option<impl System<In = In<bool>, Out = ()>> {
         Some(IntoSystem::into_system(|In(_reload), _cfg: Res<ConfigMgr<WorldConfig>>| {
             info!("SKELETON PRINT");
         }))

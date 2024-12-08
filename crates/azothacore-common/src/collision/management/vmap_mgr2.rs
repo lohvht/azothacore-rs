@@ -7,7 +7,7 @@ use std::{
 
 use bevy::{
     app::{App, Startup},
-    asset::{io::Reader as BevyAssetIoReader, AssetApp, AssetLoader, AssetServer, Assets, AsyncReadExt, LoadContext},
+    asset::{io::Reader as BevyAssetIoReader, AssetApp, AssetLoader, AssetServer, Assets, LoadContext},
     ecs::system::SystemParam,
     prelude::{EventWriter, Handle, IntoSystemConfigs, Res, ResMut, Resource, SystemSet},
 };
@@ -200,11 +200,11 @@ impl AssetLoader for WorldModelAssetLoader {
     type Error = AzError;
     type Settings = ();
 
-    async fn load<'a>(
-        &'a self,
-        reader: &'a mut BevyAssetIoReader<'_>,
-        _settings: &'a Self::Settings,
-        load_context: &'a mut LoadContext<'_>,
+    async fn load(
+        &self,
+        reader: &mut dyn BevyAssetIoReader,
+        _settings: &Self::Settings,
+        load_context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = vec![];
         let filename = load_context.asset_path();

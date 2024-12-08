@@ -395,11 +395,11 @@ impl LoginRESTService {
             login_ticket_expiry,
             is_banned,
         } = fields;
-        let is_banned = is_banned.map_or(false, |b| b);
+        let is_banned = is_banned.is_some_and(|b| b);
 
         let now = unix_now().as_secs();
         if sent_password_hash == pass_hash {
-            if login_ticket.is_none() || login_ticket_expiry.map_or(true, |exp_ts| exp_ts < now) {
+            if login_ticket.is_none() || login_ticket_expiry.is_none_or(|exp_ts| exp_ts < now) {
                 login_ticket = Some(format!("AZ-{}", hex_str!(OsRng.gen::<[u8; 20]>())));
             }
             let new_expiry = now + cfg.LoginREST.TicketDuration.as_secs();

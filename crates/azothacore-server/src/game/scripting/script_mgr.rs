@@ -38,7 +38,7 @@ impl ScriptMgr<'_, '_> {
     where
         S: WorldScript + IntoScriptObject<S, WorldScriptObject> + Send + Sync + 'static,
     {
-        commands.add(AddScript::new(script_sys))
+        commands.queue(AddScript::new(script_sys))
     }
 
     pub fn on_load_custom_database_table(&self, commands: &mut Commands) {
@@ -152,7 +152,7 @@ impl ScriptMgr<'_, '_> {
     where
         S: DatabaseScript + IntoScriptObject<S, DatabaseScriptObject> + Send + Sync + 'static,
     {
-        commands.add(AddScript::new(script_sys))
+        commands.queue(AddScript::new(script_sys))
     }
 
     pub fn on_after_databases_loaded(&self, commands: &mut Commands, update_flags: FlagSet<DatabaseType>) {
@@ -170,7 +170,7 @@ impl ScriptMgr<'_, '_> {
     where
         S: AccountScript + IntoScriptObject<S, AccountScriptObject> + Send + Sync + 'static,
     {
-        commands.add(AddScript::new(script_sys));
+        commands.queue(AddScript::new(script_sys));
     }
 
     pub fn on_account_login(&self, commands: &mut Commands, account_id: u32) {

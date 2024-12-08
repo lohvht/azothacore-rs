@@ -130,11 +130,11 @@ struct AccountInfo {
 
 impl AccountInfo {
     fn is_banned(&self) -> bool {
-        self.is_banned.map_or(false, |b| b)
+        self.is_banned.is_some_and(|b| b)
     }
 
     fn is_permanently_banned(&self) -> bool {
-        self.is_permanently_banned.map_or(false, |b| b)
+        self.is_permanently_banned.is_some_and(|b| b)
     }
 
     async fn load_result(login_db: &Pool<DbDriver>, web_credentials: &[u8]) -> sqlx::Result<Option<Self>> {
@@ -191,8 +191,8 @@ impl GameAccountInfo {
             security_level,
         } = db_gai;
 
-        let is_permanently_banned = is_permanently_banned.map_or(false, |b| b);
-        let is_banned = is_permanently_banned || unban_date.map_or(false, |ub| ub > unix_now().as_secs());
+        let is_permanently_banned = is_permanently_banned.is_some_and(|b| b);
+        let is_banned = is_permanently_banned || unban_date.is_some_and(|ub| ub > unix_now().as_secs());
         let _security_level = security_level.map_or(AccountTypes::SecPlayer, |l| l.try_into().unwrap_or(AccountTypes::SecPlayer));
 
         let display_name = if let Some(sub_str_pos) = name.find('#') {

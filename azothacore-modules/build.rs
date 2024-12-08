@@ -23,7 +23,7 @@ fn main() {
             continue;
         }
         let epath = entry.path();
-        if epath.extension().map_or(false, |ext| epath.is_file() && ext == "rs") {
+        if epath.extension().is_some_and(|ext| epath.is_file() && ext == "rs") {
             let mod_name = epath.file_stem().unwrap().to_string_lossy().to_string().to_case(Case::Snake);
             let mod_file_name = epath.file_name().unwrap().to_string_lossy().to_string();
             module_name_to_path.insert(mod_name, mod_file_name);

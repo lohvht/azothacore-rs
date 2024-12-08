@@ -57,8 +57,8 @@ pub trait ScriptObjectTrait: Component + Clone {
 
 impl ScriptObjectTrait for ScriptObject {
     fn remove_systems_from_bevy(&self, bevy_world: &mut World) {
-        _ = bevy_world.remove_system(self.is_database_bound);
-        _ = bevy_world.remove_system(self.is_afterload_script);
-        _ = bevy_world.remove_system(self.check_validity);
+        _ = bevy_world.unregister_system(self.is_database_bound);
+        _ = bevy_world.unregister_system(self.is_afterload_script);
+        _ = bevy_world.unregister_system(self.check_validity);
     }
 }
