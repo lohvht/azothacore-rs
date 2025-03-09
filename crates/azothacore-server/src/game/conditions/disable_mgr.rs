@@ -84,6 +84,7 @@ impl DisableMgr {
     /// LoadDisables in TC / AC
     fn load(mut commands: Commands, rt: Res<TokioRuntime>, world_database: Res<WorldDatabase>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
         let old_ms_time = Instant::now();
+        let disable_map = Default::default();
         #[derive(FromRow)]
         struct Disable {
             #[sqlx(rename = "sourceType")]
@@ -123,11 +124,13 @@ impl DisableMgr {
                 error!(target:"sql.sql", "Invalid type {source_type} specified in `disables` table, skipped.");
                 continue;
             };
-            todo!("IMPL DISABLE MGR");
+            // // NOTE: IMPLEMENT ME!
+            // todo!("IMPL DISABLE MGR");
             // match typ {
             //     DisableType::Spell => {},
             // }
         }
+        commands.insert_resource(Self { disable_map });
     }
 
     fn is_disabled_for(&self, typ: DisableType, entry: u32, unit: Option<()>, flags: u8) -> bool {

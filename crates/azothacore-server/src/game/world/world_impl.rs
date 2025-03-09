@@ -21,7 +21,7 @@ use tracing::{error, info};
 
 use crate::{
     game::{
-        conditions::disable_mgr::DisableMgr,
+        conditions::disable_mgr::{disable_mgr_plugin, DisableMgr, DisableMgrInitialLoadSet},
         entities::unit::{PlayerBaseMoveSpeed, BASE_MOVE_SPEED},
         globals::object_mgr::{handle_set_highest_guids_error, set_highest_guids},
         map::map_mgr::{GridCleanupTimer, MapUpdateTimer},
@@ -92,6 +92,7 @@ fn add_set_initial_world_settings_system(app: &mut App) {
     app.add_plugins((
         db2_mgr_plugin,
         //- Initialize VMapManager function pointers (to untangle game/collision circular deps)
+        disable_mgr_plugin,
         vmap_mgr2_plugin::<WorldConfig, DB2Storage<LiquidType>, DisableMgr>,
     ))
     .add_systems(
@@ -111,7 +112,11 @@ fn add_set_initial_world_settings_system(app: &mut App) {
         // Record update if recording set in log and diff is greater then minimum set in log
         WorldUpdateTime::record_update,
     )
-    .configure_sets(Startup, (InitDB2MgrSet, VMapManager2InitSet).in_set(WorldSets::SetInitialWorldSettings))
+    .configure_sets(
+        Startup,
+        (InitDB2MgrSet, DisableMgrInitialLoadSet, VMapManager2InitSet).in_set(WorldSets::SetInitialWorldSettings),
+    )
+    .configure_sets(Startup, (VMapManager2InitSet.after(DisableMgrInitialLoadSet),))
     .configure_sets(Startup, (VMapManager2InitSet.after(InitDB2MgrSet),));
 }
 

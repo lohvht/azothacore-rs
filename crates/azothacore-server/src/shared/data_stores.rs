@@ -3,7 +3,7 @@ pub mod db2_structure;
 pub mod dbc_enums;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     fs,
     io,
     ops::Deref,
@@ -21,8 +21,10 @@ use azothacore_common::{
     utils::buffered_file_open,
     AzError,
     AzResult,
+    ChildMapData,
     Locale,
     MapLiquidTypeFlag,
+    ParentMapData,
 };
 use azothacore_database::{database_env::HotfixDatabase, DbAcquire, DbDriver};
 use bevy::{
@@ -1798,6 +1800,20 @@ fn load_db2_store_after(
         ev_startup_failed.send_default();
         return;
     }
+
+    let mut child_map_data = HashMap::default();
+    let mut parent_map_data = HashMap::default();
+    for m in stores.map_store.values() {
+        let c: &mut Vec<_> = child_map_data.entry(m.id).or_default();
+        let p = parent_map_data.entry(m.id);
+        if m.parent_map_id >= 0 {
+            let parent_id = u32::try_from(m.parent_map_id).unwrap();
+            c.push(m.id);
+            p.or_insert(parent_id);
+        }
+    }
+    commands.insert_resource(ChildMapData(child_map_data));
+    commands.insert_resource(ParentMapData(parent_map_data));
 
     let current_time = Instant::now();
     let duration = current_time - earliest_start;
