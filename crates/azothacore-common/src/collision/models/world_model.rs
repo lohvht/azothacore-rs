@@ -9,6 +9,7 @@ use crate::{
     collision::vmap_definitions::{LIQUID_TILE_SIZE, VMAP_MAGIC},
     read_le,
     utils::{bincode_deserialise, bincode_serialise},
+    AzError,
     AzResult,
 };
 
@@ -119,7 +120,7 @@ impl GroupModel {
         mesh_triangle_indices: Vec<Vector3<u16>>,
         vertices_chunks: Vec<Vector3<f32>>,
         i_liquid: Option<WmoLiquid>,
-    ) -> Self {
+    ) -> AzResult<Self> {
         let mesh = if vertices_chunks.is_empty() || mesh_triangle_indices.is_empty() {
             None
         } else {
@@ -128,17 +129,18 @@ impl GroupModel {
                 .into_iter()
                 .map(|i| [i.x.into(), i.y.into(), i.z.into()])
                 .collect::<Vec<_>>();
-            Some(TriMesh::new(vertices, indices))
+            let tmesh = TriMesh::new(vertices, indices).map_err(|e| AzError::new(e).context("GroupModel Trimesh is invalid"))?;
+            Some(tmesh)
         };
 
-        Self {
+        Ok(Self {
             i_bound,
             i_mogp_flags,
             i_group_wmoid,
             i_liquid,
             mesh,
             phantom: PhantomData,
-        }
+        })
     }
 
     fn write_to_file<W: io::Write>(&self, mut out: &mut W) -> AzResult<()> {

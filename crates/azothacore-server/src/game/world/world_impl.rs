@@ -16,7 +16,7 @@ use bevy::{
     prelude::{App, Commands, In, IntoSystem, IntoSystemConfigs, IntoSystemSetConfigs, Res, ResMut, Resource, Startup},
     time::{Timer, TimerMode},
 };
-use rand::{rngs::OsRng, Rng};
+use rand::{rngs::OsRng, Rng, TryRngCore};
 use tracing::{error, info};
 
 use crate::{
@@ -70,7 +70,7 @@ fn add_set_initial_world_settings_system(app: &mut App) {
     app.insert_resource(startup_begin);
 
     //- Initialize the random number generator
-    _ = OsRng.gen::<u8>();
+    _ = OsRng.unwrap_err().random::<u8>();
 
     // ///- Initialize detour memory management
     // dtAllocSetCustom(dtCustomAlloc, dtCustomFree);

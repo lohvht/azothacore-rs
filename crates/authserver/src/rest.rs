@@ -33,7 +33,7 @@ use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder as HyperServerConnBuilder,
 };
-use rand::{rngs::OsRng, Rng};
+use rand::{rngs::OsRng, Rng, TryRngCore};
 use sqlx::Row;
 use tokio::{
     net::TcpListener,
@@ -400,7 +400,7 @@ impl LoginRESTService {
         let now = unix_now().as_secs();
         if sent_password_hash == pass_hash {
             if login_ticket.is_none() || login_ticket_expiry.is_none_or(|exp_ts| exp_ts < now) {
-                login_ticket = Some(format!("AZ-{}", hex_str!(OsRng.gen::<[u8; 20]>())));
+                login_ticket = Some(format!("AZ-{}", hex_str!(OsRng.unwrap_err().random::<[u8; 20]>())));
             }
             let new_expiry = now + cfg.LoginREST.TicketDuration.as_secs();
             let res = LoginDatabase::upd_bnet_authentication(&**login_db, args_unwrap!(&login_ticket, new_expiry, account_id)).await;

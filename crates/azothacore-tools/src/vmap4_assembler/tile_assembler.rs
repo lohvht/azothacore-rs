@@ -205,7 +205,7 @@ fn calculate_transformed_bound<P: AsRef<Path>>(src: P, spawn: &mut VmapModelSpaw
     Ok(())
 }
 
-pub fn convert_raw_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(src: P1, dst: P2, p_model_filename: P3) -> io::Result<()> {
+pub fn convert_raw_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(src: P1, dst: P2, p_model_filename: P3) -> AzResult<()> {
     let filename = src.as_ref().join(p_model_filename.as_ref());
     let out = dst.as_ref().join(format!("{}.vmo", p_model_filename.as_ref().display()));
     if out.try_exists()? {
@@ -235,7 +235,8 @@ pub fn convert_raw_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(src: 
                 raw_group.liquid,
             )
         })
-        .collect();
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|e| e.context(format!("Raw Model file has invalid raw group models {f}", f = filename.display())))?;
 
     let model = WorldModel::new(raw_model.root_wmo_id, groups);
 

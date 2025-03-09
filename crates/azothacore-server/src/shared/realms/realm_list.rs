@@ -22,7 +22,7 @@ use bevy::prelude::{App, Commands, IntoSystemConfigs, Real, Res, ResMut, Resourc
 use flagset::FlagSet;
 use futures::StreamExt;
 use ipnet::IpNet;
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::OsRng, RngCore, TryRngCore};
 use sqlx::Pool;
 use tracing::{error, info};
 
@@ -454,7 +454,7 @@ impl RealmList {
         account_name: &str,
     ) -> Result<[u8; 32], JoinRealmError> {
         let mut server_secret = [0; 32];
-        OsRng.fill_bytes(&mut server_secret);
+        OsRng.unwrap_err().fill_bytes(&mut server_secret);
 
         let mut key_data = [0; 64];
         key_data[..32].clone_from_slice(client_secret);

@@ -82,7 +82,7 @@ use bnet_rpc::{
 };
 use bytes::{Buf, Bytes};
 use prost::Message;
-use rand::{rngs::OsRng, RngCore};
+use rand::{rngs::OsRng, RngCore, TryRngCore};
 use sqlx::{Pool, Row};
 use tokio::{
     io::{AsyncRead, AsyncWrite},
@@ -571,7 +571,7 @@ impl Session<'_> {
             .collect();
 
         let mut session_key = vec![0; 64];
-        OsRng.fill_bytes(&mut session_key);
+        OsRng.unwrap_err().fill_bytes(&mut session_key);
         let logon_result = LogonResult {
             error_code: 0,
             account_id: Some(EntityId {

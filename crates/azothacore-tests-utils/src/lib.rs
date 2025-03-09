@@ -1,7 +1,7 @@
 use azothacore_common::configuration::{DatabaseInfo, DatabaseType, DbUpdates};
 use azothacore_database::{database_loader::DatabaseLoader, DbDriver};
 use flagset::FlagSet;
-use rand::{distributions::Alphanumeric, rngs::OsRng, Rng};
+use rand::{distr::Alphanumeric, rngs::OsRng, Rng, TryRngCore};
 use tokio::sync::Semaphore;
 
 fn default_db_info() -> DatabaseInfo {
@@ -61,7 +61,7 @@ pub async fn test_db_pool(address: Option<String>, database_name: &str, setup: O
 }
 
 pub fn random_alpanum(n: usize) -> String {
-    OsRng.sample_iter(Alphanumeric).take(n).map(char::from).collect()
+    OsRng.unwrap_err().sample_iter(Alphanumeric).take(n).map(char::from).collect()
 }
 
 pub static SHARED_TEST_DB_PERMITS: Semaphore = Semaphore::const_new(1);
