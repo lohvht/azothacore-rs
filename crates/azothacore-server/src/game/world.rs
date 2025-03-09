@@ -2,11 +2,11 @@ mod world_impl;
 mod world_trait;
 
 use azothacore_common::deref_boilerplate;
-pub use bevy::prelude::Resource;
+use bevy::prelude::Resource;
 use flagset::flags;
 use num_derive::{FromPrimitive, ToPrimitive};
 use thiserror::Error;
-use tokio::sync::{RwLock as AsyncRwLock, RwLockReadGuard as AsyncRwLockReadGuard, RwLockWriteGuard as AsyncRwLockWriteGuard};
+use tracing::error;
 pub use world_impl::*;
 pub use world_trait::*;
 
@@ -223,21 +223,3 @@ pub enum WorldError {
 pub struct CurrentRealm(pub Realm);
 
 deref_boilerplate!(CurrentRealm, Realm, 0);
-
-pub struct SWorld;
-
-impl SWorld {
-    pub fn get() -> &'static AsyncRwLock<impl WorldTrait> {
-        &WORLD
-    }
-
-    pub async fn read() -> AsyncRwLockReadGuard<'static, impl WorldTrait> {
-        WORLD.read().await
-    }
-
-    pub async fn write() -> AsyncRwLockWriteGuard<'static, impl WorldTrait> {
-        WORLD.write().await
-    }
-}
-
-static WORLD: AsyncRwLock<World> = AsyncRwLock::const_new(World::new());

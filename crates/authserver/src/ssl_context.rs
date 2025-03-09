@@ -45,7 +45,7 @@ fn init_ssl_context<C: SslContextConfig>(mut commands: Commands, cfg: Res<Config
     let ssl_context = match SslContext::new(cfg.certs_file(), cfg.privkey_file()) {
         Err(e) => {
             ev_startup_failed.send_default();
-            error!(cause=%e, "error initialising SSL context");
+            error!(cause=?e, "error initialising SSL context");
             return;
         },
         Ok(s) => s,

@@ -8,9 +8,9 @@ DROP TABLE IF EXISTS `taxi_path_node`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `taxi_path_node` (
-  `LocX` float NOT NULL DEFAULT 0,
-  `LocY` float NOT NULL DEFAULT 0,
-  `LocZ` float NOT NULL DEFAULT 0,
+  `Loc1` float NOT NULL DEFAULT 0,
+  `Loc2` float NOT NULL DEFAULT 0,
+  `Loc3` float NOT NULL DEFAULT 0,
   `PathID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `ContinentID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `NodeIndex` tinyint(3) unsigned NOT NULL DEFAULT 0,

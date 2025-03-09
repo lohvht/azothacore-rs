@@ -1,7 +1,29 @@
+use std::ops::{Deref, DerefMut};
+
 use bevy::{
     asset::AssetPlugin,
     diagnostic::DiagnosticsPlugin,
-    prelude::{App, AppExit, Event, EventReader, EventWriter, Fixed, HierarchyPlugin, NextState, PostStartup, Res, ResMut, Resource, Time, TransformPlugin},
+    ecs::query::QueryEntityError,
+    prelude::{
+        App,
+        AppExit,
+        Bundle,
+        Entity,
+        EntityCommands,
+        Event,
+        EventReader,
+        EventWriter,
+        Fixed,
+        HierarchyPlugin,
+        Mut,
+        NextState,
+        PostStartup,
+        Res,
+        ResMut,
+        Resource,
+        Time,
+        TransformPlugin,
+    },
     state::{
         app::{AppExtStates, StatesPlugin},
         condition::in_state,
@@ -12,7 +34,7 @@ use bevy::{
 use tokio::runtime::Runtime;
 use tracing::{error, info};
 
-use crate::deref_boilerplate;
+use crate::{az_error, deref_boilerplate, AzResult};
 
 /// Default we use for FixedUpdates in azothacore, can be overwritten again
 pub const DEFAULT_FRAME_RATE: f64 = 144.0; // Bevy default 64;
@@ -105,5 +127,89 @@ fn check_startup_failures(
         };
         next_state.set(transiton_state);
         ev_app_exit.send(exit);
+    }
+}
+
+pub trait ToFromEntity {
+    fn from_entity(entity: Entity) -> Self;
+    fn to_entity(self) -> Entity;
+}
+
+/// Primarily handles the error where the component is not found
+///
+/// This encapsulates the logic for handling [QueryDoesNotMatch] check
+/// by turning it into a [None]
+pub fn query_not_found_result<V>(res: Result<V, QueryEntityError>) -> AzResult<Option<V>> {
+    res.map_or_else(
+        |err| match err {
+            QueryEntityError::QueryDoesNotMatch(..) => Ok(None),
+            err => Err(az_error!("unable to retrieve from query: type V was: {}", std::any::type_name::<V>()).context(format!("original error: {err}"))),
+        },
+        |v| Ok(Some(v)),
+    )
+}
+
+pub enum QueryOrNewSingleMut<'w, V: Bundle> {
+    Existing(Mut<'w, V>),
+    New(Option<V>, EntityCommands<'w>),
+}
+
+// impl<'w, 's, V: Bundle> QueryOrNewSingleMut<'w, 's, V> {
+//     pub fn query<D, F, N>(query: &mut Query<'w, 's, D, F>, entity_id: Entity, new: N) -> Result<Self, QueryEntityError<'w>>
+//     where
+//         D: QueryData<Item<'w> = Mut<'w, V>>,
+//         F: QueryFilter,
+//         N: FnOnce() -> (V, Commands<'w, 's>),
+//     {
+//         query.get_mut(entity_id).map_or_else(
+//             move |err| match err {
+//                 QueryEntityError::QueryDoesNotMatch(e, ..) => {
+//                     let (v, cmd) = new();
+//                     Ok(QueryOrNewSingleMut::New(Some(v), cmd, e))
+//                 },
+//                 err => Err(err),
+//             },
+//             move |v| Ok(QueryOrNewSingleMut::Existing(v)),
+//         )
+
+//         // match query.get_mut(entity_id) {
+//         //     Ok(v) => Ok(QueryOrNewSingleMut::Existing(v)),
+//         //     Err(QueryEntityError::QueryDoesNotMatch(e, ..)) => {
+//         //         let (v, cmd) = new();
+//         //         Ok(QueryOrNewSingleMut::New(Some(v), cmd, e))
+//         //     },
+//         //     Err(e) => Err(e),
+//         // }
+//     }
+// }
+
+impl<V: Bundle> Deref for QueryOrNewSingleMut<'_, V> {
+    type Target = V;
+
+    fn deref(&self) -> &Self::Target {
+        match self {
+            QueryOrNewSingleMut::Existing(v) => v,
+            QueryOrNewSingleMut::New(v, ..) => v.as_ref().expect("This should never be unset"),
+        }
+    }
+}
+
+impl<V: Bundle> DerefMut for QueryOrNewSingleMut<'_, V> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        match self {
+            QueryOrNewSingleMut::Existing(v) => &mut *v,
+            QueryOrNewSingleMut::New(v, ..) => v.as_mut().expect("This should never be unset"),
+        }
+    }
+}
+
+impl<V: Bundle> Drop for QueryOrNewSingleMut<'_, V> {
+    fn drop(&mut self) {
+        if let QueryOrNewSingleMut::New(v, ec) = self {
+            let Some(v) = v.take() else {
+                return;
+            };
+            ec.insert_if_new(v);
+        }
     }
 }

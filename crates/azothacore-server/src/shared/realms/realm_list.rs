@@ -488,7 +488,7 @@ impl RealmList {
         while let Some(res) = result.next().await {
             let realm = match res {
                 Err(e) => {
-                    error!(target: "realmlist", cause=%e, "DB error when getting realm list, aborting program");
+                    error!(target: "realmlist", cause=?e, "DB error when getting realm list, aborting program");
                     break;
                 },
                 Ok(r) => r,
@@ -496,7 +496,7 @@ impl RealmList {
 
             let realm: Realm = match realm.try_into() {
                 Err(e) => {
-                    error!(target:"realmlist", cause=%e, "error converting Realm info from DB entry");
+                    error!(target:"realmlist", cause=?e, "error converting Realm info from DB entry");
                     continue;
                 },
                 Ok(r) => r,

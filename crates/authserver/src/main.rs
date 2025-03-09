@@ -113,13 +113,13 @@ fn ban_expiry_task(mut timer: ResMut<BanExpiryTimer>, time: Res<Time<Real>>, log
     }
     rt.block_on(async {
         if let Err(e) = LoginDatabase::del_expired_ip_bans(&**login_db, args_unwrap!()).await {
-            error!(target:"bnetserver", cause=%e, "del_expired_ip_bans err");
+            error!(target:"bnetserver", cause=?e, "del_expired_ip_bans err");
         };
         if let Err(e) = LoginDatabase::upd_expired_account_bans(&**login_db, args_unwrap!()).await {
-            error!(target:"bnetserver", cause=%e, "upd_expired_account_bans err");
+            error!(target:"bnetserver", cause=?e, "upd_expired_account_bans err");
         };
         if let Err(e) = LoginDatabase::del_bnet_expired_account_banned(&**login_db, args_unwrap!()).await {
-            error!(target:"bnetserver", cause=%e, "del_bnet_expired_account_banned err");
+            error!(target:"bnetserver", cause=?e, "del_bnet_expired_account_banned err");
         };
     });
 }
@@ -139,7 +139,7 @@ fn start_db(mut commands: Commands, cfg: Res<ConfigMgr<AuthserverConfig>>, rt: R
     let login_db_loader = DatabaseLoader::new(DatabaseType::Login, cfg.LoginDatabaseInfo.clone(), cfg.Updates.clone(), vec![]);
     let auth_db = match rt.block_on(login_db_loader.load()) {
         Err(e) => {
-            error!(target:"server::authserver", cause=%e, "error starting/stopping DB");
+            error!(target:"server::authserver", cause=?e, "error starting/stopping DB");
             ev_startup_failed.send_default();
             return;
         },

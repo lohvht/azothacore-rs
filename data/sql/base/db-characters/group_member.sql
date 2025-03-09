@@ -8,7 +8,7 @@ DROP TABLE IF EXISTS `group_member`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `group_member` (
-  `guid` int(10) unsigned NOT NULL,
+  `stored_id` int(10) unsigned NOT NULL,
   `memberGuid` bigint(20) unsigned NOT NULL,
   `memberFlags` tinyint(3) unsigned NOT NULL DEFAULT 0,
   `subgroup` tinyint(3) unsigned NOT NULL DEFAULT 0,

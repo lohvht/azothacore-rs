@@ -956,7 +956,7 @@ pub struct WorldConfig {
     #[serde_inline_default(true)] pub AllowLoggingIPAddressesInDatabase: bool,
     /// LFG group mechanics.
     #[serde(default)] pub LFG: pub struct WorldConfigLFG {
-        #[serde(default)] pub MaxKickCount: RangedBoundedNum<u32, 0, 3, 2>,
+        #[serde(default)] pub MaxKickCount: RangedBoundedNum<u32, 0, 3, 3>,
         #[serde(default)] pub KickPreventionTimer: RangedBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(15) }, { durationb_mins!(15) }>,
     },
     /// Realm Availability - CONFIG_REALM_LOGIN_ENABLED in Acore

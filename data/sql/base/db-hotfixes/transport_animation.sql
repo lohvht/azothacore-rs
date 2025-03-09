@@ -10,9 +10,9 @@ DROP TABLE IF EXISTS `transport_animation`;
 CREATE TABLE `transport_animation` (
   `ID` int(10) unsigned NOT NULL DEFAULT 0,
   `TimeIndex` int(10) unsigned NOT NULL DEFAULT 0,
-  `PosX` float NOT NULL DEFAULT 0,
-  `PosY` float NOT NULL DEFAULT 0,
-  `PosZ` float NOT NULL DEFAULT 0,
+  `Pos1` float NOT NULL DEFAULT 0,
+  `Pos2` float NOT NULL DEFAULT 0,
+  `Pos3` float NOT NULL DEFAULT 0,
   `SequenceID` tinyint(3) unsigned NOT NULL DEFAULT 0,
   `TransportID` int(11) NOT NULL DEFAULT 0,
   `VerifiedBuild` smallint(6) NOT NULL DEFAULT 0,

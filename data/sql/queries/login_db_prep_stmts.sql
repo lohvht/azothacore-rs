@@ -189,7 +189,7 @@ SELECT last_attempt_ip FROM account WHERE id = ?;
 -- :name sel_last_ip
 SELECT last_ip FROM account WHERE id = ?;
 
--- :name sel_realmlist_security_level
+-- :name sel_realmlist_security_level :typed :?
 SELECT allowedSecurityLevel from realmlist WHERE id = ?;
 
 -- :name del_account

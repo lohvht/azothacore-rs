@@ -10,9 +10,9 @@ DROP TABLE IF EXISTS `world_safe_locs`;
 CREATE TABLE `world_safe_locs` (
   `ID` int(10) unsigned NOT NULL DEFAULT 0,
   `AreaName` text DEFAULT NULL,
-  `LocX` float NOT NULL DEFAULT 0,
-  `LocY` float NOT NULL DEFAULT 0,
-  `LocZ` float NOT NULL DEFAULT 0,
+  `Loc1` float NOT NULL DEFAULT 0,
+  `Loc2` float NOT NULL DEFAULT 0,
+  `Loc3` float NOT NULL DEFAULT 0,
   `Facing` float NOT NULL DEFAULT 0,
   `MapID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `VerifiedBuild` smallint(6) NOT NULL DEFAULT 0,

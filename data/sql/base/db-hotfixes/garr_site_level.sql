@@ -9,8 +9,8 @@ DROP TABLE IF EXISTS `garr_site_level`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `garr_site_level` (
   `ID` int(10) unsigned NOT NULL DEFAULT 0,
-  `TownHallUiPosX` float NOT NULL DEFAULT 0,
-  `TownHallUiPosY` float NOT NULL DEFAULT 0,
+  `TownHallUiPos1` float NOT NULL DEFAULT 0,
+  `TownHallUiPos2` float NOT NULL DEFAULT 0,
   `MapID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `UiTextureKitID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `UpgradeMovieID` smallint(5) unsigned NOT NULL DEFAULT 0,

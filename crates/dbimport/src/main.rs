@@ -67,7 +67,7 @@ fn start_db(cfg: Res<ConfigMgr<DbImportConfig>>, rt: Res<TokioRuntime>, mut sign
         }
     }) {
         Err(e) => {
-            error!(cause=%e, "error starting / updating DB");
+            error!(cause=?e, "error starting / updating DB");
         },
         Ok(db) => {
             info!("connected to DB successfully and updated the DB (if configured). Stopping connection pool");
@@ -90,7 +90,7 @@ fn start_db(cfg: Res<ConfigMgr<DbImportConfig>>, rt: Res<TokioRuntime>, mut sign
             return;
         },
         Err(e) => {
-            error!(cause=%e, "error starting / updating DB");
+            error!(cause=?e, "error starting / updating DB");
         },
         Ok(db) => {
             info!("connected to DB successfully and updated the DB (if configured). Stopping connection pool");
@@ -113,7 +113,7 @@ fn start_db(cfg: Res<ConfigMgr<DbImportConfig>>, rt: Res<TokioRuntime>, mut sign
             return;
         },
         Err(e) => {
-            error!(cause=%e, "error starting / updating DB");
+            error!(cause=?e, "error starting / updating DB");
         },
         Ok(db) => {
             info!("connected to DB successfully and updated the DB (if configured). Stopping connection pool");
@@ -136,7 +136,7 @@ fn start_db(cfg: Res<ConfigMgr<DbImportConfig>>, rt: Res<TokioRuntime>, mut sign
             return;
         },
         Err(e) => {
-            error!(cause=%e, "error starting / updating DB");
+            error!(cause=?e, "error starting / updating DB");
         },
         Ok(db) => {
             info!("connected to DB successfully and updated the DB (if configured). Stopping connection pool");

@@ -588,24 +588,24 @@ impl WDC1Struct {
             let selected_col = match (&typ, arity) {
                 (WDC1FieldSingleType::LocalisedString, arity) => {
                     if arity <= 1 {
-                        format!("JSON_OBJECT('enUS', {db_table}.{col_name})")
+                        format!("JSON_OBJECT('enUS', `{db_table}`.`{col_name}`)")
                     } else {
-                        let s = arity_suffixes.map(|i| format!("JSON_OBJECT('enUS', {db_table}.{col_name}{i})")).join(",");
+                        let s = arity_suffixes.map(|i| format!("JSON_OBJECT('enUS', `{db_table}`.`{col_name}{i}`)")).join(",");
                         format!("JSON_ARRAY({s})")
                     }
                 },
                 (_, arity) => {
                     if arity <= 1 {
-                        format!("{db_table}.{col_name}")
+                        format!("`{db_table}`.`{col_name}`")
                     } else {
-                        let s = arity_suffixes.map(|i| format!("{db_table}.{col_name}{i}")).join(",");
+                        let s = arity_suffixes.map(|i| format!("`{db_table}`.`{col_name}{i}`")).join(",");
                         format!("JSON_ARRAY({s})")
                     }
                 },
             };
-            db2_stmt += &format!("{selected_col} as {struct_field_name}");
+            db2_stmt += &format!("{selected_col} as `{struct_field_name}`");
         }
-        db2_stmt += &format!(" FROM {db_table}");
+        db2_stmt += &format!(" FROM `{db_table}`");
         let sql = LitStr::new(&db2_stmt, self.original.span());
         quote! {
             fn db2_sql_stmt() -> &'static str {
@@ -623,36 +623,35 @@ impl WDC1Struct {
             };
         };
 
-        let id_field = self.fields.iter().find(|f| f.attrs.inlined_id.is_some()).unwrap();
-        let (id_struct_field_name, id_col_name) = db_query_col_name_from_wdc1_field(id_field);
-        let mut stmt = format!("SELECT {locale_table}.{id_col_name} as {id_struct_field_name}");
-
-        let localised_string_fields = self
+        let (id_field_struct_name, id_field_col_name) = self
             .fields
             .iter()
-            .filter_map(|f| {
-                let a = match f.get_concrete_type() {
-                    WDC1FieldType::Array {
-                        arity,
-                        typ: WDC1FieldSingleType::LocalisedString,
-                    } => arity,
-                    WDC1FieldType::Vector3 {
-                        typ: WDC1FieldSingleType::LocalisedString,
-                    } => 3,
-                    WDC1FieldType::Vector4 {
-                        typ: WDC1FieldSingleType::LocalisedString,
-                    } => 4,
-                    WDC1FieldType::Single(WDC1FieldSingleType::LocalisedString) => 1,
-                    _ => return None,
-                };
-                let (sn, cn) = db_query_col_name_from_wdc1_field(f);
-                Some((sn, cn, a))
-            })
-            .enumerate();
-        for (i, (struct_field_name, col_name, arity)) in localised_string_fields {
-            if i > 0 {
-                stmt += ", ";
-            }
+            .find(|f| f.attrs.inlined_id.is_some())
+            .map(db_query_col_name_from_wdc1_field)
+            .unwrap();
+
+        let mut stmt = format!("SELECT {locale_table}.{id_field_col_name} as {id_field_struct_name} ");
+
+        let localised_string_fields = self.fields.iter().filter_map(|f| {
+            let a = match f.get_concrete_type() {
+                WDC1FieldType::Array {
+                    arity,
+                    typ: WDC1FieldSingleType::LocalisedString,
+                } => arity,
+                WDC1FieldType::Vector3 {
+                    typ: WDC1FieldSingleType::LocalisedString,
+                } => 3,
+                WDC1FieldType::Vector4 {
+                    typ: WDC1FieldSingleType::LocalisedString,
+                } => 4,
+                WDC1FieldType::Single(WDC1FieldSingleType::LocalisedString) => 1,
+                _ => return None,
+            };
+            let (sn, cn) = db_query_col_name_from_wdc1_field(f);
+            Some((sn, cn, a))
+        });
+        for (struct_field_name, col_name, arity) in localised_string_fields {
+            stmt += ", ";
             let arity_suffixes = 1..=arity;
             let selected_col = if arity <= 1 {
                 format!("JSON_OBJECTAGG({locale_table}.locale, {locale_table}.{col_name}_lang)")
@@ -665,14 +664,6 @@ impl WDC1Struct {
             stmt += &format!("{selected_col} as {struct_field_name}");
         }
 
-        let (id_field_struct_name, id_field_col_name) = self
-            .fields
-            .iter()
-            .find(|f| f.attrs.inlined_id.is_some())
-            .map(db_query_col_name_from_wdc1_field)
-            .unwrap();
-
-        stmt += &format!(", {locale_table}.{id_field_col_name} as ${id_field_struct_name}");
         stmt += &format!(" FROM {locale_table} GROUP BY {locale_table}.{id_field_col_name}");
 
         let sql = LitStr::new(&stmt, self.original.span());

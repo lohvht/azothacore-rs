@@ -43,7 +43,7 @@ impl BattlenetAccountMgr {
 
         let pass_hash = Self::calculate_sha_pass_hash(&email, &password);
         if let Err(e) = LoginDatabase::ins_bnet_account(&mut *login_db, args!(&email, pass_hash)?).await {
-            warn!(target:"sql::sql", cause=%e, "error when creating bnet account from DB");
+            warn!(target:"sql::sql", cause=?e, "error when creating bnet account from DB");
             return Err(e.into());
         }
 

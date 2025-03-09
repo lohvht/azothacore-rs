@@ -10,9 +10,10 @@ use map_file::MapFile;
 use nalgebra::DMatrix;
 use num::Num;
 
-use crate::game::grid::grid_defines::ADT_CELLS_PER_GRID;
+use crate::game::{grid::grid_defines::ADT_CELLS_PER_GRID, world::WorldConfig};
 
 pub mod map_file;
+pub mod map_mgr;
 
 #[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct MapLiquidData {
@@ -75,5 +76,14 @@ impl GridMap {
         Y: Num + Display,
     {
         maps_dir.as_ref().join(format!("{map_id:04}_{gx:02}_{gy:02}.map"))
+    }
+}
+
+pub struct Map {}
+
+impl Map {
+    /// Map::ExistVMap
+    fn exist_v_map(cfg: &WorldConfig, map_id: u32, grid_x: usize, grid_y: usize) -> AzResult<()> {
+        todo!()
     }
 }

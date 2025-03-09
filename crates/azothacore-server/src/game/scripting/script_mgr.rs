@@ -338,7 +338,7 @@ where
             return;
         }
         if let Err(e) = bevy_world.run_system(base.check_validity).unwrap() {
-            warn!(cause=%e, script_name=base.name, "error when checking the validity of the script. Not adding script");
+            warn!(cause=?e, script_name=base.name, "error when checking the validity of the script. Not adding script");
             base.remove_systems_from_bevy(bevy_world);
             obj.remove_systems_from_bevy(bevy_world);
             return;
@@ -397,7 +397,7 @@ where
             };
 
             if let Err(err) = bevy_world.run_system(base.check_validity).unwrap() {
-                warn!(cause=%err, script_name=base.name, "error when checking the validity of the afterload script. Not adding script");
+                warn!(cause=?err, script_name=base.name, "error when checking the validity of the afterload script. Not adding script");
                 base.remove_systems_from_bevy(bevy_world);
                 script.remove_systems_from_bevy(bevy_world);
                 bevy_world.despawn(e);

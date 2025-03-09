@@ -1,9 +1,17 @@
 pub mod accounts;
 pub mod battlegrounds;
+pub mod cache;
+pub mod conditions;
+pub mod dungeon_finding;
 pub mod entities;
 pub mod globals;
 pub mod grid;
+pub mod groups;
+pub mod guilds;
+pub mod loot;
 pub mod map;
 pub mod scripting;
 pub mod scripts;
+pub mod server;
+pub mod time;
 pub mod world;

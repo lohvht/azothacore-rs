@@ -8,9 +8,9 @@ DROP TABLE IF EXISTS `area_trigger`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `area_trigger` (
-  `PosX` float NOT NULL DEFAULT 0,
-  `PosY` float NOT NULL DEFAULT 0,
-  `PosZ` float NOT NULL DEFAULT 0,
+  `Pos1` float NOT NULL DEFAULT 0,
+  `Pos2` float NOT NULL DEFAULT 0,
+  `Pos3` float NOT NULL DEFAULT 0,
   `Radius` float NOT NULL DEFAULT 0,
   `BoxLength` float NOT NULL DEFAULT 0,
   `BoxWidth` float NOT NULL DEFAULT 0,

@@ -106,7 +106,7 @@ where
 
     match bnetrpc_zcompress(json) {
         Err(e) => {
-            error!(target:"session", cause=%e, "unable to compress {}", String::from_utf8_lossy(prefix));
+            error!(target:"session", cause=?e, "unable to compress {}", String::from_utf8_lossy(prefix));
             Err(BattlenetRpcErrorCode::UtilServerFailedToSerializeResponse)
         },
         Ok(c) => Ok(c),
@@ -245,7 +245,7 @@ fn handle_bnet_authserver_socket(
         let task = rt.spawn(async move {
             let sess = match SessionInner::start_from_tcp(login_db, ssl_ctx, permit, name, conn).await {
                 Err(e) => {
-                    error!(cause=%e, "error starting session from new TCP connections");
+                    error!(cause=?e, "error starting session from new TCP connections");
                     return CommandQueue::default();
                 },
                 Ok(s) => s,
@@ -272,7 +272,7 @@ fn read_handler(
     for (e, mut inner) in &mut sessions {
         let packets = match inner.receive(None) {
             Err(err) => {
-                error!(cause=%err, "error receiving packets");
+                error!(cause=?err, "error receiving packets");
                 inner.close();
                 commands.entity(e).remove::<SessionInner>();
                 return;
@@ -296,7 +296,7 @@ fn read_handler(
                 Ok(())
             });
             if let Err(err) = res {
-                error!(cause=%err, caller_info=%sess.caller_info(), "session dispatch packets/receive packets err, terminating socket");
+                error!(cause=?err, caller_info=%sess.caller_info(), "session dispatch packets/receive packets err, terminating socket");
                 sess.close();
                 commands.entity(e).remove::<SessionInner>();
             }
@@ -411,12 +411,12 @@ deref_boilerplate!(SessionInner, Socket<AuthserverPacket>, socket);
 impl ConnectionComponent for SessionInner {}
 
 fn map_err_to_denied<E: std::error::Error>(e: E) -> BattlenetRpcErrorCode {
-    error!(target:"session::rpc", cause=%e, "error when making sql queries in bnet session. mapped to denied");
+    error!(target:"session::rpc", cause=?e, "error when making sql queries in bnet session. mapped to denied");
     BattlenetRpcErrorCode::Denied
 }
 
 fn map_err_to_internal<E: std::error::Error>(e: E) -> BattlenetRpcErrorCode {
-    error!(target:"session::rpc", cause=%e, "error when making sql queries in bnet session. mapped to Internal");
+    error!(target:"session::rpc", cause=?e, "error when making sql queries in bnet session. mapped to Internal");
     BattlenetRpcErrorCode::Internal
 }
 
@@ -623,7 +623,7 @@ impl SessionInner {
             let banned = fields.get::<u32, _>("banned") != 0;
             if banned {
                 let e = az_error!("[CheckIpCallback] Banned ip '{}' tries to login!", name);
-                debug!(target:"session", cause=%e);
+                debug!(target:"session", cause=?e);
                 return Err(e);
             }
         }
@@ -1137,7 +1137,7 @@ impl Session<'_> {
             };
             match serde_json::from_slice(json_start) {
                 Err(e) => {
-                    warn!(target:"session", cause=%e, identity_val=String::from_utf8_lossy(json_start).to_string(), current=?accnt_info, "error serialising params identity from json");
+                    warn!(target:"session", cause=?e, identity_val=String::from_utf8_lossy(json_start).to_string(), current=?accnt_info, "error serialising params identity from json");
                 },
                 Ok(RealmListTicketIdentity { game_account_id, .. }) => {
                     if let Some(gai) = accnt_info.game_accounts.get(&game_account_id) {
@@ -1166,7 +1166,7 @@ impl Session<'_> {
             };
             match serde_json::from_slice(json_start) {
                 Err(e) => {
-                    warn!(target:"session", cause=%e, val=String::from_utf8_lossy(json_start).to_string(), current=?accnt_info, "error serialising params identity from json");
+                    warn!(target:"session", cause=?e, val=String::from_utf8_lossy(json_start).to_string(), current=?accnt_info, "error serialising params identity from json");
                 },
                 Ok(RealmListTicketClientInformation {
                     info: ClientInformation { secret, .. },

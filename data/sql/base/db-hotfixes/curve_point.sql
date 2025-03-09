@@ -9,8 +9,8 @@ DROP TABLE IF EXISTS `curve_point`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `curve_point` (
   `ID` int(10) unsigned NOT NULL DEFAULT 0,
-  `PosX` float NOT NULL DEFAULT 0,
-  `PosY` float NOT NULL DEFAULT 0,
+  `Pos1` float NOT NULL DEFAULT 0,
+  `Pos2` float NOT NULL DEFAULT 0,
   `CurveID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `OrderIndex` tinyint(3) unsigned NOT NULL DEFAULT 0,
   `VerifiedBuild` smallint(6) NOT NULL DEFAULT 0,

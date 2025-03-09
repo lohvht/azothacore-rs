@@ -819,19 +819,19 @@ INSERT INTO petition_sign (ownerguid, petitionguid, playerguid, player_account) 
 UPDATE characters SET online = 0 WHERE account = ?;
 
 -- :name ins_group
-INSERT INTO `groups` (guid, leaderGuid, lootMethod, looterGuid, lootThreshold, icon1, icon2, icon3, icon4, icon5, icon6, icon7, icon8, groupType, difficulty, raidDifficulty, masterLooterGuid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO `groups` (stored_id, leaderGuid, lootMethod, looterGuid, lootThreshold, icon1, icon2, icon3, icon4, icon5, icon6, icon7, icon8, groupType, difficulty, raidDifficulty, masterLooterGuid) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- :name rep_group_member
-REPLACE INTO group_member (guid, memberGuid, memberFlags, subgroup, roles) VALUES(?, ?, ?, ?, ?);
+REPLACE INTO group_member (stored_id, memberGuid, memberFlags, subgroup, roles) VALUES(?, ?, ?, ?, ?);
 
 -- :name del_group_member
-DELETE FROM group_member WHERE memberGuid = ? AND guid = ?;
+DELETE FROM group_member WHERE memberGuid = ? AND stored_id = ?;
 
 -- :name upd_group_leader
-UPDATE `groups` SET leaderGuid = ? WHERE guid = ?;
+UPDATE `groups` SET leaderGuid = ? WHERE stored_id = ?;
 
 -- :name upd_group_type
-UPDATE `groups` SET groupType = ? WHERE guid = ?;
+UPDATE `groups` SET groupType = ? WHERE stored_id = ?;
 
 -- :name upd_group_member_subgroup
 UPDATE group_member SET subgroup = ? WHERE memberGuid = ?;
@@ -840,10 +840,10 @@ UPDATE group_member SET subgroup = ? WHERE memberGuid = ?;
 UPDATE group_member SET memberFlags = ? WHERE memberGuid = ?;
 
 -- :name upd_group_difficulty
-UPDATE `groups` SET difficulty = ? WHERE guid = ?;
+UPDATE `groups` SET difficulty = ? WHERE stored_id = ?;
 
 -- :name upd_group_raid_difficulty
-UPDATE `groups` SET raidDifficulty = ? WHERE guid = ?;
+UPDATE `groups` SET raidDifficulty = ? WHERE stored_id = ?;
 
 -- :name del_all_gm_tickets
 TRUNCATE TABLE gm_ticket;
@@ -1085,10 +1085,10 @@ DELETE FROM item_refund_instance WHERE item_guid = ?;
 INSERT INTO item_refund_instance (item_guid, player_guid, paidMoney, paidExtendedCost) VALUES (?, ?, ?, ?);
 
 -- :name del_group
-DELETE FROM `groups` WHERE guid = ?;
+DELETE FROM `groups` WHERE stored_id = ?;
 
 -- :name del_group_member_all
-DELETE FROM group_member WHERE guid = ?;
+DELETE FROM group_member WHERE stored_id = ?;
 
 -- :name ins_char_gift
 INSERT INTO character_gifts (guid, item_guid, entry, flags) VALUES (?, ?, ?, ?);

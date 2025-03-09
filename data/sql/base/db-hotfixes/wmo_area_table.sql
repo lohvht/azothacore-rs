@@ -20,8 +20,9 @@ CREATE TABLE `wmo_area_table` (
   `SoundProviderPref` tinyint(3) unsigned NOT NULL DEFAULT 0,
   `SoundProviderPrefUnderwater` tinyint(3) unsigned NOT NULL DEFAULT 0,
   `Flags` tinyint(3) unsigned NOT NULL DEFAULT 0,
-  `ID` int(10) unsigned NOT NULL DEFAULT 0,
   `UwZoneMusic` int(10) unsigned NOT NULL DEFAULT 0,
+  `ID` int(10) unsigned NOT NULL DEFAULT 0,
+  `InlineWmoID` int(10) unsigned NOT NULL DEFAULT 0,
   `WmoID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `VerifiedBuild` smallint(6) NOT NULL DEFAULT 0,
   PRIMARY KEY (`ID`)

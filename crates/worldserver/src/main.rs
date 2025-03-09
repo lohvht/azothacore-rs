@@ -334,7 +334,7 @@ fn stop_db(
 
 fn handle_startup_errors(In(result): In<AzResult<()>>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
     if let Err(e) = result {
-        error!(cause=%e, "Startup err");
+        error!(cause=?e, "Startup err");
         ev_startup_failed.send_default();
     }
 }

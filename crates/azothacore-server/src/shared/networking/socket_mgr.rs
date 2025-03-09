@@ -166,7 +166,7 @@ impl<S> Eq for SocketMgrSet<S> {}
 ///             let mut command_queue = CommandQueue::default();
 ///             let new_sock = match MySocket::start(sock).await {
 ///                 Err(e) => {
-///                     error!(cause=%e, "error starting from new TCP connection");
+///                     error!(cause=?e, "error starting from new TCP connection");
 ///                     return command_queue;
 ///                 },
 ///                 Ok(s) => s,
@@ -221,7 +221,7 @@ where
     let acceptor = match rt.block_on(TcpListener::bind(bind_addr)) {
         Err(e) => {
             ev_startup_failed.send_default();
-            error!(cause=%e, "TCP network startup failed due to acceptor error");
+            error!(cause=?e, "TCP network startup failed due to acceptor error");
             return;
         },
         Ok(t) => t,

@@ -10,9 +10,9 @@ DROP TABLE IF EXISTS `cinematic_camera`;
 CREATE TABLE `cinematic_camera` (
   `ID` int(10) unsigned NOT NULL DEFAULT 0,
   `SoundID` int(10) unsigned NOT NULL DEFAULT 0,
-  `OriginX` float NOT NULL DEFAULT 0,
-  `OriginY` float NOT NULL DEFAULT 0,
-  `OriginZ` float NOT NULL DEFAULT 0,
+  `Origin1` float NOT NULL DEFAULT 0,
+  `Origin2` float NOT NULL DEFAULT 0,
+  `Origin3` float NOT NULL DEFAULT 0,
   `OriginFacing` float NOT NULL DEFAULT 0,
   `FileDataID` int(10) unsigned NOT NULL DEFAULT 0,
   `VerifiedBuild` smallint(6) NOT NULL DEFAULT 0,

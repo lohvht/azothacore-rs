@@ -1,7 +1,10 @@
+use azothacore_common::{az_error, AzError};
 use bevy::prelude::{Commands, Resource};
 use flagset::flags;
+use num::FromPrimitive;
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 
 #[derive(Debug, Clone, ToPrimitive, FromPrimitive, Deserialize, Serialize, PartialEq)]
 pub enum ServerProcessType {
@@ -41,7 +44,7 @@ pub enum Expansion {
 
 pub const CURRENT_EXPANSION: Expansion = Expansion::Legion;
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, FromPrimitive, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(u8)]
 pub enum ItemQuality {
     /// GREY
@@ -62,6 +65,14 @@ pub enum ItemQuality {
     Heirloom = 7,
     /// LIGHT BLUE
     WowToken = 8,
+}
+
+impl TryFrom<u8> for ItemQuality {
+    type Error = AzError;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error> {
+        Self::from_u8(value).ok_or(az_error!("unable to convert number '{value}' to ItemQuality"))
+    }
 }
 
 #[derive(Default, serde::Deserialize, serde::Serialize, Copy, Clone, Debug, PartialEq, PartialOrd, Ord, Eq)]
@@ -164,6 +175,20 @@ pub enum DungeonAccessRequirementsPrintMode {
     NoExtraInfo,
     /// Display detailed requirements, all at once, with clickable links
     DetailedInfo,
+}
+
+/// enum Team in TC / AC
+#[derive(Serialize_repr, Deserialize_repr)]
+#[repr(u32)]
+pub enum FactionID {
+    Horde = 67,
+    Alliance = 469,
+    //TEAM_STEAMWHEEDLE_CARTEL = 169,                       // not used in code
+    //TEAM_ALLIANCE_FORCES     = 891,
+    //TEAM_HORDE_FORCES        = 892,
+    //TEAM_SANCTUARY           = 936,
+    //TEAM_OUTLAND             = 980,
+    Other = 0, // if ReputationListId > 0 && Flags != FACTION_FLAG_TEAM_HEADER
 }
 
 #[cfg(test)]

@@ -9,9 +9,9 @@ DROP TABLE IF EXISTS `light`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `light` (
   `ID` int(10) unsigned NOT NULL DEFAULT 0,
-  `GameCoordsX` float NOT NULL DEFAULT 0,
-  `GameCoordsY` float NOT NULL DEFAULT 0,
-  `GameCoordsZ` float NOT NULL DEFAULT 0,
+  `GameCoords1` float NOT NULL DEFAULT 0,
+  `GameCoords2` float NOT NULL DEFAULT 0,
+  `GameCoords3` float NOT NULL DEFAULT 0,
   `GameFalloffStart` float NOT NULL DEFAULT 0,
   `GameFalloffEnd` float NOT NULL DEFAULT 0,
   `ContinentID` smallint(6) NOT NULL DEFAULT 0,

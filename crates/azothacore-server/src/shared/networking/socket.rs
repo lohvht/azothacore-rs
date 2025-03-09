@@ -176,7 +176,7 @@ async fn handle_socket<R, W, P>(
             read_res = rd.read_buf(&mut *read_buffer) => {
                 match read_res {
                     Err(e) => {
-                        error!(cause=%e, "shutdown read socket due to error in reading from stream");
+                        error!(cause=?e, "shutdown read socket due to error in reading from stream");
                         break;
                     },
                     Ok(_) => {
@@ -186,7 +186,7 @@ async fn handle_socket<R, W, P>(
                                 continue;
                             },
                             Err(e) => {
-                                error!(cause=%e, "error decoding data, possible socket corrruption? terminating");
+                                error!(cause=?e, "error decoding data, possible socket corrruption? terminating");
                                 break;
                             },
                             Ok(p) => p,

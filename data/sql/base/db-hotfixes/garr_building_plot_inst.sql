@@ -8,8 +8,8 @@ DROP TABLE IF EXISTS `garr_building_plot_inst`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `garr_building_plot_inst` (
-  `MapOffsetX` float NOT NULL DEFAULT 0,
-  `MapOffsetY` float NOT NULL DEFAULT 0,
+  `MapOffset1` float NOT NULL DEFAULT 0,
+  `MapOffset2` float NOT NULL DEFAULT 0,
   `UiTextureAtlasMemberID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `GarrSiteLevelPlotInstID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `GarrBuildingID` tinyint(3) unsigned NOT NULL DEFAULT 0,

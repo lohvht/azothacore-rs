@@ -8,7 +8,7 @@ DROP TABLE IF EXISTS `groups`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `groups` (
-  `guid` int(10) unsigned NOT NULL,
+  `stored_id` int(10) unsigned NOT NULL,
   `leaderGuid` bigint(20) unsigned NOT NULL,
   `lootMethod` tinyint(3) unsigned NOT NULL,
   `looterGuid` bigint(20) unsigned NOT NULL,
@@ -26,7 +26,7 @@ CREATE TABLE `groups` (
   `raidDifficulty` tinyint(3) unsigned NOT NULL DEFAULT 14,
   `legacyRaidDifficulty` tinyint(3) unsigned NOT NULL DEFAULT 3,
   `masterLooterGuid` bigint(20) unsigned NOT NULL,
-  PRIMARY KEY (`guid`),
+  PRIMARY KEY (`stored_id`),
   KEY `leaderGuid` (`leaderGuid`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci COMMENT='Groups';
 /*!40101 SET character_set_client = @saved_cs_client */;

@@ -9,8 +9,8 @@ DROP TABLE IF EXISTS `garr_site_level_plot_inst`;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `garr_site_level_plot_inst` (
   `ID` int(10) unsigned NOT NULL DEFAULT 0,
-  `UiMarkerPosX` float NOT NULL DEFAULT 0,
-  `UiMarkerPosY` float NOT NULL DEFAULT 0,
+  `UiMarkerPos1` float NOT NULL DEFAULT 0,
+  `UiMarkerPos2` float NOT NULL DEFAULT 0,
   `GarrSiteLevelID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `GarrPlotInstanceID` tinyint(3) unsigned NOT NULL DEFAULT 0,
   `UiMarkerSize` tinyint(3) unsigned NOT NULL DEFAULT 0,

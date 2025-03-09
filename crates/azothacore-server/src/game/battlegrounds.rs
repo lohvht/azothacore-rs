@@ -1,6 +1,8 @@
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::AtomicU32;
 
-use bevy::prelude::Resource;
+use azothacore_database::database_env::CharacterDatabase;
+
+use crate::shared::id_generators::{DBIDGenerator, IDGenerator};
 
 #[derive(Default, serde::Deserialize, serde::Serialize, Copy, Clone, Debug, PartialEq, PartialOrd, Ord, Eq)]
 pub enum BattlegroundQueueInvitationType {
@@ -10,20 +12,12 @@ pub enum BattlegroundQueueInvitationType {
     Even = 2,     // teams even: N vs N players
 }
 
-#[derive(Resource)]
-pub struct ArenaTeamMgr {
-    next_arena_team_id: AtomicU32,
-}
+pub struct ArenaTeamIDGenMarker;
 
-impl Default for ArenaTeamMgr {
-    fn default() -> Self {
-        Self { next_arena_team_id: 1.into() }
-    }
-}
+/// ArenaTeamMgr::NextArenaTeamId in TC / AC
+/// contains ArenaTeamMgr::SetNextArenaTeamId, ArenaTeamMgr::GenerateArenaTeamId
+pub type ArenaTeamIDGenerator = IDGenerator<ArenaTeamIDGenMarker, AtomicU32, u32>;
 
-impl ArenaTeamMgr {
-    /// SetNextArenaTeamId
-    pub fn set_next_arena_team_id(&self, id: u32) {
-        self.next_arena_team_id.store(id, Ordering::SeqCst);
-    }
+impl DBIDGenerator<CharacterDatabase, u32> for ArenaTeamIDGenerator {
+    const DB_SELECT_MAX_ID_QUERY: &str = "SELECT CAST(COALESCE(MAX(arenateamid), 0) AS UNSIGNED INT)+1 FROM arena_team";
 }

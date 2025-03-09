@@ -466,7 +466,7 @@ impl AccountMgr {
         for RbacDefaultPermRow { sec_id, permission_id } in result {
             let sec_id = match sec_id.try_into() {
                 Err(e) => {
-                    error!(target:"sql.sql", sec_id=sec_id, cause=%e, "unexpected sec id. Ignored");
+                    error!(target:"sql.sql", sec_id=sec_id, cause=?e, "unexpected sec id. Ignored");
                     continue;
                 },
                 Ok(i) => i,

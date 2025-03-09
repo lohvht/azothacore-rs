@@ -2,7 +2,7 @@
 mod wow7_3_5_26972;
 
 use flagset::{flags, FlagSet};
-use num::{FromPrimitive, Num};
+use num::{FromPrimitive, Num, ToPrimitive};
 use num_derive::{FromPrimitive, ToPrimitive};
 use thiserror::Error;
 pub use wow7_3_5_26972::*;
@@ -334,5 +334,78 @@ flags! {
 flags! {
     pub enum WorldMapTransformsFlags: u8 {
         Dungeon   = 0x04
+    }
+}
+
+/// Lua_IsInInstance
+/// MapTypes in TC / AC
+#[derive(Copy, Clone, serde::Deserialize, serde::Serialize, Debug, ToPrimitive, FromPrimitive, PartialEq, PartialOrd, Ord, Eq)]
+pub enum MapType {
+    /// none
+    Common = 0,
+    /// party
+    Instance = 1,
+    /// raid
+    Raid = 2,
+    /// pvp
+    Battleground = 3,
+    /// arena
+    Arena = 4,
+    /// scenario
+    Scenario = 5,
+}
+
+impl MapType {
+    pub fn to_num(&self) -> u8 {
+        self.to_u8().unwrap_or_else(|| panic!("MapType should never fail to become primitive {self:?}"))
+    }
+}
+
+/// enum Difficulty in TC / AC
+#[derive(Copy, Clone, serde::Deserialize, serde::Serialize, Debug, ToPrimitive, FromPrimitive, PartialEq, PartialOrd, Ord, Eq)]
+pub enum DifficultyID {
+    None = 0,
+    Normal = 1,
+    Heroic = 2,
+    _10N = 3,
+    _25N = 4,
+    _10HC = 5,
+    _25HC = 6,
+    LFR = 7,
+    MythicKeystone = 8,
+    _40 = 9,
+    _3ManScenarioHc = 11,
+    _3ManScenarioN = 12,
+    NormalRaid = 14,
+    HeroicRaid = 15,
+    MythicRaid = 16,
+    LFRNew = 17,
+    EventRaid = 18,
+    EventDungeon = 19,
+    EventScenario = 20,
+    Mythic = 23,
+    Timewalking = 24,
+    WorldPVPScenario = 25,
+    _5ManScenarioN = 26,
+    _20ManScenarioN = 27,
+    PVEVPScenario = 29,
+    EventScenario6 = 30,
+    WorldPvpScenario2 = 32,
+    TimewalkingRaid = 33,
+    PVP = 34,
+}
+
+flags! {
+    pub enum DifficultyFlag: u8 {
+        Heroic = 0x01,
+        Default = 0x02,
+        /// Player can select this difficulty in dropdown menu
+        CanSelect = 0x04,
+        ChallengeMode = 0x08,
+        Legacy = 0x20,
+        /// Controls icon displayed on minimap when inside the instance
+        DisplayHeroic = 0x40,
+        /// Controls icon displayed on minimap when inside the instance
+        DisplayMythic = 0x80,
     }
 }

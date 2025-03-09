@@ -1081,7 +1081,7 @@ pub struct GameObjectDisplayInfo {
     pub id: u32,
     pub file_data_id: i32,
     #[sqlx(json)]
-    pub geo_box: [f32; 6],
+    pub geo_box_min_max: [f32; 6],
     pub override_loot_effect_scale: f32,
     pub override_name_scale: f32,
     pub object_effect_package_id: i16,
@@ -1090,17 +1090,17 @@ pub struct GameObjectDisplayInfo {
 impl GameObjectDisplayInfo {
     pub fn geo_box_min(&self) -> Vector3<f32> {
         Vector3::new(
-            self.geo_box[0].min(self.geo_box[3]),
-            self.geo_box[1].min(self.geo_box[4]),
-            self.geo_box[2].min(self.geo_box[5]),
+            self.geo_box_min_max[0].min(self.geo_box_min_max[3]),
+            self.geo_box_min_max[1].min(self.geo_box_min_max[4]),
+            self.geo_box_min_max[2].min(self.geo_box_min_max[5]),
         )
     }
 
     pub fn geo_box_max(&self) -> Vector3<f32> {
         Vector3::new(
-            self.geo_box[0].max(self.geo_box[3]),
-            self.geo_box[1].max(self.geo_box[4]),
-            self.geo_box[2].max(self.geo_box[5]),
+            self.geo_box_min_max[0].max(self.geo_box_min_max[3]),
+            self.geo_box_min_max[1].max(self.geo_box_min_max[4]),
+            self.geo_box_min_max[2].max(self.geo_box_min_max[5]),
         )
     }
 }
@@ -2646,6 +2646,7 @@ pub struct QuestSort {
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0x70495C9B)]
+#[db2_db_table("quest_v2")]
 pub struct QuestV2 {
     pub id:              u32,
     pub unique_bit_flag: u16,
@@ -3277,8 +3278,7 @@ pub struct SpellScaling {
 #[layout_hash(0xA461C24D)]
 pub struct SpellShapeshift {
     pub id:                 u32,
-    #[sqlx(json)]
-    pub spell_id:           [i32; 2],
+    pub spell_id:           u32,
     #[sqlx(json)]
     pub shapeshift_exclude: [i32; 2],
     #[sqlx(json)]
@@ -3814,7 +3814,7 @@ pub struct WorldSafeLocs {
     #[sqlx(json)]
     pub loc:       Vector3<f32>,
     pub facing:    f32,
-    pub continent: u16,
+    pub map_id:    u16,
 }
 
 // struct SpellProcsPerMinuteModMeta

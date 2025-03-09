@@ -1,18 +1,40 @@
-use std::future::Future;
+use azothacore_common::{
+    bevy_app::TokioRuntime,
+    configuration::{Config, ConfigMgr},
+    AccountTypes,
+    AzResult,
+};
+use azothacore_database::database_env::{LoginDatabase, WorldDatabase};
+use bevy::prelude::{Commands, In, Res, ResMut, Resource, SystemSet};
 
-use azothacore_common::AzResult;
-use azothacore_database::database_env::WorldDatabase;
-use bevy::prelude::*;
+use crate::game::{scripting::script_mgr::ScriptMgr, world::CurrentRealm};
 
-use super::WorldError;
+/// World::m_allowedSecurityLevel in TC / World::_allowedSecurityLevel in AC
+#[derive(Resource)]
+pub struct AllowedSecurityLevel(pub AccountTypes);
 
-pub trait WorldTrait {
-    fn is_stopped(&self) -> bool;
-    /// Initialize config values
-    fn load_config_settings(&mut self, reload: bool) -> impl Future<Output = ()> + Send;
+pub trait WorldTrait<C: Config>
+where
+    Self: Resource,
+{
+    // fn is_stopped(&self) -> bool;
+    /// Initialize config values - LoadConfigSettings in TC / AC
+    fn load_config_settings(reload: In<bool>, commands: Commands, cfg: ResMut<ConfigMgr<C>>, script_mgr: ScriptMgr);
+    fn load_db_allowed_security_level(
+        this: Res<Self>,
+        commands: Commands,
+        rt: Res<TokioRuntime>,
+        login_db: Res<LoginDatabase>,
+        current_realm: Res<CurrentRealm>,
+    );
+    fn set_player_security_limit(sec: In<AccountTypes>, this: ResMut<AllowedSecurityLevel>);
+}
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum WorldSets {
     /// Initialize the World
-    fn set_initial_world_settings(&mut self) -> impl Future<Output = Result<(), WorldError>> + Send;
-    fn stop_now(&mut self, exit_code: i32) -> Result<i32, WorldError>;
+    /// SystemSet analagous to the world function of the same name in TC / AC
+    SetInitialWorldSettings,
 }
 
 #[derive(Resource, sqlx::FromRow)]

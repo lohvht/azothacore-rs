@@ -711,13 +711,14 @@ where
                             if let Some(s) = field_type.field_size() {
                                 offset_relative_to_record += s;
                             } else {
-                                // sanity check, None should be String only
-                                if !matches!(field_type, DB2FieldType::LocalisedString) {
+                                // sanity check, None should be String related only
+                                if !matches!(field_type, DB2FieldType::LocalisedString) && !matches!(field_type, DB2FieldType::String) {
                                     return Err(io::Error::new(
                                         io::ErrorKind::Other,
                                         format!(
-                                            "SANITY_CHECK: get_raw_record_data failed as field type is invalid. Expected {:?} but got {:?}",
+                                            "SANITY_CHECK: get_raw_record_data failed as field type is invalid. Expected {:?} or {:?} but got {:?}",
                                             DB2FieldType::LocalisedString,
+                                            DB2FieldType::String,
                                             field_type,
                                         ),
                                     ));

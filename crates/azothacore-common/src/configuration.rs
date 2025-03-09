@@ -159,7 +159,7 @@ where
         let cfg: C = match Config::load(&path) {
             Err(e) => {
                 ev_startup_failed.send_default();
-                error!(cause=%e, "error initialising config");
+                error!(cause=?e, "error initialising config");
                 return;
             },
             Ok(c) => c,
@@ -189,7 +189,7 @@ fn reload_config<C>(
         if !attempted_reload {
             // Reloading configuraion should not fail at all, for now we just log
             if let Err(err) = cfg.reload_from_path() {
-                warn!(cause=%err, path=%cfg.filename.display(), "error reloading from path, using old configs");
+                warn!(cause=?err, path=%cfg.filename.display(), "error reloading from path, using old configs");
             } else {
                 reloaded = true;
             }

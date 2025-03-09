@@ -102,7 +102,7 @@ struct MapBuilder<'w> {
 
 fn handle_discover_tiles_error(In(res): In<AzResult<()>>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
     if let Err(e) = res {
-        error!(cause=%e, "error when discovering tiles");
+        error!(cause=?e, "error when discovering tiles");
         ev_startup_failed.send_default();
     }
 }
@@ -208,7 +208,7 @@ impl MapBuilder<'_> {
     fn populate_tiles_to_build(this: MapBuilder, mut commands: Commands, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
         info!("Begin populating tiles to build");
         if let Err(e) = this.build_maps(&mut commands) {
-            error!(cause=%e, "error when populating tiles to build");
+            error!(cause=?e, "error when populating tiles to build");
             ev_startup_failed.send_default();
         }
     }
@@ -258,7 +258,7 @@ impl MapBuilder<'_> {
                 continue;
             }
             let nav_mesh = self.build_nav_mesh(map_id).inspect_err(|e| {
-                error!(cause=%e, "Failed creating navmesh!");
+                error!(cause=?e, "Failed creating navmesh!");
             })?;
 
             for tile in tiles {

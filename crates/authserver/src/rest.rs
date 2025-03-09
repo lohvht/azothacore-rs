@@ -116,7 +116,7 @@ impl LoginRESTService {
         let acceptor = match rt.block_on(TcpListener::bind(cfg.login_rest_bind_addr())) {
             Ok(a) => a,
             Err(e) => {
-                error!(target:"server::rest", cause=%e, "Couldn't bind to {}", cfg.login_rest_bind_addr());
+                error!(target:"server::rest", cause=?e, "Couldn't bind to {}", cfg.login_rest_bind_addr());
                 ev_startup_failed.send_default();
                 return;
             },
