@@ -482,7 +482,8 @@ fn main() -> io::Result<()> {
     println!("cargo:rerun-if-changed=protos");
 
     // use a vendored protoc
-    std::env::set_var("PROTOC", protobuf_src::protoc());
+    // SAFETY: the build script is single-threaded at this point
+    unsafe { std::env::set_var("PROTOC", protobuf_src::protoc()) };
 
     let service_generator = BnetRpcServiceGenerator {};
 

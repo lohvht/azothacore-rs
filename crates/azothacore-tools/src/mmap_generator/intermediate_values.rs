@@ -122,19 +122,21 @@ impl IntermediateValues<'_> {
 }
 
 macro_rules! buf_slice_from_ptr {
-    ( $ptr:expr, $ptr_len:expr ) => {{
-        #[allow(unused_unsafe)]
-        &unsafe { slice::from_raw_parts($ptr, $ptr_len as usize) }
-            .iter()
-            .flat_map(|v| v.to_ne_bytes())
-            .collect::<Vec<_>>()
-    }};
+    // NOTE: `&{ .. }` rather than `{ &.. }` so the Vec temporary lives until the end of the caller's
+    // statement. With edition 2024 tail-expression temporaries are dropped at the end of the block.
+    ( $ptr:expr, $ptr_len:expr ) => {
+        &{
+            #[allow(unused_unsafe)]
+            let s = unsafe { slice::from_raw_parts($ptr, $ptr_len as usize) };
+            s.iter().flat_map(|v| v.to_ne_bytes()).collect::<Vec<_>>()
+        }
+    };
 }
 
 macro_rules! buf_slice_from_slice {
-    ( $slice:expr ) => {{
+    ( $slice:expr ) => {
         &$slice.iter().flat_map(|v| v.to_ne_bytes()).collect::<Vec<_>>()
-    }};
+    };
 }
 
 // fn debug_write_recast_heightfield<W: io::Write>(file: &mut W, hf: &RecastHeightField) -> AzResult<()> {

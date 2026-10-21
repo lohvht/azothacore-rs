@@ -2,6 +2,9 @@
 resolver = "2"
 members = ["crates/*", "azothacore-modules", "xtask"]
 
+[workspace.package]
+edition = "2024"
+
 # Enable a small amount of optimization in debug mode
 [profile.dev]
 opt-level = 1
