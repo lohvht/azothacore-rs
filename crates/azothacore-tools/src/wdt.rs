@@ -5,7 +5,7 @@ use byteorder::{LittleEndian, ReadBytesExt};
 
 use crate::{
     adt::AdtChunkModf,
-    extractor_common::{casc_handles::CascStorageHandle, cstr_bytes_to_string, ChunkedFile},
+    extractor_common::{ChunkedFile, casc_handles::CascStorageHandle, cstr_bytes_to_string},
 };
 
 pub const WDT_MAP_SIZE: usize = 64;

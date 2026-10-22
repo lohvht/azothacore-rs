@@ -7,7 +7,7 @@ use std::{
 
 use bevy::{
     app::{App, Startup},
-    asset::{io::Reader as BevyAssetIoReader, AssetApp, AssetLoader, AssetServer, Assets, LoadContext},
+    asset::{AssetApp, AssetLoader, AssetServer, Assets, LoadContext, io::Reader as BevyAssetIoReader},
     ecs::system::SystemParam,
     prelude::{EventWriter, Handle, IntoSystemConfigs, Res, ResMut, Resource, SystemSet},
 };
@@ -15,15 +15,15 @@ use flagset::FlagSet;
 use tracing::{debug, error, instrument};
 
 use crate::{
-    bevy_app::{az_startup_succeeded, AzStartupFailedEvent},
-    collision::{management::VMapMgr, maps::map_tree::StaticMapTree, models::world_model::WorldModel},
-    configuration::ConfigMgr,
-    deref_boilerplate,
-    utils::buffered_file_open,
     AzError,
     ChildMapData,
     MapLiquidTypeFlag,
     ParentMapData,
+    bevy_app::{AzStartupFailedEvent, az_startup_succeeded},
+    collision::{management::VMapMgr, maps::map_tree::StaticMapTree, models::world_model::WorldModel},
+    configuration::ConfigMgr,
+    deref_boilerplate,
+    utils::buffered_file_open,
 };
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
@@ -171,23 +171,23 @@ where
     pub fn acquire_model_instance(&mut self, filename: &str, load_async: bool) -> Option<Handle<WorldModel>> {
         let path = push_extension(self.cfg_mgr.vmaps_dir().join(filename), "vmo");
         if load_async {
-            Some(self.asset_loader.load(path))
-        } else if let Some(h) = self.asset_loader.get_handle(path.to_path_buf()) {
-            Some(h)
-        } else {
-            match buffered_file_open(&path) {
+            return Some(self.asset_loader.load(path));
+        }
+        if let Some(h) = self.asset_loader.get_handle(path.to_path_buf()) {
+            return Some(h);
+        }
+        match buffered_file_open(&path) {
+            Err(e) => {
+                error!("misc: VMapMgr2: could not load {}; err {e}", path.display());
+                None
+            },
+            Ok(mut f) => match WorldModel::read_file(&mut f) {
+                Ok(m) => Some(self.loaded_model_files.add(m)),
                 Err(e) => {
-                    error!("misc: VMapMgr2: could not load {}; err {e}", path.display());
+                    debug!("error trying to open world model file: {filename}; e: {e}");
                     None
                 },
-                Ok(mut f) => match WorldModel::read_file(&mut f) {
-                    Ok(m) => Some(self.loaded_model_files.add(m)),
-                    Err(e) => {
-                        debug!("error trying to open world model file: {filename}; e: {e}");
-                        None
-                    },
-                },
-            }
+            },
         }
     }
 }
@@ -235,7 +235,7 @@ where
         let tree = match self.instance_map_trees.get_mut(&map_id) {
             None => {
                 let t = StaticMapTree::init_from_file(self.helper.cfg_mgr.vmaps_dir(), map_id)
-                    .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tree: {}", e)))?;
+                    .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tree: {e}")))?;
 
                 self.instance_map_trees.entry(map_id).or_insert(t)
             },
@@ -243,7 +243,7 @@ where
         };
 
         tree.load_map_tile(tile_x, tile_y, &self.helper, &mut self.model_store, load_async)
-            .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tile: {}", e)))?;
+            .map_err(|e| super::VmapFactoryLoadError::General(format!("error loading map tile: {e}")))?;
 
         let tree = self
             .instance_map_trees

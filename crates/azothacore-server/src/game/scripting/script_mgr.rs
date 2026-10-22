@@ -363,7 +363,8 @@ where
             (s, e)
         },
     };
-    let mut script_mappings = bevy_world.get_resource_or_insert_with(|| RegisteredScriptMapping::default());
+    let mut script_mappings = bevy_world.get_resource_or_insert_with(RegisteredScriptMapping::default);
+
     if let Some(old_e) = script_mappings.insert(script_name, e) {
         bevy_world.despawn(old_e);
     }

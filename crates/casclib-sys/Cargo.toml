@@ -5,6 +5,6 @@ version = "0.0.0"
 edition.workspace = true
 
 [build-dependencies]
-cmake = "0"
-bindgen = "0"
+cmake = "0.1"
+bindgen = "0.73"
 flate2.workspace = true

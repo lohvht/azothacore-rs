@@ -10,8 +10,8 @@ use std::{
 use flagset::FlagSet;
 use nalgebra::{DMatrix, SMatrix};
 use tracing::{error, info, warn};
-pub use wow7_3_5_26972::*;
 use wow_db2::wdc1;
+pub use wow7_3_5_26972::*;
 
 // Bunch of map stuff
 /// Max accuracy = val/256
@@ -23,32 +23,32 @@ const FLAT_HEIGHT_DELTA_LIMIT: f32 = 0.005;
 /// If max - min less this value - liquid surface is flat
 const FLAT_LIQUID_DELTA_LIMIT: f32 = 0.001;
 
-use azothacore_common::{az_error, utils::buffered_file_create, AzResult, Locale};
+use azothacore_common::{AzResult, Locale, az_error, utils::buffered_file_create};
 use azothacore_server::{
     game::{
-        grid::grid_defines::{ADT_CELLS_PER_GRID, ADT_CELL_SIZE, ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
+        grid::grid_defines::{ADT_CELL_SIZE, ADT_CELLS_PER_GRID, ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE},
         map::{
-            map_file::{MapFile, MapFilev9v8, MapHeightData, MapHeightFlightBox},
             GridMap,
             MapLiquidData,
             MapLiquidDataEntryFlags,
             MapLiquidDataGlobalEntryFlags,
             MapLiquidTypeFlag,
+            map_file::{MapFile, MapFilev9v8, MapHeightData, MapHeightFlightBox},
         },
     },
     shared::data_stores::db2_structure::{CinematicCamera, LiquidMaterial, LiquidType, Map as MapDb2},
 };
 
 use crate::{
-    adt::{AdtChunkMcnk, AdtChunkMfbo, AdtChunkMh2o, ADT_LIQUID_TYPE_MAGMA, ADT_LIQUID_TYPE_OCEAN, ADT_LIQUID_TYPE_SLIME, ADT_LIQUID_TYPE_WATER},
+    adt::{ADT_LIQUID_TYPE_MAGMA, ADT_LIQUID_TYPE_OCEAN, ADT_LIQUID_TYPE_SLIME, ADT_LIQUID_TYPE_WATER, AdtChunkMcnk, AdtChunkMfbo, AdtChunkMh2o},
     extractor_common::{
-        casc_handles::{CascFileHandle, CascLocale, CascStorageHandle},
         ChunkedFile,
         DB2AndMapExtractFlags,
         ExtractorConfig,
+        casc_handles::{CascFileHandle, CascLocale, CascStorageHandle},
     },
     to_casc_locales,
-    wdt::{WdtChunkMain, WDT_MAP_SIZE},
+    wdt::{WDT_MAP_SIZE, WdtChunkMain},
 };
 
 pub fn main_db2_and_map_extract(args: &ExtractorConfig, first_installed_locale: Locale, build: u32) -> AzResult<()> {

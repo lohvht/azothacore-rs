@@ -1,6 +1,6 @@
-use azothacore_common::{az_error, deref_boilerplate, AzResult};
+use azothacore_common::{AzResult, az_error, deref_boilerplate};
 use bevy::prelude::Component;
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 
 use crate::{
     game::{

@@ -1,7 +1,7 @@
 #[allow(non_camel_case_types)]
 mod wow7_3_5_26972;
 
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 use num::{FromPrimitive, Num, ToPrimitive};
 use num_derive::{FromPrimitive, ToPrimitive};
 use thiserror::Error;

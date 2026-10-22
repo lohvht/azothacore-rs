@@ -4,8 +4,7 @@ use bevy::{
 };
 
 use crate::game::{
-    grid::grid_defines::{compute_grid_coord, MAX_NUMBER_OF_GRIDS},
-    map::{GridMap, Map},
+    grid::grid_defines::{MAX_NUMBER_OF_GRIDS, compute_grid_coord},
     world::WorldConfig,
 };
 

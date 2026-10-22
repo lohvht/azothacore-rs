@@ -2,7 +2,7 @@ use std::{
     fmt::Debug,
     io,
     net::SocketAddr,
-    sync::{atomic::AtomicBool, Arc},
+    sync::{Arc, atomic::AtomicBool},
     time::Duration,
 };
 

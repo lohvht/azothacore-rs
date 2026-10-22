@@ -10,6 +10,7 @@ use parry3d::partitioning::Qbvh;
 use tracing::{debug, error};
 
 use crate::{
+    AzResult,
     az_error,
     cmp_or_return,
     collision::{
@@ -19,7 +20,6 @@ use crate::{
     },
     sanity_check_read_all_bytes_from_reader,
     utils::{bincode_deserialise, bincode_serialise, buffered_file_create, buffered_file_open},
-    AzResult,
 };
 
 pub struct StaticMapTree {

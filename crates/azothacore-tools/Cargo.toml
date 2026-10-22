@@ -13,12 +13,12 @@ wow-db2.workspace = true
 # External crates
 bevy.workspace = true
 byteorder = "1"
-crossbeam = { version = "0" }
+crossbeam = { version = "0.8" }
 figment.workspace = true
 flagset.workspace = true
 futures.workspace = true
-glob = "0"
-libc = "0"
+glob = "0.3"
+libc = "0.2"
 nalgebra.workspace = true
 num-derive.workspace = true
 num-traits.workspace = true
@@ -28,10 +28,10 @@ rayon = "1"
 serde_default.workspace = true
 serde-inline-default.workspace = true
 serde.workspace = true
-sscanf = "0"
+sscanf = "0.4"
 structstruck.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-zerocopy = { version = "0" }
-zerocopy-derive = { version = "0" }
+zerocopy = { version = "0.8" }
+zerocopy-derive = { version = "0.8" }

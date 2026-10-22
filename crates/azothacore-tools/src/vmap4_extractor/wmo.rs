@@ -5,18 +5,18 @@ use std::{
 };
 
 use azothacore_common::{
+    AzResult,
     az_error,
     collision::models::world_model::{WmoLiquid, WmoLiquidParams},
-    AzResult,
 };
 use byteorder::{LittleEndian, ReadBytesExt};
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 use nalgebra::{Vector3, Vector4};
 use parry3d::bounding_volume::Aabb;
 use tracing::{debug, error};
 
 use crate::{
-    extractor_common::{casc_handles::CascStorageHandle, chunked_data_offsets, cstr_bytes_to_string, ChunkedFile},
+    extractor_common::{ChunkedFile, casc_handles::CascStorageHandle, chunked_data_offsets, cstr_bytes_to_string},
     vmap4_assembler::tile_assembler::{GroupModel_Raw, WorldModel_Raw},
 };
 
@@ -392,8 +392,8 @@ impl WmoGroup {
                 let mut data = io::Cursor::new(subchunk_data);
                 while data.position() < subchunk_data_len {
                     s.mopy.push(WmoGroupMOPY {
-                        flag:        FlagSet::new(data.read_u8()?)
-                            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("FLAGS INVALID?: err was {}", e)))?,
+                        flag: FlagSet::new(data.read_u8()?).map_err(|e| io::Error::other(format!("FLAGS INVALID?: err was {e}")))?,
+
                         material_id: data.read_u8()?,
                     });
                 }

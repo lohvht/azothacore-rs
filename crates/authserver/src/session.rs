@@ -4,27 +4,27 @@ use std::{
     ops::{Deref, DerefMut},
     process,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Mutex,
         OnceLock,
+        atomic::{AtomicU32, Ordering},
     },
 };
 
 use azothacore_common::{
-    az_error,
-    bevy_app::{az_startup_succeeded, TokioRuntime},
-    configuration::ConfigMgr,
-    deref_boilerplate,
-    utils::{unix_now, BufferDecodeError, BufferResult, DecodeValueFromBytes, MessageBuffer},
     AccountTypes,
     AzResult,
     Locale,
+    az_error,
+    bevy_app::{TokioRuntime, az_startup_succeeded},
+    configuration::ConfigMgr,
+    deref_boilerplate,
+    utils::{BufferDecodeError, BufferResult, DecodeValueFromBytes, MessageBuffer, unix_now},
 };
 use azothacore_database::{
+    DbDriver,
     args,
     args_unwrap,
     database_env::{LoginDatabase, LoginPreparedStmts},
-    DbDriver,
 };
 use azothacore_server::shared::{
     bnetrpc_zcompress,
@@ -33,8 +33,8 @@ use azothacore_server::shared::{
         socket_mgr::{ConnectionComponent, NewTcpConnection, RunStartTcpSocketTask, SocketReceiver},
     },
     realms::{
-        realm_list::{JoinRealmError, RealmList},
         BnetRealmHandle,
+        realm_list::{JoinRealmError, RealmList},
     },
 };
 use bevy::{
@@ -42,7 +42,18 @@ use bevy::{
     prelude::{App, Commands, Component, Entity, FixedUpdate, IntoSystemConfigs, Query, Res, ResMut, SystemSet, Update, World},
 };
 use bnet_rpc::{
+    BattlenetRpcErrorCode,
+    BnetRpcResult,
+    BnetRpcService,
+    BnetServiceWrapper,
     bgs::protocol::{
+        Attribute,
+        EntityId,
+        Header,
+        NoData,
+        NoResponse,
+        ProcessId,
+        Variant,
         account::v1::{
             AccountFieldTags,
             AccountService,
@@ -67,22 +78,11 @@ use bnet_rpc::{
         report::v1::ReportService,
         resources::v1::ResourcesService,
         user_manager::v1::UserManagerService,
-        Attribute,
-        EntityId,
-        Header,
-        NoData,
-        NoResponse,
-        ProcessId,
-        Variant,
     },
-    BattlenetRpcErrorCode,
-    BnetRpcResult,
-    BnetRpcService,
-    BnetServiceWrapper,
 };
 use bytes::{Buf, Bytes};
 use prost::Message;
-use rand::{rngs::OsRng, RngCore, TryRngCore};
+use rand::{RngCore, TryRngCore, rngs::OsRng};
 use sqlx::{Pool, Row};
 use tokio::{
     io::{AsyncRead, AsyncWrite},

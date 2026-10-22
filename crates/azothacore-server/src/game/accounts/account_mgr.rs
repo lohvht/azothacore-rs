@@ -1,22 +1,22 @@
 use std::collections::{BTreeMap, BTreeSet};
 
-use azothacore_common::{hex_str, AccountTypes};
+use azothacore_common::{AccountTypes, hex_str};
 use azothacore_database::{
-    args,
-    database_env::{CharacterDatabase, CharacterPreparedStmts, LoginDatabase, LoginPreparedStmts},
     DbAcquire,
     DbExecutor,
+    args,
+    database_env::{CharacterDatabase, CharacterPreparedStmts, LoginDatabase, LoginPreparedStmts},
 };
 use bevy::prelude::Commands;
 use sha2::{Digest, Sha256};
-use sqlx::{query_as, Connection};
+use sqlx::{Connection, query_as};
 use tokio::{runtime::Runtime, time::Instant};
 use tracing::{debug, error, info, trace};
 
 use super::{
-    rbac::{RawRbacPermId, RbacPermission},
     AccountOpError,
     AccountOpResult,
+    rbac::{RawRbacPermId, RbacPermission},
 };
 use crate::game::scripting::script_mgr::ScriptMgr;
 
@@ -499,7 +499,7 @@ impl AccountMgr {
 
 #[cfg(test)]
 mod tests {
-    use azothacore_tests_utils::{random_alpanum, test_db_pool_auth, SHARED_TEST_DB_PERMITS};
+    use azothacore_tests_utils::{SHARED_TEST_DB_PERMITS, random_alpanum, test_db_pool_auth};
     use sqlx::query;
 
     use super::*;

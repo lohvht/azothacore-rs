@@ -4,6 +4,8 @@ use std::{
 };
 
 use azothacore_common::{
+    AzResult,
+    MapLiquidTypeFlag,
     az_error,
     bevy_app::AzStartupFailedEvent,
     collision::{
@@ -12,10 +14,8 @@ use azothacore_common::{
     },
     configuration::ConfigMgr,
     deref_boilerplate,
-    recastnavigation_handles::{DetourNavMesh, DetourNavMeshParams, DT_POLY_BITS},
+    recastnavigation_handles::{DT_POLY_BITS, DetourNavMesh, DetourNavMeshParams},
     utils::{bincode_serialise, buffered_file_create},
-    AzResult,
-    MapLiquidTypeFlag,
 };
 use bevy::{
     app::{App, AppExit, PostUpdate, Startup, Update},
@@ -27,9 +27,9 @@ use parry3d::bounding_volume::Aabb;
 use tracing::{error, info, warn};
 
 use crate::{
-    extractor_common::{get_dir_contents, ExtractorConfig, MapIdTileXY},
+    extractor_common::{ExtractorConfig, MapIdTileXY, get_dir_contents},
     mmap_generator::{
-        common::{get_tile_bounds, MeshData, TileInfo, GRID_SIZE},
+        common::{GRID_SIZE, MeshData, TileInfo, get_tile_bounds},
         terrain_builder::TerrainBuilder,
         tile_builder::TileBuilder,
     },

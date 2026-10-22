@@ -5,10 +5,10 @@ use std::{
 };
 
 use azothacore_common::{
-    bevy_app::{AzStartupFailedEvent, TokioRuntime},
-    deref_boilerplate,
     AzContext,
     AzResult,
+    bevy_app::{AzStartupFailedEvent, TokioRuntime},
+    deref_boilerplate,
 };
 use azothacore_database::{
     args,

@@ -14,10 +14,10 @@ pub type AzResult<T> = anyhow::Result<T>;
 pub type AzError = anyhow::Error;
 use std::{collections::HashMap, fmt::Debug};
 
-pub use anyhow::{anyhow as az_error, Context as AzContext};
+pub use anyhow::{Context as AzContext, anyhow as az_error};
 use bevy::prelude::Resource;
 pub use compile_options::*;
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 pub use hex_fmt::HexFmt;
 use num::{FromPrimitive, ToPrimitive};
 use num_derive::{FromPrimitive, ToPrimitive};

@@ -1,13 +1,13 @@
 use azothacore_common::{
+    AzResult,
     az_error,
     collision::{management::vmap_mgr2::LiquidFlagsGetter, maps::map_defines::MmapNavTerrainFlag, models::model_instance::ModelFlags},
     configuration::ConfigMgr,
     g3dlite_copied::matrix3_from_euler_angles_xyz,
     row_vector_to_matrix_index,
     utils::buffered_file_open,
-    AzResult,
 };
-use azothacore_server::game::map::{map_file::MapFile, GridMap, MapLiquidTypeFlag};
+use azothacore_server::game::map::{GridMap, MapLiquidTypeFlag, map_file::MapFile};
 use bevy::{ecs::system::SystemParam, prelude::Res};
 use flagset::FlagSet;
 use nalgebra::{DMatrix, SMatrix, Vector3};
@@ -16,7 +16,7 @@ use tracing::debug;
 use crate::{
     extractor_common::ExtractorConfig,
     mmap_generator::{
-        common::{MeshData, GRID_PART_SIZE, GRID_SIZE, INVALID_MAP_LIQ_HEIGHT_MAX, V8_SIZE, V8_SIZE_SQ, V9_SIZE, V9_SIZE_SQ},
+        common::{GRID_PART_SIZE, GRID_SIZE, INVALID_MAP_LIQ_HEIGHT_MAX, MeshData, V8_SIZE, V8_SIZE_SQ, V9_SIZE, V9_SIZE_SQ},
         map_builder::MmapBuilderVmapMgr,
     },
 };
@@ -31,7 +31,7 @@ enum Spot {
 }
 
 impl Spot {
-    fn get_loop_vars(&self) -> impl Iterator<Item = usize> {
+    fn get_loop_vars(&self) -> impl Iterator<Item = usize> + use<> {
         let (loop_start, loop_end, loop_incre) = match *self {
             Spot::Entire => (0, V8_SIZE_SQ, 1),
             Spot::Top => (0, V8_SIZE, 1),
@@ -141,7 +141,7 @@ impl TerrainBuilder<'_> {
                 None => {
                     break Err(az_error!(
                         "error retrieving map spot for the map {map_id:04}[{tile_x},{tile_y}], tried finding from these maps: {tried_map_ids:?}"
-                    ))
+                    ));
                 },
                 Some(i) => i,
             };
@@ -225,9 +225,11 @@ impl TerrainBuilder<'_> {
                             || col >= liq_data.offset_x as usize + width
                         {
                             // dummy vert using invalid height
-                            mesh_data.liquid_verts.push((x_offset + col as f32 * GRID_PART_SIZE) * -1.0);
+                            mesh_data.liquid_verts.push(-(x_offset + col as f32 * GRID_PART_SIZE));
+
                             mesh_data.liquid_verts.push(self.cfg.db2_and_map_extract.use_min_height);
-                            mesh_data.liquid_verts.push((y_offset + row as f32 * GRID_PART_SIZE) * -1.0);
+                            mesh_data.liquid_verts.push(-(y_offset + row as f32 * GRID_PART_SIZE));
+
                             continue;
                         }
                         terrain_builder_get_liquid_coord(i, j, x_offset, y_offset, &mut coord, liquid_map);
@@ -240,9 +242,10 @@ impl TerrainBuilder<'_> {
                 Err(liquid_level) => {
                     for i in 0..V9_SIZE_SQ {
                         let (row, col) = row_vector_to_matrix_index!(S: (V9_SIZE, V9_SIZE), i);
-                        mesh_data.liquid_verts.push((x_offset + col as f32 * GRID_PART_SIZE) * -1.0);
+                        mesh_data.liquid_verts.push(-(x_offset + col as f32 * GRID_PART_SIZE));
+
                         mesh_data.liquid_verts.push(*liquid_level);
-                        mesh_data.liquid_verts.push((y_offset + row as f32 * GRID_PART_SIZE) * -1.0);
+                        mesh_data.liquid_verts.push(-(y_offset + row as f32 * GRID_PART_SIZE));
                     }
                 },
             }
@@ -565,15 +568,19 @@ fn terrain_builder_get_height_coord<const R: usize, const C: usize>(
     // coord is mirroed about the horizontal axes
     if query_v9 {
         // index%(V9_SIZE)
-        coord[0] = (x_offset + col_idx as f32 * GRID_PART_SIZE) * -1.0;
+        coord[0] = -(x_offset + col_idx as f32 * GRID_PART_SIZE);
+
         // (int)(index/(V9_SIZE))
-        coord[1] = (y_offset + row_idx as f32 * GRID_PART_SIZE) * -1.0;
+        coord[1] = -(y_offset + row_idx as f32 * GRID_PART_SIZE);
+
         coord[2] = v[(row_idx, col_idx)];
     } else {
         // index%(V8_SIZE)
-        coord[0] = (x_offset + col_idx as f32 * GRID_PART_SIZE + GRID_PART_SIZE / 2.0) * -1.0;
+        coord[0] = -(x_offset + col_idx as f32 * GRID_PART_SIZE + GRID_PART_SIZE / 2.0);
+
         // (int)(index/(V8_SIZE))
-        coord[1] = (y_offset + row_idx as f32 * GRID_PART_SIZE + GRID_PART_SIZE / 2.0) * -1.0;
+        coord[1] = -(y_offset + row_idx as f32 * GRID_PART_SIZE + GRID_PART_SIZE / 2.0);
+
         coord[2] = v[(row_idx, col_idx)];
     }
 }
@@ -583,8 +590,9 @@ fn terrain_builder_get_liquid_coord(index: usize, index2: usize, x_offset: f32, 
     // coord is mirroed about the horizontal axes
     let (row, col) = row_vector_to_matrix_index!(S: (V9_SIZE, V9_SIZE), index);
 
-    coord[0] = (x_offset + col as f32 * GRID_PART_SIZE) * -1.0;
-    coord[1] = (y_offset + row as f32 * GRID_PART_SIZE) * -1.0;
+    coord[0] = -(x_offset + col as f32 * GRID_PART_SIZE);
+    coord[1] = -(y_offset + row as f32 * GRID_PART_SIZE);
+
     coord[2] = v[row_vector_to_matrix_index!(v, index2)];
 }
 

@@ -15,7 +15,7 @@ tracing.workspace = true
 
 [build-dependencies]
 proc-macro2 = "1"
-prost-build = { version = "0" }
+prost-build = { version = "0.13" }
 protobuf-src = { version = "1" }
 quote = "1"
 syn = "2"

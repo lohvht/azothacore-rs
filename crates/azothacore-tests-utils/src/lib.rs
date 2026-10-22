@@ -1,7 +1,7 @@
 use azothacore_common::configuration::{DatabaseInfo, DatabaseType, DbUpdates};
-use azothacore_database::{database_loader::DatabaseLoader, DbDriver};
+use azothacore_database::{DbDriver, database_loader::DatabaseLoader};
 use flagset::FlagSet;
-use rand::{distr::Alphanumeric, rngs::OsRng, Rng, TryRngCore};
+use rand::{Rng, TryRngCore, distr::Alphanumeric, rngs::OsRng};
 use tokio::sync::Semaphore;
 
 fn default_db_info() -> DatabaseInfo {

@@ -1,5 +1,5 @@
 use std::{
-    ffi::{c_void, CString},
+    ffi::{CString, c_void},
     io,
     mem,
     path::Path,
@@ -7,7 +7,7 @@ use std::{
 };
 
 use casclib_sys::*;
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use thiserror::Error;
@@ -301,8 +301,8 @@ impl io::Read for CascFileHandle {
 
         let res = unsafe { CascReadFile(self.h, buf_ptr, len_to_read as u32, &mut len_read) };
         if !res {
-            let last_error = CascError::try_from(unsafe { GetCascError() })
-                .map_or_else(|e| io::Error::new(io::ErrorKind::Other, e), |e| io::Error::new(io::ErrorKind::Other, e));
+            let last_error = CascError::try_from(unsafe { GetCascError() }).map_or_else(io::Error::other, io::Error::other);
+
             return Err(last_error);
         }
         self.current_pos += u64::from(len_read);
@@ -320,8 +320,8 @@ impl io::Seek for CascFileHandle {
 
         let res = unsafe { CascSetFilePointer64(self.h, to_move, &mut self.current_pos, method) };
         if !res {
-            let last_error = CascError::try_from(unsafe { GetCascError() })
-                .map_or_else(|e| io::Error::new(io::ErrorKind::Other, e), |e| io::Error::new(io::ErrorKind::Other, e));
+            let last_error = CascError::try_from(unsafe { GetCascError() }).map_or_else(io::Error::other, io::Error::other);
+
             return Err(last_error);
         }
         Ok(self.current_pos)

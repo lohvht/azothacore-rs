@@ -5,11 +5,11 @@ use std::{
 };
 
 use figment::{
-    providers::{Env, Format, Toml},
     Figment,
     Profile,
+    providers::{Env, Format, Toml},
 };
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 use serde::{Deserialize, Serialize};
 use serde_default::DefaultFromSerde;
 use serde_inline_default::serde_inline_default;

@@ -13,26 +13,24 @@ use std::{
 };
 
 use azothacore_common::{
-    az_error,
-    bevy_app::{AzStartupFailedEvent, TokioRuntime},
-    collision::management::vmap_mgr2::LiquidFlagsGetter,
-    configuration::{ConfigMgr, DataDirConfig},
-    deref_boilerplate,
-    utils::buffered_file_open,
     AzError,
     AzResult,
     ChildMapData,
     Locale,
     MapLiquidTypeFlag,
     ParentMapData,
+    az_error,
+    bevy_app::{AzStartupFailedEvent, TokioRuntime},
+    collision::management::vmap_mgr2::LiquidFlagsGetter,
+    configuration::{ConfigMgr, DataDirConfig},
+    deref_boilerplate,
+    utils::buffered_file_open,
 };
-use azothacore_database::{database_env::HotfixDatabase, DbAcquire, DbDriver};
+use azothacore_database::{DbAcquire, DbDriver, database_env::HotfixDatabase};
 use bevy::{
     app::App,
     ecs::system::SystemParam,
     prelude::{
-        not,
-        on_event,
         Commands,
         Event,
         EventReader,
@@ -45,6 +43,8 @@ use bevy::{
         Startup,
         SystemSet,
         Time,
+        not,
+        on_event,
     },
 };
 use db2_loader::DB2DatabaseLoader;
@@ -96,7 +96,7 @@ fn db2_file_error(e: io::Error) -> AzError {
 }
 
 fn db2_database_error(e: io::Error) -> io::Error {
-    io::Error::new(io::ErrorKind::Other, format!("loading db2 info from database failed; err={e}"))
+    io::Error::other(format!("loading db2 info from database failed; err={e}"))
 }
 
 fn open_db2_file_loader<D: DB2 + From<wow_db2::DB2RawRecord>, P: AsRef<Path>>(db2_dir: P, locale: Locale) -> AzResult<DB2FileLoader<D>> {
@@ -124,7 +124,8 @@ impl<D: DB2 + From<wow_db2::DB2RawRecord> + for<'r> FromRow<'r, <DbDriver as Dat
         let mut hotfix_db = hotfix_db
             .acquire()
             .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("unable to upen connect to database to get db2 details; err={e}")))?;
+            .map_err(|e| io::Error::other(format!("unable to upen connect to database to get db2 details; err={e}")))?;
+
         DB2DatabaseLoader::load(&mut *hotfix_db, &mut db2_data).await.map_err(db2_database_error)?;
         // DB2DatabaseLoader::load() always loads strings into enUS locale, other locales are expected to have data in corresponding _locale tables
         // so we need to make additional call to load that data in case said locale

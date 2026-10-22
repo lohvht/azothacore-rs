@@ -7,6 +7,7 @@ use std::{
 };
 
 use azothacore_common::{
+    AzResult,
     cmp_or_return,
     collision::{
         maps::map_tree::StaticMapTree,
@@ -21,7 +22,6 @@ use azothacore_common::{
     read_le,
     sanity_check_read_all_bytes_from_reader,
     utils::{bincode_deserialise, bincode_serialise, buffered_file_create, buffered_file_open},
-    AzResult,
 };
 use flagset::FlagSet;
 use futures::future;
@@ -31,7 +31,7 @@ use rayon::prelude::*;
 use tracing::{error, info, warn};
 
 use crate::{
-    extractor_common::{get_fixed_plain_name, ExtractorConfig},
+    extractor_common::{ExtractorConfig, get_fixed_plain_name},
     vmap4_extractor::TempGameObjectModel,
 };
 
@@ -98,8 +98,8 @@ pub fn tile_assembler_convert_world2(
                     });
                 }
             }
-            s.send(entry.name.clone())
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("send fail, err: {e}")))?;
+            s.send(entry.name.clone()).map_err(|e| io::Error::other(format!("send fail, err: {e}")))?;
+
             map_spawns.push(entry);
         }
 
@@ -111,8 +111,7 @@ pub fn tile_assembler_convert_world2(
         ptree.clear_and_rebuild(map_data, 0.0);
 
         // write map tree file
-        StaticMapTree::write_map_tree_to_file(&dst, map_id, &ptree, &map_spawns)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("write map tree to file err: {e}")))?;
+        StaticMapTree::write_map_tree_to_file(&dst, map_id, &ptree, &map_spawns).map_err(|e| io::Error::other(format!("write map tree to file err: {e}")))?;
 
         // write map tile files, similar to ADT files, only with extra BVH tree node info
         for (tile_id, tile_entries) in tile_entries.iter() {
@@ -136,7 +135,7 @@ pub fn tile_assembler_convert_world2(
                 }
             }
             StaticMapTree::write_map_tile_spawns_file(&dst, map_id, x, y, &all_tile_entries)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("write_map_tile_spawns_file err: {e}")))?;
+                .map_err(|e| io::Error::other(format!("write_map_tile_spawns_file err: {e}")))?;
         }
         io::Result::Ok(())
     })?;
@@ -246,7 +245,8 @@ pub fn convert_raw_file<P1: AsRef<Path>, P2: AsRef<Path>, P3: AsRef<Path>>(src: 
     })?;
     model
         .write_file(&mut outfile)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("MODEL RAW VMO WRITE ERR: {e}")))?;
+        .map_err(|e| io::Error::other(format!("MODEL RAW VMO WRITE ERR: {e}")))?;
+
     Ok(())
 }
 
@@ -404,7 +404,8 @@ impl WorldModel_Raw {
         out.write_all(RAW_VMAP_MAGIC)?;
         out.write_all(&(self.n_vectors as u32).to_le_bytes())?;
         out.write_all(&self.root_wmo_id.to_le_bytes())?;
-        bincode_serialise(&mut out, &self.groups).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("BINCODE WRITE ERR: {e}")))?;
+        bincode_serialise(&mut out, &self.groups).map_err(|e| io::Error::other(format!("BINCODE WRITE ERR: {e}")))?;
+
         Ok(())
     }
 
@@ -418,7 +419,7 @@ impl WorldModel_Raw {
     pub fn read<R: io::Read>(input: &mut R) -> io::Result<WorldModel_Raw> {
         let mut input = input;
         let (n_vectors, root_wmo_id) = Self::read_world_model_raw_header(input)?;
-        let groups = bincode_deserialise(&mut input).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("BINCODE READ ERR: {e}")))?;
+        let groups = bincode_deserialise(&mut input).map_err(|e| io::Error::other(format!("BINCODE READ ERR: {e}")))?;
 
         sanity_check_read_all_bytes_from_reader!(input)?;
         let s = Self {

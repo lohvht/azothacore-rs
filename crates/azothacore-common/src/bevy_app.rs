@@ -1,6 +1,7 @@
 use std::ops::{Deref, DerefMut};
 
 use bevy::{
+    MinimalPlugins,
     asset::AssetPlugin,
     diagnostic::DiagnosticsPlugin,
     ecs::query::QueryEntityError,
@@ -29,12 +30,11 @@ use bevy::{
         condition::in_state,
         state::{State, States},
     },
-    MinimalPlugins,
 };
 use tokio::runtime::Runtime;
 use tracing::{error, info};
 
-use crate::{az_error, deref_boilerplate, AzResult};
+use crate::{AzResult, az_error, deref_boilerplate};
 
 /// Default we use for FixedUpdates in azothacore, can be overwritten again
 pub const DEFAULT_FRAME_RATE: f64 = 144.0; // Bevy default 64;

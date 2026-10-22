@@ -4,15 +4,15 @@ use std::{
     path::Path,
 };
 
-use azothacore_common::{read_le_unwrap, AzResult};
+use azothacore_common::{AzResult, read_le_unwrap};
 use azothacore_server::{
-    game::grid::grid_defines::{ADT_CELLS_PER_GRID, ADT_CELL_SIZE},
+    game::grid::grid_defines::{ADT_CELL_SIZE, ADT_CELLS_PER_GRID},
     shared::data_stores::db2_structure::{LiquidMaterial, LiquidType},
 };
 use nalgebra::{Matrix3, Vector3};
 use zerocopy::FromBytes;
 
-use crate::extractor_common::{casc_handles::CascStorageHandle, chunked_data_offsets, cstr_bytes_to_string, ChunkedFile};
+use crate::extractor_common::{ChunkedFile, casc_handles::CascStorageHandle, chunked_data_offsets, cstr_bytes_to_string};
 
 pub struct AdtChunkMcnkSubchunkMcvt {
     pub height_map: [f32; (ADT_CELL_SIZE + 1) * (ADT_CELL_SIZE + 1) + ADT_CELL_SIZE * ADT_CELL_SIZE],
@@ -131,35 +131,19 @@ pub struct AdtChunkMh2oLiquidInstance {
 
 impl AdtChunkMh2oLiquidInstance {
     pub fn get_offset_x(&self) -> usize {
-        if self.liquid_vertex_format.get() < 42 {
-            self.offset_x as usize
-        } else {
-            0
-        }
+        if self.liquid_vertex_format.get() < 42 { self.offset_x as usize } else { 0 }
     }
 
     pub fn get_offset_y(&self) -> usize {
-        if self.liquid_vertex_format.get() < 42 {
-            self.offset_y as usize
-        } else {
-            0
-        }
+        if self.liquid_vertex_format.get() < 42 { self.offset_y as usize } else { 0 }
     }
 
     pub fn get_width(&self) -> usize {
-        if self.liquid_vertex_format.get() < 42 {
-            self.width as usize
-        } else {
-            8
-        }
+        if self.liquid_vertex_format.get() < 42 { self.width as usize } else { 8 }
     }
 
     pub fn get_height(&self) -> usize {
-        if self.liquid_vertex_format.get() < 42 {
-            self.height as usize
-        } else {
-            8
-        }
+        if self.liquid_vertex_format.get() < 42 { self.height as usize } else { 8 }
     }
 }
 

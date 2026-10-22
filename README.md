@@ -17,12 +17,14 @@ git clone --recurse-submodules git@github.com:lohvht/azothacore-rs.git
 
 # Requirements
 
-Ensure that you're on a *NIGHTLY* toolchain for rust as the project uses a few features that are not
-stable yet.
+The project builds on the *STABLE* rust toolchain (pinned in `rust-toolchain.toml`).
 
-There are several other dependencies required to compile this project other than a **nightly** build
+NOTE: `rustfmt.toml` uses a few unstable formatting options. Stable `rustfmt` ignores them with a warning;
+run `cargo +nightly fmt` to format with them applied.
+
+There are several other dependencies required to compile this project other than a rust toolchain
 due to the project's dependencies on non-rust components. These are the crates in the `crates/`
-directory ending with `-sys`. As well as [recastnavigation-sys](https://github.com/andriyDev/recastnavigation-rs-sys)
+directory ending with `-sys`. As well as [recastnavigation-sys](https://github.com/lohvht/recastnavigation-rs-sys) (git submodule in `crates/recastnavigation-rs-sys`)
 
 These are the following requirements needed at the moment:
 - cmake

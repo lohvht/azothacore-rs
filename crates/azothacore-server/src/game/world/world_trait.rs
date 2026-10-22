@@ -1,8 +1,8 @@
 use azothacore_common::{
-    bevy_app::TokioRuntime,
-    configuration::{Config, ConfigMgr},
     AccountTypes,
     AzResult,
+    bevy_app::TokioRuntime,
+    configuration::{Config, ConfigMgr},
 };
 use azothacore_database::database_env::{LoginDatabase, WorldDatabase};
 use bevy::prelude::{Commands, In, Res, ResMut, Resource, SystemSet};

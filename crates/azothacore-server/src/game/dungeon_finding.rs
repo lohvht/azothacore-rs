@@ -1,8 +1,8 @@
 use azothacore_common::{
-    az_error,
-    bevy_app::{query_not_found_result, QueryOrNewSingleMut, ToFromEntity},
-    configuration::ConfigMgr,
     AzResult,
+    az_error,
+    bevy_app::{QueryOrNewSingleMut, ToFromEntity, query_not_found_result},
+    configuration::ConfigMgr,
 };
 use bevy::{
     ecs::system::SystemParam,
@@ -13,7 +13,6 @@ use lfg_group_data::{KicksLeftConfig, LfgGroupData};
 use lfg_player_data::LfgPlayerData;
 use num_traits::FromPrimitive;
 
-use super::entities::object::object_guid::HighGuidPlayer;
 use crate::game::entities::object::object_guid::{HighGuidParty, ObjectGuid};
 
 pub mod lfg;

@@ -2,18 +2,18 @@ use std::path::Path;
 
 use authserver::{
     config::AuthserverConfig,
-    rest::{login_rest_service_plugin, LoginRESTServiceSystemSets},
-    session::{bnet_session_handling_plugin, SessionInner},
-    ssl_context::{ssl_context_plugin, SetSslContextSet},
+    rest::{LoginRESTServiceSystemSets, login_rest_service_plugin},
+    session::{SessionInner, bnet_session_handling_plugin},
+    ssl_context::{SetSslContextSet, ssl_context_plugin},
 };
 use azothacore_common::{
-    banner,
-    bevy_app::{az_startup_succeeded, bevy_app, AzStartupFailedEvent, TokioRuntime},
-    configuration::{config_mgr_plugin, ConfigMgr, ConfigMgrSet, DatabaseType},
-    log::{logging_plugin, LoggingSetupSet},
-    AzResult,
     AZOTHA_REALM_CONFIG,
+    AzResult,
     CONF_DIR,
+    banner,
+    bevy_app::{AzStartupFailedEvent, TokioRuntime, az_startup_succeeded, bevy_app},
+    configuration::{ConfigMgr, ConfigMgrSet, DatabaseType, config_mgr_plugin},
+    log::{LoggingSetupSet, logging_plugin},
 };
 use azothacore_database::{
     args_unwrap,
@@ -23,7 +23,7 @@ use azothacore_database::{
 use azothacore_server::shared::{
     networking::socket_mgr::socket_mgr_plugin,
     realms::realm_list::realm_list_plugin,
-    shared_defines::{set_server_process, ServerProcessType},
+    shared_defines::{ServerProcessType, set_server_process},
     tokio_signal_handling_bevy_plugin,
 };
 use bevy::{

@@ -8,10 +8,10 @@ use std::{
 };
 
 use byteorder::{ByteOrder, LittleEndian, ReadBytesExt};
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 use itertools::{FoldWhile, Itertools};
 
-use crate::{new_localised_string, DB2Field, DB2FieldType, DB2RawRecord, Locale, DB2};
+use crate::{DB2, DB2Field, DB2FieldType, DB2RawRecord, Locale, new_localised_string};
 
 flags! {
     pub enum WDCFlags: u16 {
@@ -106,18 +106,15 @@ impl WDC1Header {
         if self.id_index as usize == id_idx {
             return Ok(());
         }
-        Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("id_index from code is not correct. id_index from dbc is {:?}, got {:?}", self.id_index, id_idx,),
-        ))
+        Err(io::Error::other(format!(
+            "id_index from code is not correct. id_index from dbc is {:?}, got {:?}",
+            self.id_index, id_idx,
+        )))
     }
 
     fn magic_check(&self) -> io::Result<()> {
         if &self.magic != b"WDC1" {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("WRONG MAGIC CHECK: expect {:?} got {:?}", b"WDC1", self.magic),
-            ));
+            return Err(io::Error::other(format!("WRONG MAGIC CHECK: expect {:?} got {:?}", b"WDC1", self.magic)));
         }
         Ok(())
     }
@@ -127,10 +124,11 @@ impl WDC1Header {
         W: DB2,
     {
         if self.layout_hash != W::layout_hash() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("WRONG LAYOUT_HASH: expect {:?} got {:?}", W::layout_hash(), self.layout_hash),
-            ));
+            return Err(io::Error::other(format!(
+                "WRONG LAYOUT_HASH: expect {:?} got {:?}",
+                W::layout_hash(),
+                self.layout_hash
+            )));
         }
         Ok(())
     }
@@ -152,7 +150,8 @@ impl WDC1Header {
         self.copy_table_size = rdr.read_u32::<LittleEndian>()?;
 
         let f = rdr.read_u16::<LittleEndian>()?;
-        self.flags = FlagSet::<WDCFlags>::new(f).map_err(|e| io::Error::new(io::ErrorKind::Other, format!("FLAGS INVALID?: got {:?}, err was {}", f, e)))?;
+        self.flags = FlagSet::<WDCFlags>::new(f).map_err(|e| io::Error::other(format!("FLAGS INVALID?: got {f:?}, err was {e}")))?;
+
         self.id_index = rdr.read_u16::<LittleEndian>()?;
         self.total_field_count = rdr.read_u32::<LittleEndian>()?;
         self.bitpacked_data_offset = rdr.read_u32::<LittleEndian>()?;
@@ -270,12 +269,7 @@ impl FieldCompression {
                 size_bits:   v2,
                 array_count: v3,
             },
-            n => {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("field compression values are invalid: expect 0-4 got {:?}", n),
-                ))
-            },
+            n => return Err(io::Error::other(format!("field compression values are invalid: expect 0-4 got {n:?}"))),
         })
     }
 }
@@ -472,41 +466,37 @@ where
                 + header.relationship_data_size as usize;
 
             if expected_file_size != file_size {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("UNEXPECTED FILE SIZE: expect {:?} got {:?}", expected_file_size, file_size),
-                ));
+                return Err(io::Error::other(format!(
+                    "UNEXPECTED FILE SIZE: expect {expected_file_size:?} got {file_size:?}"
+                )));
             }
         }
         if (header.locale & (1 << (locale as u32))) == 0 {
             let header_locale = header.locale;
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Attempted to load locale {locale} for db2 which has locales {header_locale}. Check if you placed your localised db2 files in correct directory."),
-            ));
+            return Err(io::Error::other(format!(
+                "Attempted to load locale {locale} for db2 which has locales {header_locale}. Check if you placed your localised db2 files in correct directory."
+            )));
         }
 
         if header.lookup_column_count > 1 {
-            return Err(io::Error::new(io::ErrorKind::Other, "lookup_column_count is greater than 1"));
+            return Err(io::Error::other("lookup_column_count is greater than 1"));
         }
 
         if header.field_count as usize != W::num_fields() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("UNEXPECTED FIELD COUNT: expect {:?} got {:?}", W::num_fields(), header.field_count),
-            ));
+            return Err(io::Error::other(format!(
+                "UNEXPECTED FIELD COUNT: expect {:?} got {:?}",
+                W::num_fields(),
+                header.field_count
+            )));
         }
 
         let field_data = FieldStructure::init_from_reader(&mut buf, header.field_count)?;
         if header.field_count as usize != field_data.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "field_data size mismatch! field_data size {} should equal to header's field_count {}",
-                    field_data.len(),
-                    header.field_count,
-                ),
-            ));
+            return Err(io::Error::other(format!(
+                "field_data size mismatch! field_data size {} should equal to header's field_count {}",
+                field_data.len(),
+                header.field_count,
+            )));
         }
         let data_start = mem::size_of::<WDC1Header>() + mem::size_of::<FieldStructure>() * header.field_count as usize;
 
@@ -538,19 +528,16 @@ where
         };
 
         if W::inlined_id_index().is_some() && header.id_list_size != 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("header mismatch! id_list_size {} should equal to 0 if NonInlinedIDs", header.id_list_size,),
-            ));
+            return Err(io::Error::other(format!(
+                "header mismatch! id_list_size {} should equal to 0 if NonInlinedIDs",
+                header.id_list_size,
+            )));
         }
         if W::inlined_id_index().is_none() && header.id_list_size != header.record_count * 4 {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "header mismatch! id_list_size {} should equal to 4 * record_count {} if DB2 has InlinedIDs",
-                    header.id_list_size, header.record_count
-                ),
-            ));
+            return Err(io::Error::other(format!(
+                "header mismatch! id_list_size {} should equal to 4 * record_count {} if DB2 has InlinedIDs",
+                header.id_list_size, header.record_count
+            )));
         }
 
         let mut id_list = vec![];
@@ -568,14 +555,11 @@ where
         if !field_storage_infos.is_empty() && field_data.len() != field_storage_infos.len() {
             // For some DB2 like SpellItemEnchantmentCondition.db2, there is no field_storage_info, but there is field_structure
             // This check ensures that if it exists, the field_structure and field_storage_infos tally.
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "field_storage_info size mismatch! field_storage_info size {} should equal to field_data size {}",
-                    field_storage_infos.len(),
-                    field_data.len(),
-                ),
-            ));
+            return Err(io::Error::other(format!(
+                "field_storage_info size mismatch! field_storage_info size {} should equal to field_data size {}",
+                field_storage_infos.len(),
+                field_data.len(),
+            )));
         }
 
         let mut calculated_pallet_data_size = 0;
@@ -631,23 +615,17 @@ where
         }
 
         if calculated_pallet_data_size != header.pallet_data_size as usize {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "pallet data size mismatch! calculated size {} should equal to header's pallet_data_size {}",
-                    calculated_pallet_data_size, header.pallet_data_size,
-                ),
-            ));
+            return Err(io::Error::other(format!(
+                "pallet data size mismatch! calculated size {} should equal to header's pallet_data_size {}",
+                calculated_pallet_data_size, header.pallet_data_size,
+            )));
         }
 
         if calculated_common_data_size != header.common_data_size as usize {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "common data size mismatch! calculated size {} should equal to header's common_data_size {}",
-                    calculated_common_data_size, header.common_data_size,
-                ),
-            ));
+            return Err(io::Error::other(format!(
+                "common data size mismatch! calculated size {} should equal to header's common_data_size {}",
+                calculated_common_data_size, header.common_data_size,
+            )));
         }
 
         let relationship_mappings = RelationshipMapping::init_from_reader(&header, &mut buf)?;
@@ -655,13 +633,10 @@ where
         let mut buf_remain = vec![];
         buf.read_to_end(&mut buf_remain)?;
         if !buf_remain.is_empty() {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "SANITY_CHECK: somehow file isn't fully consumed. please check again! {} bytes left",
-                    buf_remain.len(),
-                ),
-            ));
+            return Err(io::Error::other(format!(
+                "SANITY_CHECK: somehow file isn't fully consumed. please check again! {} bytes left",
+                buf_remain.len(),
+            )));
         }
         Ok(Self {
             locale,
@@ -713,26 +688,19 @@ where
                             } else {
                                 // sanity check, None should be String related only
                                 if !matches!(field_type, DB2FieldType::LocalisedString) && !matches!(field_type, DB2FieldType::String) {
-                                    return Err(io::Error::new(
-                                        io::ErrorKind::Other,
-                                        format!(
-                                            "SANITY_CHECK: get_raw_record_data failed as field type is invalid. Expected {:?} or {:?} but got {:?}",
-                                            DB2FieldType::LocalisedString,
-                                            DB2FieldType::String,
-                                            field_type,
-                                        ),
-                                    ));
+                                    return Err(io::Error::other(format!(
+                                        "SANITY_CHECK: get_raw_record_data failed as field type is invalid. Expected {:?} or {:?} but got {:?}",
+                                        DB2FieldType::LocalisedString,
+                                        DB2FieldType::String,
+                                        field_type,
+                                    )));
                                 }
 
                                 let cstr_size = raw_data[offset_relative_to_record..]
                                     .iter()
                                     .fold_while(0usize, |acc, b| {
                                         let acc = acc + 1;
-                                        if *b == 0 {
-                                            FoldWhile::Done(acc)
-                                        } else {
-                                            FoldWhile::Continue(acc)
-                                        }
+                                        if *b == 0 { FoldWhile::Done(acc) } else { FoldWhile::Continue(acc) }
                                     })
                                     .into_inner();
                                 offset_relative_to_record += cstr_size
@@ -751,7 +719,7 @@ where
         Ok(res)
     }
 
-    pub fn produce_raw_data(&self) -> io::Result<impl Iterator<Item = DB2RawRecord>> {
+    pub fn produce_raw_data(&self) -> io::Result<impl Iterator<Item = DB2RawRecord> + use<W>> {
         let mut res = BTreeMap::new();
         let mut id_value_to_record_number = BTreeMap::new();
         let max_records = self.get_num_records_to_iterate();
@@ -936,10 +904,9 @@ where
                     DB2FieldType::U16 => DB2Field::U16(vec![*foreign_id as u16]),
                     DB2FieldType::U8 => DB2Field::U8(vec![*foreign_id as u8]),
                     _ => {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("SANITY_CHECK: parent_id type invalid. please check again! got type {typ:?}",),
-                        ));
+                        return Err(io::Error::other(format!(
+                            "SANITY_CHECK: parent_id type invalid. please check again! got type {typ:?}",
+                        )));
                     },
                 };
                 record.parent = Some(parent_id)
@@ -964,7 +931,7 @@ where
     }
 
     /// Produces the entire contents of the DB2 file
-    pub fn produce_data(&self) -> io::Result<impl Iterator<Item = W>> {
+    pub fn produce_data(&self) -> io::Result<impl Iterator<Item = W> + use<W>> {
         Ok(self.produce_raw_data()?.map(|record| W::from(record)))
     }
 
@@ -975,13 +942,10 @@ where
     pub fn load_strings_into(&self, existing_db2_data: &mut BTreeMap<u32, W>) -> io::Result<()> {
         for record in self.produce_raw_data()? {
             let Some(existing) = existing_db2_data.get_mut(&record.id) else {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!(
-                        "record id '{record_id}' does not existing in existing record, please make sure that the underlying DB2s are the same.",
-                        record_id = record.id
-                    ),
-                ));
+                return Err(io::Error::other(format!(
+                    "record id '{record_id}' does not existing in existing record, please make sure that the underlying DB2s are the same.",
+                    record_id = record.id
+                )));
             };
 
             existing.merge_strs(&record);
@@ -1048,10 +1012,8 @@ where
 
     fn cstr_bytes_to_string(raw: &[u8]) -> io::Result<String> {
         match CStr::from_bytes_until_nul(raw) {
-            Err(err) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("ERROR: can't convert to str, bytes was {raw:?}; err = {err}"),
-            )),
+            Err(err) => Err(io::Error::other(format!("ERROR: can't convert to str, bytes was {raw:?}; err = {err}"))),
+
             Ok(c) => Ok(c.to_string_lossy().to_string()),
         }
     }
@@ -1109,10 +1071,9 @@ where
                     .get(&field_idx)
                     .and_then(|arr_map| arr_map.get(&array_idx))
                     .ok_or_else(|| {
-                        io::Error::new(
-                            io::ErrorKind::Other,
-                            format!("record_get_var_num_sparse: record_number {record_number}, cannot find offset: idx {field_idx} array_idx {array_idx}"),
-                        )
+                        io::Error::other(format!(
+                            "record_get_var_num_sparse: record_number {record_number}, cannot find offset: idx {field_idx} array_idx {array_idx}"
+                        ))
                     })?;
                 Self::cstr_bytes_to_string(&raw_record[offset..])?
             },
@@ -1134,13 +1095,9 @@ where
             match fsi.storage_type {
                 FieldCompression::BitpackedInlined { offset_bits, size_bits, .. } => {
                     if array_idx != 0 {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!(
-                                "record_get_var_num_regular: record_number {}, array_idx is not zero for bitpacked inlined field. field idx {:?}, array_idx {:?}",
-                                record_number, field_idx, array_idx,
-                            ),
-                        ));
+                        return Err(io::Error::other(format!(
+                            "record_get_var_num_regular: record_number {record_number}, array_idx is not zero for bitpacked inlined field. field idx {field_idx:?}, array_idx {array_idx:?}",
+                        )));
                     }
 
                     let packed_value = read_pallet_value!(raw_record, self.header.bitpacked_data_offset, offset_bits, size_bits);
@@ -1156,13 +1113,9 @@ where
                 },
                 FieldCompression::CommonData { default_value } => {
                     if array_idx != 0 {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!(
-                                "record_get_var_num_regular: record_id {}, array_idx is not zero for common data field. field idx {:?}, array_idx {:?}",
-                                record_number, field_idx, array_idx,
-                            ),
-                        ));
+                        return Err(io::Error::other(format!(
+                            "record_get_var_num_regular: record_id {record_number}, array_idx is not zero for common data field. field idx {field_idx:?}, array_idx {array_idx:?}",
+                        )));
                     }
                     let record_id = self.record_get_id(raw_record, offset_map_field_and_array_offsets, record_number)?;
 
@@ -1178,26 +1131,18 @@ where
                 },
                 FieldCompression::BitpackedIndexed { offset_bits, size_bits } => {
                     if array_idx != 0 {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!(
-                                "record_get_var_num_regular: record_number {}, array_idx is not zero for bitpacked indexed field. field idx {:?}, array_idx {:?}",
-                                record_number, field_idx, array_idx,
-                            ),
-                        ));
+                        return Err(io::Error::other(format!(
+                            "record_get_var_num_regular: record_number {record_number}, array_idx is not zero for bitpacked indexed field. field idx {field_idx:?}, array_idx {array_idx:?}",
+                        )));
                     }
                     let packed_index: usize = read_pallet_value!(raw_record, self.header.bitpacked_data_offset, offset_bits, size_bits)
                         .try_into()
                         .unwrap();
                     match self.pallet_data.get(&field_idx) {
                         None => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                format!(
-                                    "record_get_var_num_regular: error getting bitpacked indexed data field, record_number {} field_idx {:?}",
-                                    record_number, field_idx,
-                                ),
-                            ));
+                            return Err(io::Error::other(format!(
+                                "record_get_var_num_regular: error getting bitpacked indexed data field, record_number {record_number} field_idx {field_idx:?}",
+                            )));
                         },
                         Some(data) => convert_func(&data[packed_index][..])?,
                     }
@@ -1208,26 +1153,18 @@ where
                     array_count,
                 } => {
                     if array_idx >= array_count.try_into().unwrap() {
-                        return Err(io::Error::new(
-                            io::ErrorKind::Other,
-                            format!(
-                                "record_get_var_num_regular: error getting bitpacked indexed data array field by index, record_number {} field_idx {:?} array_idx {}, array_count {}",
-                                record_number, field_idx, array_idx, array_count
-                            ),
-                        ));
+                        return Err(io::Error::other(format!(
+                            "record_get_var_num_regular: error getting bitpacked indexed data array field by index, record_number {record_number} field_idx {field_idx:?} array_idx {array_idx}, array_count {array_count}"
+                        )));
                     }
                     let packed_index: usize = read_pallet_value!(raw_record, self.header.bitpacked_data_offset, offset_bits, size_bits)
                         .try_into()
                         .unwrap();
                     match self.pallet_array_data.get(&field_idx) {
                         None => {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                format!(
-                                    "record_get_var_num_regular: error getting bitpacked indexed array data field, record_number {} field_idx {:?} array_idx {}",
-                                    record_number, field_idx, array_idx,
-                                ),
-                            ));
+                            return Err(io::Error::other(format!(
+                                "record_get_var_num_regular: error getting bitpacked indexed array data field, record_number {record_number} field_idx {field_idx:?} array_idx {array_idx}",
+                            )));
                         },
                         Some(pallet_array) => convert_func(&pallet_array[packed_index][array_idx][..])?,
                     }
@@ -1266,10 +1203,9 @@ where
             .get(&field_idx)
             .and_then(|arr_map| arr_map.get(&array_idx))
             .ok_or_else(|| {
-                io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("record_get_var_num_sparse: record_number {record_number}, cannot find offset: idx {field_idx} array_idx {array_idx}"),
-                )
+                io::Error::other(format!(
+                    "record_get_var_num_sparse: record_number {record_number}, cannot find offset: idx {field_idx} array_idx {array_idx}"
+                ))
             })?;
         convert_func(&raw_record[offset..offset + field_size])
     }
@@ -1285,13 +1221,10 @@ where
         convert_func: fn(data_to_convert: &[u8]) -> io::Result<I>,
     ) -> io::Result<I> {
         if field_idx >= self.header.field_count as usize {
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!(
-                    "record_get_var_num: record_number {}, Field Idx is greater than field count: idx {:?} field_count {:?}",
-                    record_number, field_idx, self.header.field_count
-                ),
-            ));
+            return Err(io::Error::other(format!(
+                "record_get_var_num: record_number {}, Field Idx is greater than field count: idx {:?} field_count {:?}",
+                record_number, field_idx, self.header.field_count
+            )));
         }
         match self.file_data {
             FileLoaderData::OffsetMaps { .. } => self.record_get_var_num_sparse(

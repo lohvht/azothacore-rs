@@ -3,7 +3,7 @@ pub mod realm_list;
 use std::net::SocketAddr;
 
 use azothacore_common::AccountTypes;
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 use ipnet::IpNet;
 use num::{FromPrimitive, ToPrimitive};
 use num_derive::{FromPrimitive, ToPrimitive};

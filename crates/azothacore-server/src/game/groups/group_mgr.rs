@@ -1,37 +1,37 @@
 use std::{collections::BTreeMap, sync::Mutex, time::Instant};
 
 use azothacore_common::{
-    az_error,
-    bevy_app::{AzStartupFailedEvent, ToFromEntity, TokioRuntime},
     AzContext,
     AzResult,
+    az_error,
+    bevy_app::{AzStartupFailedEvent, ToFromEntity, TokioRuntime},
 };
 use azothacore_database::{
+    DbDriver,
     args_unwrap,
     database_env::{CharacterDatabase, CharacterPreparedStmts},
-    DbDriver,
 };
 use bevy::{
     ecs::system::SystemParam,
     prelude::{Bundle, Commands, Entity, EventWriter, Res, Resource},
 };
 use flagset::FlagSet;
-use sqlx::{query, query_as, Transaction};
+use sqlx::{Transaction, query, query_as};
 use tracing::{error, info, warn};
 
 use crate::{
     game::{
         cache::character_cache::CharacterCache,
         dungeon_finding::{
-            lfg_group_data::{KicksLeftConfig, LfgGroupData},
             LFGMgr,
+            lfg_group_data::{KicksLeftConfig, LfgGroupData},
         },
         entities::object::object_guid::{HighGuidParty, HighGuidPlayer, ObjectGuid, ObjectGuidRealmSpecific},
         groups::{Group, GroupDifficultySettings, GroupFlag, GroupFlags, GroupLootInfo, GroupMemberSlots, GroupRoundRobinLooterGuid, GroupTargetIcons},
         world::CurrentRealm,
     },
     shared::{
-        data_stores::{db2_structure::Difficulty, DB2Storage},
+        data_stores::{DB2Storage, db2_structure::Difficulty},
         realms::Realm,
     },
 };
@@ -459,7 +459,7 @@ impl GroupMgr<'_> {
         let mut count = 0;
         for fields in res {
             let db_id = fields.stored_id;
-            let Some((ref mut group, ref mut lfg)) = group_bundles.get_mut(&db_id) else {
+            let Some((group, lfg)) = group_bundles.get_mut(&db_id) else {
                 warn!(
                     target = "misc",
                     "GroupMgr::LoadGroups: Consistency failed, can't find group (storage id: {db_id})"

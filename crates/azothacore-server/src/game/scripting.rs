@@ -1,5 +1,4 @@
 use bevy::{app::App, prelude::SystemSet};
-use script_mgr::ScriptMgr;
 use tracing::info;
 
 pub mod script_defines;

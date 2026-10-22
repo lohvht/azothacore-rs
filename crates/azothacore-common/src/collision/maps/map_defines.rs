@@ -6,11 +6,11 @@ use std::{
 use flagset::FlagSet;
 
 use crate::{
+    AzResult,
     az_error,
     recastnavigation_handles::{DT_NAVMESH_VERSION, RC_WALKABLE_AREA},
     sanity_check_read_all_bytes_from_reader,
     utils::{bincode_deserialise, bincode_serialise, buffered_file_create, buffered_file_open},
-    AzResult,
 };
 
 const MMAP_MAGIC: &[u8; 4] = b"MMAP"; // 'MMAP'

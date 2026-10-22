@@ -6,8 +6,8 @@ use std::{
     time::Duration,
 };
 
-use flate2::{write::GzEncoder, Compression};
-use sqlx::{mysql::MySqlPoolOptions, Executor, Row};
+use flate2::{Compression, write::GzEncoder};
+use sqlx::{Executor, Row, mysql::MySqlPoolOptions};
 use tokio::task::JoinSet;
 
 async fn database_names(user: &str, password: &str, host: &str) -> Vec<String> {

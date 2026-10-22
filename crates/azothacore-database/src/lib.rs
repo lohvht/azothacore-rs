@@ -5,7 +5,7 @@ pub mod database_loader_utils;
 use std::{ops, path::PathBuf};
 
 use azothacore_common::configuration::{DatabaseInfo, DatabaseType, DbUpdates};
-use sqlx::{pool::PoolConnection, MySqlConnection};
+use sqlx::{MySqlConnection, pool::PoolConnection};
 pub use sqlx::{query, query_as, query_as_with, query_with};
 
 /// DbDriver used in azothacore -> attempt to abstract out database specific code

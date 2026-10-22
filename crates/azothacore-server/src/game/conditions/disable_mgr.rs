@@ -4,7 +4,7 @@ use std::{
 };
 
 use azothacore_common::{
-    bevy_app::{az_startup_succeeded, AzStartupFailedEvent, TokioRuntime},
+    bevy_app::{AzStartupFailedEvent, TokioRuntime, az_startup_succeeded},
     collision::management::vmap_mgr2::VmapDisabledChecker,
 };
 use azothacore_database::database_env::WorldDatabase;
@@ -111,7 +111,8 @@ impl DisableMgr {
             Ok(v) => v,
         };
 
-        let mut total_count = 0;
+        let total_count = 0;
+
         for Disable {
             source_type,
             entry,

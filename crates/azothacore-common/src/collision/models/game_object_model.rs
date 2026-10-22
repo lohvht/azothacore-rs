@@ -3,11 +3,11 @@ use std::{collections::BTreeMap, io, path::Path};
 use parry3d::bounding_volume::Aabb;
 
 use crate::{
+    AzResult,
     cmp_or_return,
     collision::vmap_definitions::{GAMEOBJECT_MODELS, VMAP_MAGIC},
     sanity_check_read_all_bytes_from_reader,
     utils::{bincode_deserialise, bincode_serialise, buffered_file_create},
-    AzResult,
 };
 
 #[derive(serde::Deserialize, serde::Serialize)]

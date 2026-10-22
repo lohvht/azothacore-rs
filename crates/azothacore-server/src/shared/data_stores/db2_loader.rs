@@ -2,9 +2,9 @@ use std::{collections::BTreeMap, io};
 
 use azothacore_database::{DbDriver, DbExecutor};
 use futures::TryStreamExt;
-use sqlx::{query, query_as, Database, FromRow};
+use sqlx::{Database, FromRow, query, query_as};
 use tracing::warn;
-use wow_db2::{raw_localised_strs_record_from_sql_row, wdc1::FileLoader, DB2};
+use wow_db2::{DB2, raw_localised_strs_record_from_sql_row, wdc1::FileLoader};
 
 pub type DB2FileLoader<D> = FileLoader<D>;
 
@@ -16,11 +16,7 @@ impl DB2DatabaseLoader {
         db2_data: &mut BTreeMap<u32, D>,
     ) -> io::Result<()> {
         let mut res = query_as::<_, D>(D::db2_sql_stmt()).fetch(hotfix_db);
-        while let Some(db2_entry) = res
-            .try_next()
-            .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("error querying for db2: {e}")))?
-        {
+        while let Some(db2_entry) = res.try_next().await.map_err(|e| io::Error::other(format!("error querying for db2: {e}")))? {
             let entry = db2_data.entry(db2_entry.id()).or_default();
             // do a total replacement
             *entry = db2_entry;
@@ -37,10 +33,11 @@ impl DB2DatabaseLoader {
         while let Some(row) = res
             .try_next()
             .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("error querying localised strings for db2: {e}")))?
+            .map_err(|e| io::Error::other(format!("error querying localised strings for db2: {e}")))?
         {
             let str_entry = raw_localised_strs_record_from_sql_row(&db2_fields, &row)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("error mapping localised string row to db2 entry: err={e}")))?;
+                .map_err(|e| io::Error::other(format!("error mapping localised string row to db2 entry: err={e}")))?;
+
             let Some(db2) = db2_data.get_mut(&str_entry.id) else {
                 warn!(
                     query_stmt = locale_stmt,

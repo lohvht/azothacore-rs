@@ -96,11 +96,15 @@ fn get_service_hashes(full_service_name: &str) -> (u32, u32) {
 
     let calc_name_hash = fnv_1a_hash(full_service_name);
     if calc_name_hash != name_hash {
-        panic!("Somehow the calculated name hash for {full_service_name} does not match the one hardcoded. This is probably our mistake and should never happen; calc={calc_name_hash}, coded={name_hash}");
+        panic!(
+            "Somehow the calculated name hash for {full_service_name} does not match the one hardcoded. This is probably our mistake and should never happen; calc={calc_name_hash}, coded={name_hash}"
+        );
     }
     let calc_original_name_hash = fnv_1a_hash(original_name);
     if calc_original_name_hash != original_name_hash {
-        panic!("Somehow the calculated original name hash for {original_name} does not match the one hardcoded. This is probably our mistake and should never happen; calc={calc_original_name_hash}, coded={original_name_hash}");
+        panic!(
+            "Somehow the calculated original name hash for {original_name} does not match the one hardcoded. This is probably our mistake and should never happen; calc={calc_original_name_hash}, coded={original_name_hash}"
+        );
     }
     (name_hash, original_name_hash)
 }
@@ -125,9 +129,11 @@ impl MethodInfo {
         let method_id = if let Some(mid_str) = trailing.strip_prefix("method_id: ") {
             mid_str
                 .parse()
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, format!("error parsing method_id '{mid_str}', err={e}")))
+                .map_err(|e| io::Error::other(format!("error parsing method_id '{mid_str}', err={e}")))
         } else {
-            panic!("Method ID should be set at least on method - this step is hardcoded and taken manually from other sources (like TC) as the reverse engineered proto files don't have them" );
+            panic!(
+                "Method ID should be set at least on method - this step is hardcoded and taken manually from other sources (like TC) as the reverse engineered proto files don't have them"
+            );
         };
 
         method_id.map(|method_id| Self {
@@ -492,11 +498,7 @@ fn main() -> io::Result<()> {
         .filter_map(|de| {
             de.ok().and_then(|e| {
                 let p = e.into_path();
-                if p.is_file() {
-                    Some(p)
-                } else {
-                    None
-                }
+                if p.is_file() { Some(p) } else { None }
             })
         })
         .collect::<Vec<_>>();

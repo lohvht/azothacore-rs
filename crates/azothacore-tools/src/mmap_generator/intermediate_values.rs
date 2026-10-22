@@ -1,6 +1,6 @@
 use std::{io, io::Write, path::Path, slice};
 
-use azothacore_common::{utils::buffered_file_create, AzResult};
+use azothacore_common::{AzResult, utils::buffered_file_create};
 use byteorder::{NativeEndian, WriteBytesExt};
 use recastnavigation_sys::{rcCompactHeightfield, rcContourSet, rcPolyMesh, rcPolyMeshDetail};
 use tracing::info;

@@ -4,25 +4,25 @@ use std::{
 };
 
 use azothacore_common::{
-    az_error,
-    bevy_app::{az_startup_succeeded, TokioRuntime},
-    configuration::ConfigMgr,
-    hex_str,
-    utils::net_resolve,
     AccountTypes,
     AzError,
     Locale,
+    az_error,
+    bevy_app::{TokioRuntime, az_startup_succeeded},
+    configuration::ConfigMgr,
+    hex_str,
+    utils::net_resolve,
 };
 use azothacore_database::{
+    DbDriver,
     args,
     database_env::{LoginDatabase, LoginPreparedStmts},
-    DbDriver,
 };
 use bevy::prelude::{App, Commands, IntoSystemConfigs, Real, Res, ResMut, Resource, Startup, SystemSet, Time, Timer, TimerMode, Update};
 use flagset::FlagSet;
 use futures::StreamExt;
 use ipnet::IpNet;
-use rand::{rngs::OsRng, RngCore, TryRngCore};
+use rand::{RngCore, TryRngCore, rngs::OsRng};
 use sqlx::Pool;
 use tracing::{error, info};
 

@@ -15,8 +15,8 @@ mod structs;
 pub use structs::*;
 
 use crate::{
-    bevy_app::{az_startup_succeeded, AzStartupDryRunEvent, AzStartupFailedEvent},
     AzResult,
+    bevy_app::{AzStartupDryRunEvent, AzStartupFailedEvent, az_startup_succeeded},
 };
 
 pub trait Config: serde::de::DeserializeOwned + Send + Sync + 'static {
@@ -188,10 +188,13 @@ fn reload_config<C>(
     for _ev in reload_cfg_events.read() {
         if !attempted_reload {
             // Reloading configuraion should not fail at all, for now we just log
-            if let Err(err) = cfg.reload_from_path() {
-                warn!(cause=?err, path=%cfg.filename.display(), "error reloading from path, using old configs");
-            } else {
-                reloaded = true;
+            match cfg.reload_from_path() {
+                Err(err) => {
+                    warn!(cause=?err, path=%cfg.filename.display(), "error reloading from path, using old configs");
+                },
+                _ => {
+                    reloaded = true;
+                },
             }
             attempted_reload = true;
         }
@@ -223,7 +226,7 @@ mod tests {
     use tokio::sync::mpsc::{channel, error::TryRecvError};
 
     use super::*;
-    use crate::bevy_app::{bevy_app, AzStartupState, DEFAULT_FRAME_RATE};
+    use crate::bevy_app::{AzStartupState, DEFAULT_FRAME_RATE, bevy_app};
 
     #[derive(Deserialize, Serialize, DefaultFromSerde, PartialEq)]
     pub struct TestConfig {
@@ -299,7 +302,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "Resource requested by")]
+    #[should_panic(expected = "could not access system parameter Res<ConfigMgr<TestConfig>>")]
     fn cfg_mgr_systemset_reordering_works_panic_if_resource_asked_before_load_initial() {
         #[derive(Component)]
         struct A;

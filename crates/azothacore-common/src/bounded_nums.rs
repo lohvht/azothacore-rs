@@ -5,7 +5,7 @@ use std::{
     time::Duration,
 };
 
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 
 /// FromI128 attempts to convert i128 to the types that implement this
 /// and default to a sensible default if not possible.
@@ -142,20 +142,20 @@ impl<N: FromI128, const TYPE_MASK: u8, const PRED1: i128, const DEFAULT1: i128, 
 }
 
 impl<
-        N: FromI128,
-        const TYPE_MASK_FIRST: u8,
-        const PRED1_FIRST: i128,
-        const DEFAULT1_FIRST: i128,
-        const PRED2_FIRST: i128,
-        const DEFAULT2_FIRST: i128,
-        const DEFAULT3_FIRST: i128,
-        const TYPE_MASK_SECOND: u8,
-        const PRED1_SECOND: i128,
-        const DEFAULT1_SECOND: i128,
-        const PRED2_SECOND: i128,
-        const DEFAULT2_SECOND: i128,
-        const DEFAULT3_SECOND: i128,
-    > PartialOrd<BoundedNum<N, TYPE_MASK_SECOND, PRED1_SECOND, DEFAULT1_SECOND, PRED2_SECOND, DEFAULT2_SECOND, DEFAULT3_SECOND>>
+    N: FromI128,
+    const TYPE_MASK_FIRST: u8,
+    const PRED1_FIRST: i128,
+    const DEFAULT1_FIRST: i128,
+    const PRED2_FIRST: i128,
+    const DEFAULT2_FIRST: i128,
+    const DEFAULT3_FIRST: i128,
+    const TYPE_MASK_SECOND: u8,
+    const PRED1_SECOND: i128,
+    const DEFAULT1_SECOND: i128,
+    const PRED2_SECOND: i128,
+    const DEFAULT2_SECOND: i128,
+    const DEFAULT3_SECOND: i128,
+> PartialOrd<BoundedNum<N, TYPE_MASK_SECOND, PRED1_SECOND, DEFAULT1_SECOND, PRED2_SECOND, DEFAULT2_SECOND, DEFAULT3_SECOND>>
     for BoundedNum<N, TYPE_MASK_FIRST, PRED1_FIRST, DEFAULT1_FIRST, PRED2_FIRST, DEFAULT2_FIRST, DEFAULT3_FIRST>
 {
     fn partial_cmp(
@@ -167,20 +167,20 @@ impl<
 }
 
 impl<
-        N: FromI128,
-        const TYPE_MASK_FIRST: u8,
-        const PRED1_FIRST: i128,
-        const DEFAULT1_FIRST: i128,
-        const PRED2_FIRST: i128,
-        const DEFAULT2_FIRST: i128,
-        const DEFAULT3_FIRST: i128,
-        const TYPE_MASK_SECOND: u8,
-        const PRED1_SECOND: i128,
-        const DEFAULT1_SECOND: i128,
-        const PRED2_SECOND: i128,
-        const DEFAULT2_SECOND: i128,
-        const DEFAULT3_SECOND: i128,
-    > PartialEq<BoundedNum<N, TYPE_MASK_SECOND, PRED1_SECOND, DEFAULT1_SECOND, PRED2_SECOND, DEFAULT2_SECOND, DEFAULT3_SECOND>>
+    N: FromI128,
+    const TYPE_MASK_FIRST: u8,
+    const PRED1_FIRST: i128,
+    const DEFAULT1_FIRST: i128,
+    const PRED2_FIRST: i128,
+    const DEFAULT2_FIRST: i128,
+    const DEFAULT3_FIRST: i128,
+    const TYPE_MASK_SECOND: u8,
+    const PRED1_SECOND: i128,
+    const DEFAULT1_SECOND: i128,
+    const PRED2_SECOND: i128,
+    const DEFAULT2_SECOND: i128,
+    const DEFAULT3_SECOND: i128,
+> PartialEq<BoundedNum<N, TYPE_MASK_SECOND, PRED1_SECOND, DEFAULT1_SECOND, PRED2_SECOND, DEFAULT2_SECOND, DEFAULT3_SECOND>>
     for BoundedNum<N, TYPE_MASK_FIRST, PRED1_FIRST, DEFAULT1_FIRST, PRED2_FIRST, DEFAULT2_FIRST, DEFAULT3_FIRST>
 {
     fn eq(&self, other: &BoundedNum<N, TYPE_MASK_SECOND, PRED1_SECOND, DEFAULT1_SECOND, PRED2_SECOND, DEFAULT2_SECOND, DEFAULT3_SECOND>) -> bool {
@@ -327,8 +327,8 @@ impl<N: FromI128, const TYPE_MASK: u8, const PRED1: i128, const DEFAULT1: i128, 
 #[cfg(test)]
 mod tests {
     use figment::{
-        providers::{Format, Toml},
         Figment,
+        providers::{Format, Toml},
     };
 
     use super::*;

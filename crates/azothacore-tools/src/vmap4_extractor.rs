@@ -9,6 +9,8 @@ use std::{
 };
 
 use azothacore_common::{
+    AzResult,
+    Locale,
     az_error,
     cmp_or_return,
     collision::{
@@ -16,8 +18,6 @@ use azothacore_common::{
         vmap_definitions::RAW_VMAP_MAGIC,
     },
     utils::{bincode_deserialise, bincode_serialise, buffered_file_create, buffered_file_open},
-    AzResult,
-    Locale,
 };
 use azothacore_server::{
     game::grid::grid_defines::SIZE_OF_GRIDS,
@@ -30,17 +30,17 @@ use wow_db2::wdc1;
 use crate::{
     adt::{ADTFile, AdtDoodadDef, AdtMapObjectDefs},
     extractor_common::{
-        casc_handles::{CascLocale, CascStorageHandle},
-        get_fixed_plain_name,
         ExtractorConfig,
         VmapExtractAndGenerate,
+        casc_handles::{CascLocale, CascStorageHandle},
+        get_fixed_plain_name,
     },
     vmap4_assembler::tile_assembler::WorldModel_Raw,
     vmap4_extractor::{
         model::Model,
         wmo::{WmoDoodadData, WmoMods, WmoRoot},
     },
-    wdt::{WDTFile, WDT_MAP_SIZE},
+    wdt::{WDT_MAP_SIZE, WDTFile},
 };
 
 pub mod model;

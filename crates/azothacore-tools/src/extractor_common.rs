@@ -7,8 +7,8 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use azothacore_common::{az_error, AzResult, Locale};
-use flagset::{flags, FlagSet};
+use azothacore_common::{AzResult, Locale, az_error};
+use flagset::{FlagSet, flags};
 use serde::{Deserialize, Serialize};
 use serde_default::DefaultFromSerde;
 use serde_inline_default::serde_inline_default;
@@ -30,10 +30,7 @@ flags! {
 
 pub fn cstr_bytes_to_string(raw: &[u8]) -> io::Result<String> {
     match CStr::from_bytes_until_nul(raw) {
-        Err(err) => Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("ERROR: can't convert to str, bytes was {raw:?}; err = {err}"),
-        )),
+        Err(err) => Err(io::Error::other(format!("ERROR: can't convert to str, bytes was {raw:?}; err = {err}"))),
         Ok(c) => Ok(c.to_string_lossy().to_string()),
     }
 }
@@ -273,18 +270,18 @@ impl ChunkedFile {
     }
 }
 
-pub fn get_dir_contents<'a, P: AsRef<Path> + 'a>(dirpath: P, filter: &str) -> io::Result<impl Iterator<Item = PathBuf> + 'a> {
+pub fn get_dir_contents<'a, P: AsRef<Path> + 'a>(dirpath: P, filter: &str) -> io::Result<impl Iterator<Item = PathBuf> + 'a + use<'a, P>> {
     let path_glob = dirpath.as_ref().join(filter);
-    let path_glob = path_glob.as_os_str().to_str().ok_or(io::Error::new(
-        io::ErrorKind::Other,
-        format!("No valid str from path: {} for filter {filter}", dirpath.as_ref().display()),
-    ))?;
+    let path_glob = path_glob.as_os_str().to_str().ok_or(io::Error::other(format!(
+        "No valid str from path: {} for filter {filter}",
+        dirpath.as_ref().display()
+    )))?;
     let paths = glob::glob(path_glob)
         .map_err(|e| {
-            io::Error::new(
-                io::ErrorKind::Other,
-                format!("path pattern error from path: {} for filter {filter}; err {e}", dirpath.as_ref().display()),
-            )
+            io::Error::other(format!(
+                "path pattern error from path: {} for filter {filter}; err {e}",
+                dirpath.as_ref().display()
+            ))
         })?
         .filter_map(|g| match g {
             Err(e) => {

@@ -1,13 +1,13 @@
 use std::{io, path::Path};
 
 use azothacore_common::{
-    banner,
-    configuration::{from_env_toml, LogAppender, LogFlags, LogLevel, LogLoggerConfig},
-    log,
-    AzResult,
-    Locale,
     AZOTHA_FULL_EXTRACTOR_CONFIG,
+    AzResult,
     CONF_DIR,
+    Locale,
+    banner,
+    configuration::{LogAppender, LogFlags, LogLevel, LogLoggerConfig, from_env_toml},
+    log,
 };
 use azothacore_tools::{
     basic_extractor::main_db2_and_map_extract,
@@ -163,9 +163,5 @@ fn old_client_check(args: &ExtractorConfig) -> io::Result<()> {
             },
         }
     });
-    if has_mpq {
-        Err(io::Error::new(io::ErrorKind::Other, "HAS_MPQ"))
-    } else {
-        Ok(())
-    }
+    if has_mpq { Err(io::Error::other("HAS_MPQ")) } else { Ok(()) }
 }

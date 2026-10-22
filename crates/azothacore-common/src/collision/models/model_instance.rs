@@ -1,5 +1,5 @@
 use bevy::asset::Handle as AssetHandle;
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 use nalgebra::{Matrix3, Vector3};
 use parry3d::bounding_volume::Aabb;
 

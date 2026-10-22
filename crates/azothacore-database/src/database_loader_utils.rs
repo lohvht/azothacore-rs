@@ -29,7 +29,7 @@ pub enum DatabaseLoaderError {
     Generic { msg: String },
 }
 
-fn map_open_err(file_path: &str) -> impl FnOnce(io::Error) -> DatabaseLoaderError {
+fn map_open_err(file_path: &str) -> impl FnOnce(io::Error) -> DatabaseLoaderError + use<> {
     let file = file_path.to_string();
     move |e| DatabaseLoaderError::OpenApplyFile { file, inner: e }
 }

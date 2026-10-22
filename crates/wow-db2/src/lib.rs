@@ -6,7 +6,7 @@ use std::{
     str::FromStr,
 };
 
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 use num::Num;
 use thiserror::Error;
 pub mod wdc1;

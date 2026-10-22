@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, path::Path};
 
-use azothacore_common::{recastnavigation_handles::DetourNavMeshParams, AzResult};
+use azothacore_common::{AzResult, recastnavigation_handles::DetourNavMeshParams};
 use azothacore_server::game::grid::grid_defines::{ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE, SIZE_OF_GRIDS};
 use bevy::prelude::Component;
 use nalgebra::Vector6;
@@ -61,7 +61,7 @@ pub fn load_off_mesh_connections<P: AsRef<Path>>(map_id: u32, tile_x: u16, tile_
             mesh_data.offset_mesh_connections.push(Vector6::new(p0y, p0z, p0x, p1y, p1z, p1x));
             mesh_data.offset_mesh_connection_dirs.push(1); // 1 - both direction, 0 - one sided
             mesh_data.offset_mesh_connection_rads.push(size); // agent size equivalent
-                                                              // can be used same way as polygon flags
+            // can be used same way as polygon flags
             mesh_data.offset_mesh_connections_areas.push(0xFF);
             mesh_data.offset_mesh_connections_flags.push(0xFF); // all movement masks can make this path
         }

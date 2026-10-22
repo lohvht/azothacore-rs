@@ -1,10 +1,13 @@
 use azothacore_common::{
+    AzResult,
     az_error,
     collision::maps::map_defines::{MmapNavTerrainFlag, MmapTileFile},
-    recastnavigation_handles::{detour_create_nav_mesh_data, DetourNavMesh, DetourNavMeshParams, RecastConfig},
-    AzResult,
+    recastnavigation_handles::{DetourNavMesh, DetourNavMeshParams, RecastConfig, detour_create_nav_mesh_data},
 };
 use recastnavigation_sys::{
+    CreateContext,
+    DT_VERTS_PER_POLYGON,
+    RC_WALKABLE_AREA,
     dtNavMeshCreateParams,
     rcAllocCompactHeightfield,
     rcAllocContourSet,
@@ -32,16 +35,13 @@ use recastnavigation_sys::{
     rcMergePolyMeshDetails,
     rcMergePolyMeshes,
     rcRasterizeTriangles,
-    CreateContext,
-    DT_VERTS_PER_POLYGON,
-    RC_WALKABLE_AREA,
 };
 use tracing::{error, info, instrument, warn};
 
 use crate::{
     extractor_common::ExtractorConfig,
     mmap_generator::{
-        common::{clean_vertices, get_tile_bounds, load_off_mesh_connections, MeshData, GRID_SIZE},
+        common::{GRID_SIZE, MeshData, clean_vertices, get_tile_bounds, load_off_mesh_connections},
         intermediate_values::IntermediateValues,
         terrain_builder::TerrainBuilder,
     },

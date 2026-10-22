@@ -2,7 +2,7 @@ use tracing::{error, info};
 
 pub mod tile_assembler;
 
-use azothacore_common::{collision::models::model_instance::VmapModelSpawnWithMapId, AzResult};
+use azothacore_common::{AzResult, collision::models::model_instance::VmapModelSpawnWithMapId};
 
 use crate::{extractor_common::ExtractorConfig, vmap4_assembler::tile_assembler::tile_assembler_convert_world2, vmap4_extractor::TempGameObjectModel};
 

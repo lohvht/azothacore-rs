@@ -1,25 +1,25 @@
 use std::{collections::HashMap, fs, io, path::Path};
 
 use azothacore_common::{
-    bevy_app::bevy_app,
-    collision::management::vmap_mgr2::{vmap_mgr2_plugin, VMapManager2InitSet, VmapConfig},
-    configuration::{config_mgr_plugin, Config},
-    utils::buffered_file_open,
     AzResult,
     ChildMapData,
     Locale,
     ParentMapData,
+    bevy_app::bevy_app,
+    collision::management::vmap_mgr2::{VMapManager2InitSet, VmapConfig, vmap_mgr2_plugin},
+    configuration::{Config, config_mgr_plugin},
+    utils::buffered_file_open,
 };
 use azothacore_server::{
     game::map::MapLiquidTypeFlag,
     shared::data_stores::db2_structure::{LiquidType, Map},
 };
 use bevy::{app::Startup, prelude::IntoSystemSetConfigs};
-use map_builder::{mmap_generator_plugin, LiquidTypes, MmapGenerationSets, VmapNotDisabled};
+use map_builder::{LiquidTypes, MmapGenerationSets, VmapNotDisabled, mmap_generator_plugin};
 use tracing::{info, warn};
 use wow_db2::wdc1;
 
-use crate::extractor_common::{get_dir_contents, ExtractorConfig};
+use crate::extractor_common::{ExtractorConfig, get_dir_contents};
 mod common;
 mod intermediate_values;
 mod map_builder;
@@ -29,26 +29,17 @@ mod tile_builder;
 fn check_directories(args: &ExtractorConfig, first_installed_locale: Locale) -> io::Result<()> {
     let dbc = args.output_dbc_path(first_installed_locale);
     if get_dir_contents(&dbc, "*")?.next().is_none() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("'{}' directory is empty or does not exist", dbc.display()),
-        ));
+        return Err(io::Error::other(format!("'{}' directory is empty or does not exist", dbc.display())));
     }
 
     let maps = args.output_map_path();
     if get_dir_contents(&maps, "*")?.next().is_none() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("'{}' directory is empty or does not exist", maps.display()),
-        ));
+        return Err(io::Error::other(format!("'{}' directory is empty or does not exist", maps.display())));
     }
 
     let vmaps = args.output_vmap_output_path();
     if get_dir_contents(&vmaps, "*")?.next().is_none() {
-        return Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("'{}' directory is empty or does not exist", vmaps.display()),
-        ));
+        return Err(io::Error::other(format!("'{}' directory is empty or does not exist", vmaps.display())));
     }
 
     let mmaps = args.output_mmap_path();

@@ -19,16 +19,12 @@ macro_rules! deref_boilerplate {
 
 #[macro_export]
 macro_rules! f32b {
-    ( $v:expr ) => {{
-        f32::to_bits($v) as i128
-    }};
+    ( $v:expr ) => {{ f32::to_bits($v) as i128 }};
 }
 
 #[macro_export]
 macro_rules! f64b {
-    ( $v:expr ) => {{
-        f64::to_bits($v) as i128
-    }};
+    ( $v:expr ) => {{ f64::to_bits($v) as i128 }};
 }
 
 #[macro_export]
@@ -59,28 +55,20 @@ macro_rules! durationb_ms {
 
 #[macro_export]
 macro_rules! durationb_s {
-    ( $s:expr ) => {{
-        $crate::durationb!($s, 0)
-    }};
+    ( $s:expr ) => {{ $crate::durationb!($s, 0) }};
 }
 
 #[macro_export]
 macro_rules! durationb_mins {
-    ( $mins:expr ) => {{
-        $crate::durationb_s!($mins * 60)
-    }};
+    ( $mins:expr ) => {{ $crate::durationb_s!($mins * 60) }};
 }
 
 #[macro_export]
 macro_rules! durationb_hours {
-    ( $hours:expr ) => {{
-        $crate::durationb_mins!($hours * 60)
-    }};
+    ( $hours:expr ) => {{ $crate::durationb_mins!($hours * 60) }};
 }
 
 #[macro_export]
 macro_rules! durationb_days {
-    ( $days:expr ) => {{
-        $crate::durationb_hours!($days * 24)
-    }};
+    ( $days:expr ) => {{ $crate::durationb_hours!($days * 24) }};
 }

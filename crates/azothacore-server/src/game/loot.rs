@@ -1,4 +1,4 @@
-use azothacore_common::{az_error, AzError};
+use azothacore_common::{AzError, az_error};
 use num_derive::{FromPrimitive, ToPrimitive};
 use num_traits::FromPrimitive;
 

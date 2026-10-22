@@ -14,13 +14,13 @@ use azothacore_common::bevy_app::TokioRuntime;
 use bevy::{app::AppExit, prelude::*, tasks::poll_once};
 use thiserror::Error;
 use tokio::{
-    sync::mpsc::{unbounded_channel, UnboundedReceiver, UnboundedSender},
+    sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel},
     task::JoinHandle,
 };
 use tracing::{error, info};
 
 pub fn bnetrpc_zcompress(mut json: Vec<u8>) -> io::Result<Vec<u8>> {
-    use flate2::{write::ZlibEncoder, Compression};
+    use flate2::{Compression, write::ZlibEncoder};
     json.push(b'\0');
     let mut compressed = u32::try_from(json.len()).unwrap().to_le_bytes().to_vec();
 

@@ -6,13 +6,13 @@ use std::{
     sync::atomic::AtomicU64,
 };
 
-use azothacore_common::{az_error, bevy_app::ToFromEntity, AzError, AzResult, HexFmt};
+use azothacore_common::{AzError, AzResult, HexFmt, az_error, bevy_app::ToFromEntity};
 use azothacore_database::database_env::{CharacterDatabase, WorldDatabase};
 use bevy::{
     ecs::system::{Res, SystemParam},
     prelude::Entity,
 };
-use flagset::{flags, FlagSet};
+use flagset::{FlagSet, flags};
 
 use crate::{
     game::world::CurrentRealm,

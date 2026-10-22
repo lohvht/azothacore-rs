@@ -13,23 +13,23 @@ use azothacore_common::{
 };
 use sha2::{Digest, Sha256};
 use sqlx::{
+    Connection,
     mysql::MySqlDatabaseError,
     pool::PoolOptions,
     query,
     query_as,
     query_with,
     types::chrono::{DateTime, Utc},
-    Connection,
 };
 use tokio::time::Instant;
 use tracing::{debug, error, info, trace, warn};
 use walkdir::WalkDir;
 
 use crate::{
-    args,
-    database_loader_utils::{apply_file, DatabaseLoaderError},
     DbDriver,
     ExtendedDBInfo,
+    args,
+    database_loader_utils::{DatabaseLoaderError, apply_file},
 };
 
 #[derive(Debug, Clone, Eq, PartialEq, PartialOrd, Ord, Copy)]
@@ -56,7 +56,7 @@ impl FromStr for FetcherState {
             "MODULE" => Ok(FetcherState::Module),
             "ARCHIVED" => Ok(FetcherState::Archived),
             e => Err(DatabaseLoaderError::Generic {
-                msg: format!("invalid fetcher enum: {}", e),
+                msg: format!("invalid fetcher enum: {e}"),
             }),
         }
     }
@@ -277,7 +277,7 @@ impl DatabaseLoader {
         self.check_update_table(pool.clone(), "updates_include").await?;
 
         let (updated, recent, archived) = self.fetch_and_apply_updates(pool).await?;
-        let info = format!("Containing {} new and {} archived updates.", recent, archived);
+        let info = format!("Containing {recent} new and {archived} archived updates.");
         if updated > 0 {
             info!(">> {} database is up-to-date! {}", self.database_config.DatabaseName, info);
         } else {
@@ -380,7 +380,12 @@ impl DatabaseLoader {
                     state: dir_state,
                 };
                 if storage.contains(&r) {
-                    return Err(DatabaseLoaderError::Generic { msg: format!("Updating failed due to duplicate filename \"{}\" found. Because updates are ordered by their filenames, every name needs to be unique!", r.path.display()) });
+                    return Err(DatabaseLoaderError::Generic {
+                        msg: format!(
+                            "Updating failed due to duplicate filename \"{}\" found. Because updates are ordered by their filenames, every name needs to be unique!",
+                            r.path.display()
+                        ),
+                    });
                 }
                 storage.push(r);
             }
@@ -587,7 +592,8 @@ impl DatabaseLoader {
     }
 
     async fn check_update_table(&self, pool: sqlx::Pool<DbDriver>, table_name: &str) -> Result<(), DatabaseLoaderError> {
-        let res = query(&format!("SHOW TABLES LIKE '{}'", table_name)).fetch_optional(&pool).await?;
+        let res = query(&format!("SHOW TABLES LIKE '{table_name}'")).fetch_optional(&pool).await?;
+
         if res.is_some() {
             return Ok(());
         }

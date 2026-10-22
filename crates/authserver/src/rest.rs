@@ -1,20 +1,20 @@
 use std::sync::Arc;
 
 use axum::{
-    extract::{rejection::JsonRejection, State},
+    Json,
+    Router,
+    extract::{State, rejection::JsonRejection},
     http::Request,
     response::IntoResponse,
     routing::{get, post},
-    Json,
-    Router,
 };
 use axum_extra::{
-    extract::WithRejection,
-    headers::{authorization::Basic, Authorization},
     TypedHeader,
+    extract::WithRejection,
+    headers::{Authorization, authorization::Basic},
 };
 use azothacore_common::{
-    bevy_app::{az_startup_succeeded, AzStartupFailedEvent, TokioRuntime},
+    bevy_app::{AzStartupFailedEvent, TokioRuntime, az_startup_succeeded},
     configuration::ConfigMgr,
     hex_str,
     utils::unix_now,
@@ -28,16 +28,16 @@ use bevy::{
     app::AppExit,
     prelude::{App, Commands, EventReader, EventWriter, IntoSystemConfigs, PostUpdate, Res, Resource, Startup, SystemSet},
 };
-use hyper::{body::Incoming, service::service_fn, StatusCode};
+use hyper::{StatusCode, body::Incoming, service::service_fn};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},
     server::conn::auto::Builder as HyperServerConnBuilder,
 };
-use rand::{rngs::OsRng, Rng, TryRngCore};
+use rand::{Rng, TryRngCore, rngs::OsRng};
 use sqlx::Row;
 use tokio::{
     net::TcpListener,
-    sync::mpsc::{unbounded_channel, UnboundedSender},
+    sync::mpsc::{UnboundedSender, unbounded_channel},
 };
 use tower_service::Service as TowerService;
 use tracing::{debug, error, info, warn};

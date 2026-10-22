@@ -38,7 +38,7 @@ fn setup_casc_build() {
     let dst = Config::new("CascLib")
         .define("CASC_BUILD_SHARED_LIB", "OFF")
         .define("CASC_BUILD_STATIC_LIB", "ON")
-        .uses_cxx11()
+        .define("CMAKE_POLICY_VERSION_MINIMUM", "3.5")
         .very_verbose(true)
         .build();
 
@@ -51,7 +51,7 @@ fn setup_casc_build() {
     // Tell rustc to use CascLib dync library
     // println!("cargo:rustc-link-lib=dylib=casc");
     println!("cargo:rustc-link-lib=static=casc");
-    println!("cargo:rerun-if-changed={}", wrapper_header);
+    println!("cargo:rerun-if-changed={wrapper_header}");
     println!("cargo:rustc-link-lib=dylib=stdc++");
     // // NOTE: Usually If system has zlib, we need to include this line
     // // But we have forked the underlying casclib to not use

@@ -1,3 +1,6 @@
 [submodule "CascLib"]
 	path = crates/casclib-sys/CascLib
 	url = https://github.com/lohvht/CascLib
+[submodule "recastnavigation-rs-sys"]
+	path = crates/recastnavigation-rs-sys
+	url = https://github.com/lohvht/recastnavigation-rs-sys

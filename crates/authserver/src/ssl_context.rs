@@ -5,11 +5,11 @@ use std::{
     sync::Arc,
 };
 
-use azothacore_common::{bevy_app::AzStartupFailedEvent, configuration::ConfigMgr, deref_boilerplate, AzResult, CONF_DIR};
+use azothacore_common::{AzResult, CONF_DIR, bevy_app::AzStartupFailedEvent, configuration::ConfigMgr, deref_boilerplate};
 use bevy::prelude::{App, Commands, EventWriter, IntoSystemConfigs, Res, Resource, Startup, SystemSet};
 use tokio_native_tls::{
-    native_tls::{self, Identity},
     TlsAcceptor,
+    native_tls::{self, Identity},
 };
 use tracing::{debug, error};
 

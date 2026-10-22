@@ -1,16 +1,16 @@
 use std::path::Path;
 
 use azothacore_common::{
-    az_error,
-    banner,
-    bevy_app::{bevy_app, AzStartupFailedEvent, TokioRuntime},
-    configuration::{config_mgr_plugin, ConfigMgr, ConfigMgrSet, DatabaseType},
-    log::{logging_plugin, LoggingSetupSet},
-    AzResult,
     AZOTHA_CORE_CONFIG,
+    AzResult,
     CONF_DIR,
     GIT_HASH,
     GIT_VERSION,
+    az_error,
+    banner,
+    bevy_app::{AzStartupFailedEvent, TokioRuntime, bevy_app},
+    configuration::{ConfigMgr, ConfigMgrSet, DatabaseType, config_mgr_plugin},
+    log::{LoggingSetupSet, logging_plugin},
 };
 use azothacore_database::{
     args,
@@ -19,20 +19,20 @@ use azothacore_database::{
     database_loader_utils::DatabaseLoaderError,
     query_with,
 };
-use azothacore_modules::{modules_plugin, ModulesInitSet, MODULES_LIST};
+use azothacore_modules::{MODULES_LIST, ModulesInitSet, modules_plugin};
 use azothacore_server::{
     game::{
-        scripting::{script_mgr::ScriptMgr, scripts_plugin, ScriptsInitSet},
-        world::{world_plugin, CurrentRealm, WorldConfig, WorldDbVersion, WorldSets},
+        scripting::{ScriptsInitSet, script_mgr::ScriptMgr, scripts_plugin},
+        world::{CurrentRealm, WorldConfig, WorldDbVersion, WorldSets, world_plugin},
     },
     shared::{
-        realms::{
-            realm_list::{realm_list_plugin, RealmList, RealmListStartSet},
-            RealmFlags,
-        },
-        shared_defines::{set_server_process, ServerProcessType},
-        tokio_signal_handling_bevy_plugin,
         SignalReceiver,
+        realms::{
+            RealmFlags,
+            realm_list::{RealmList, RealmListStartSet, realm_list_plugin},
+        },
+        shared_defines::{ServerProcessType, set_server_process},
+        tokio_signal_handling_bevy_plugin,
     },
 };
 use bevy::{

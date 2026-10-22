@@ -21,12 +21,12 @@ bevy.workspace = true
 bincode = { version = "1" }
 bytes.workspace = true
 chrono.workspace = true
-const_format = { version = "0" }
+const_format = { version = "0.2" }
 figment.workspace = true
 flagset.workspace = true
 futures.workspace = true
-git-version = { version = "0" }
-hex_fmt = { version = "0" }
+git-version = { version = "0.3" }
+hex_fmt = { version = "0.3" }
 humantime.workspace = true
 nalgebra.workspace = true
 num-derive.workspace = true
@@ -41,6 +41,6 @@ serde.workspace = true
 structstruck.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
-tracing-appender = { version = "0" }
-tracing-subscriber = { version = "0", features = ["registry"] }
+tracing-appender = { version = "0.2" }
+tracing-subscriber = { version = "0.3", features = ["registry"] }
 tracing.workspace = true

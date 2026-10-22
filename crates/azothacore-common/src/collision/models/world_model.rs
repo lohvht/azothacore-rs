@@ -5,12 +5,12 @@ use nalgebra::{DMatrix, Vector3};
 use parry3d::{bounding_volume::Aabb, partitioning::Qbvh, shape::TriMesh};
 
 use crate::{
+    AzError,
+    AzResult,
     cmp_or_return,
     collision::vmap_definitions::{LIQUID_TILE_SIZE, VMAP_MAGIC},
     read_le,
     utils::{bincode_deserialise, bincode_serialise},
-    AzError,
-    AzResult,
 };
 
 /// Holds a model (converted M2 or WMO) in its original coordinate space

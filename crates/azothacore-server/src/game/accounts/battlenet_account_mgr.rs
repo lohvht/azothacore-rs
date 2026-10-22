@@ -1,17 +1,17 @@
 use azothacore_common::hex_str;
 use azothacore_database::{
-    args,
-    database_env::{LoginDatabase, LoginPreparedStmts},
     DbAcquire,
     DbExecutor,
+    args,
+    database_env::{LoginDatabase, LoginPreparedStmts},
 };
 use sha2::{Digest, Sha256};
 use tracing::{error, warn};
 
 use super::{
-    account_mgr::{AccountMgr, MAX_PASS_STR},
     AccountOpError,
     AccountOpResult,
+    account_mgr::{AccountMgr, MAX_PASS_STR},
 };
 
 pub const MAX_BNET_EMAIL_STR: usize = 320;
@@ -180,7 +180,7 @@ impl BattlenetAccountMgr {
 
 #[cfg(test)]
 mod tests {
-    use azothacore_tests_utils::{test_db_pool_auth, SHARED_TEST_DB_PERMITS};
+    use azothacore_tests_utils::{SHARED_TEST_DB_PERMITS, test_db_pool_auth};
 
     use super::*;
 

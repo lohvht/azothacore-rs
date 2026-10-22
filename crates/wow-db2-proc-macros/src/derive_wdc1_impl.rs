@@ -1,8 +1,8 @@
 use convert_case::{Case, Casing};
 use itertools::Itertools;
 use proc_macro2::{Ident, Span, TokenStream};
-use quote::{quote, quote_spanned, ToTokens};
-use syn::{parse::ParseStream, spanned::Spanned, Attribute, Data, DeriveInput, Error, Field, Fields, Index, LitInt, LitStr, Member, Result, Type, Visibility};
+use quote::{ToTokens, quote, quote_spanned};
+use syn::{Attribute, Data, DeriveInput, Error, Field, Fields, Index, LitInt, LitStr, Member, Result, Type, Visibility, parse::ParseStream, spanned::Spanned};
 
 pub fn derive(node: &DeriveInput) -> Result<TokenStream> {
     let input = WDC1Struct::from_syn(node)?;
@@ -144,13 +144,14 @@ impl WDC1FieldAttrs {
                 a.inlined_parent_id = Some(parent_inline);
             }
         }
-        if let Some(name) = &field.ident {
-            if *name == "id" && a.inlined_id.is_none() {
-                if !matches!(processed_field_ty, WDC1FieldType::Single(WDC1FieldSingleType::U32)) {
-                    return Err(Error::new_spanned(field, format!("ID field must be of u32 type, got {:?}", processed_field_ty)));
-                }
-                a.inlined_id = Some(false)
+        if let Some(name) = &field.ident
+            && *name == "id"
+            && a.inlined_id.is_none()
+        {
+            if !matches!(processed_field_ty, WDC1FieldType::Single(WDC1FieldSingleType::U32)) {
+                return Err(Error::new_spanned(field, format!("ID field must be of u32 type, got {processed_field_ty:?}")));
             }
+            a.inlined_id = Some(false)
         }
         Ok(a)
     }
@@ -438,7 +439,7 @@ impl WDC1Struct {
                 } else {
                     return Err(Error::new_spanned(
                         self.original.clone(),
-                        format!("ID field is not of the correct type, got: {:?}, want u32", ty),
+                        format!("ID field is not of the correct type, got: {ty:?}, want u32"),
                     ));
                 }
             }
