@@ -5,6 +5,9 @@ members = ["crates/*", "azothacore-modules", "xtask"]
 [workspace.package]
 edition = "2024"
 
+[workspace.lints.clippy]
+pedantic = "warn"
+
 # Enable a small amount of optimization in debug mode
 [profile.dev]
 opt-level = 1
