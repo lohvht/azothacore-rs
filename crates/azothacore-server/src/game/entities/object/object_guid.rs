@@ -10,7 +10,7 @@ use azothacore_common::{AzError, AzResult, HexFmt, az_error, bevy_app::ToFromEnt
 use azothacore_database::database_env::{CharacterDatabase, WorldDatabase};
 use bevy::{
     ecs::system::{Res, SystemParam},
-    prelude::Entity,
+    prelude::*,
 };
 use flagset::{FlagSet, flags};
 

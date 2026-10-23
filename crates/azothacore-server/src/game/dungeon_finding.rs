@@ -4,10 +4,7 @@ use azothacore_common::{
     bevy_app::{QueryOrNewSingleMut, ToFromEntity, query_not_found_result},
     configuration::ConfigMgr,
 };
-use bevy::{
-    ecs::system::SystemParam,
-    prelude::{Commands, Query, Res},
-};
+use bevy::{ecs::system::SystemParam, prelude::*};
 use lfg::LfgState;
 use lfg_group_data::{KicksLeftConfig, LfgGroupData};
 use lfg_player_data::LfgPlayerData;
@@ -70,7 +67,7 @@ impl<C: KicksLeftConfig> LFGMgr<'_, '_, C> {
     //     AddPlayerToGroup(gguid, guid);
     // }
 
-    fn get_or_init_group_lfg_data_mut(&mut self, guid: ObjectGuid<HighGuidParty>) -> AzResult<QueryOrNewSingleMut<LfgGroupData>> {
+    fn get_or_init_group_lfg_data_mut(&mut self, guid: ObjectGuid<HighGuidParty>) -> AzResult<QueryOrNewSingleMut<'_, LfgGroupData>> {
         let e = guid.to_entity();
         query_not_found_result(self.groups_store.get_mut(e))
             .map(|v| match v {

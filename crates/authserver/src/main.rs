@@ -26,28 +26,7 @@ use azothacore_server::shared::{
     shared_defines::{ServerProcessType, set_server_process},
     tokio_signal_handling_bevy_plugin,
 };
-use bevy::{
-    app::AppExit,
-    prelude::{
-        Commands,
-        EventReader,
-        EventWriter,
-        FixedUpdate,
-        IntoSystemConfigs,
-        IntoSystemSetConfigs,
-        PostUpdate,
-        PreStartup,
-        Real,
-        Res,
-        ResMut,
-        Resource,
-        Startup,
-        SystemSet,
-        Time,
-        Timer,
-        TimerMode,
-    },
-};
+use bevy::{app::AppExit, prelude::*};
 use clap::Parser;
 use tracing::{error, info};
 

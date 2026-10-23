@@ -234,12 +234,9 @@ impl AdtChunkMh2o<'_> {
             return Some(LIQUID_VERTEX_FORMAT_TYPE_DEPTH);
         }
 
-        if let Some(liquid_type) = liquid_types_db2.get(&(liquid_instance.liquid_type.get().into())) {
-            if let Some(liquid_material) = liquid_materials_db2.get(&(liquid_type.material_id.into())) {
-                return Some(liquid_material.lvf as u16);
-            }
-        }
-        None
+        let liquid_type = liquid_types_db2.get(&(liquid_instance.liquid_type.get().into()))?;
+        let liquid_material = liquid_materials_db2.get(&(liquid_type.material_id.into()))?;
+        Some(liquid_material.lvf as u16)
     }
 
     pub fn get_liquid_type(

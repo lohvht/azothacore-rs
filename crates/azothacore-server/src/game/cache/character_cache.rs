@@ -1,4 +1,4 @@
-use bevy::prelude::Resource;
+use bevy::prelude::*;
 
 use crate::game::entities::object::object_guid::{HighGuidPlayer, ObjectGuid};
 

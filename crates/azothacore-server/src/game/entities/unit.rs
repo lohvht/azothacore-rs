@@ -1,6 +1,6 @@
 use std::ops;
 
-use bevy::prelude::Resource;
+use bevy::prelude::*;
 
 #[derive(Clone, Copy)]
 pub struct MoveSpeed {

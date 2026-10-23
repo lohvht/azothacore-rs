@@ -1,6 +1,6 @@
 use bevy::{
     ecs::system::{FunctionSystem, SystemId},
-    prelude::{Component, In, System, World},
+    prelude::*,
 };
 
 use crate::{

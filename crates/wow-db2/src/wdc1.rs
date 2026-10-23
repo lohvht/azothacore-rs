@@ -913,14 +913,12 @@ where
             }
         }
 
-        let mut new_record_number = max_records;
-        for copy in &self.copy_table {
+        for (new_record_number, copy) in (max_records..).zip(&self.copy_table) {
             // Should exist, go ahead and panic if not
             let record_num = id_value_to_record_number.get(&copy.id_of_copied_row).unwrap();
             let mut copied_row = res.get(record_num).unwrap().clone();
             copied_row.id = copy.id_of_new_row;
             res.entry(new_record_number).or_insert(copied_row);
-            new_record_number += 1;
         }
 
         // TODO: Make produce_data actually lazily returns records.

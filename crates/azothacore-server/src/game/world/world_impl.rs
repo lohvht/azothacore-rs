@@ -13,7 +13,7 @@ use azothacore_database::{
 use bevy::{
     app::PreUpdate,
     ecs::system::SystemId,
-    prelude::{App, Commands, In, IntoSystem, IntoSystemConfigs, IntoSystemSetConfigs, Res, ResMut, Resource, Startup},
+    prelude::*,
     time::{Timer, TimerMode},
 };
 use rand::{Rng, TryRngCore, rngs::OsRng};
@@ -165,17 +165,15 @@ impl WorldTrait<WorldConfig> for World {
     fn load_config_settings(In(reload): In<bool>, mut commands: Commands, mut cfg: ResMut<ConfigMgr<WorldConfig>>, script_mgr: ScriptMgr) {
         // Happens earlier than AC b/c config reload is built into Config object directly
         script_mgr.on_before_config_load(&mut commands, reload);
-        if reload {
-            if let Err(e) = cfg.reload_from_path() {
-                error!(target:"server.loading", cause=?e, "World settings reload fail: can't read settings.");
-                return;
-            }
-            // TODO: Implement me! => Right now appenders / loggers logic is buggy and also coupled together such that
-            //       we cannot do reloads easily.
-            // Use our log::init()
-            // sLog->LoadFromConfig();
-            // sMetric->LoadFromConfigs();
+        if reload && let Err(e) = cfg.reload_from_path() {
+            error!(target:"server.loading", cause=?e, "World settings reload fail: can't read settings.");
+            return;
         }
+        // TODO: Implement me! => Right now appenders / loggers logic is buggy and also coupled together such that
+        //       we cannot do reloads easily. On reload:
+        // Use our log::init()
+        // sLog->LoadFromConfig();
+        // sMetric->LoadFromConfigs();
         // TODO: Implement me!
         // // Set realm id and enable db logging
         // sLog->SetRealmId(realm.Id.Realm);

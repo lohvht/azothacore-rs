@@ -1,6 +1,6 @@
 use std::collections::BTreeSet;
 
-use bevy::prelude::Component;
+use bevy::prelude::*;
 
 use crate::game::{dungeon_finding::lfg::LfgState, entities::object::object_guid::ObjectGuid};
 

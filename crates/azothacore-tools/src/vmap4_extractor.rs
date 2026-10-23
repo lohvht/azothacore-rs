@@ -353,11 +353,12 @@ impl VmapExtractor {
     fn extract_single_wmo(&self, storage: &CascStorageHandle, file_name: &str, wmo_doodads: &mut BTreeMap<String, WmoDoodadData>) -> AzResult<()> {
         let plain_name = get_fixed_plain_name(file_name);
         let sz_local_file = self.temp_vmap_dir.join(&plain_name);
-        if let Some((_prefix, rest)) = plain_name.rsplit_once('_') {
-            if rest.len() == 3 && rest.chars().all(|c| c.is_ascii_digit()) {
-                // i.e. the rest after '_' are all digits => not root wmo files, return
-                return Ok(());
-            }
+        if let Some((_prefix, rest)) = plain_name.rsplit_once('_')
+            && rest.len() == 3
+            && rest.chars().all(|c| c.is_ascii_digit())
+        {
+            // i.e. the rest after '_' are all digits => not root wmo files, return
+            return Ok(());
         }
         if wmo_doodads.get(&plain_name).is_some() {
             // This is to catch when extract_single_wmo is called again but the doodad data is
@@ -431,13 +432,13 @@ impl VmapExtractor {
     ///
     /// for the get part of getWDT itself, it should be done by just a normal `wdts.get_mut`
     #[instrument(skip_all, fields(map_id=map_id))]
-    fn get_wdt<'a>(
+    fn get_wdt(
         &self,
         map_id: u32,
         storage: &CascStorageHandle,
         maps: &BTreeMap<u32, Map>,
         maps_that_are_parents: &BTreeSet<u32>,
-        wdts: &'a mut HashMap<u32, Arc<Mutex<WdtWithAdts>>>,
+        wdts: &mut HashMap<u32, Arc<Mutex<WdtWithAdts>>>,
         wmo_doodads: &mut BTreeMap<String, WmoDoodadData>,
     ) -> Option<Arc<Mutex<WdtWithAdts>>> {
         if let Some(wdt) = wdts.get(&map_id) {
@@ -507,7 +508,7 @@ impl VmapExtractor {
         let source = storage.open_file("DBFilesClient/Map.db2", CascLocale::None.into())?;
         let db2 = wdc1::FileLoader::<Map>::from_reader(source, locale)?;
         let maps = db2.produce_data()?.map(|r| (r.id, r)).collect::<BTreeMap<_, _>>();
-        let maps_that_are_parents = maps.iter().filter_map(|(_, m)| if m.parent_map_id >= 0 { Some(m.parent_map_id.try_into().unwrap()) } else { None } ).collect();
+        let maps_that_are_parents = maps.values().filter_map(|m| if m.parent_map_id >= 0 { Some(m.parent_map_id.try_into().unwrap()) } else { None } ).collect();
         let maps_len = maps.len();
         info!("Done! ({maps_len} maps loaded)");
 

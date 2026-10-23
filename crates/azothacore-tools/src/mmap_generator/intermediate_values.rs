@@ -83,10 +83,10 @@ impl IntermediateValues<'_> {
             all_tris.push(*t + curr_verts_count);
         }
 
-        for v in all_verts.chunks_exact(3) {
+        for v in all_verts.as_chunks::<3>().0 {
             _ = writeln!(obj_file, "v {:?} {:?} {:?}", v[0], v[1], v[2]);
         }
-        for t in all_tris.chunks_exact(3) {
+        for t in all_tris.as_chunks::<3>().0 {
             _ = writeln!(obj_file, "f {:?} {:?} {:?}", t[0] + 1, t[1] + 1, t[2] + 1);
         }
         _ = obj_file.flush();

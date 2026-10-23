@@ -1,5 +1,5 @@
 use azothacore_common::{AzResult, az_error, deref_boilerplate};
-use bevy::prelude::Component;
+use bevy::prelude::*;
 use flagset::{FlagSet, flags};
 
 use crate::{

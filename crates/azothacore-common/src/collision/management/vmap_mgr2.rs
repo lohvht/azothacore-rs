@@ -9,7 +9,7 @@ use bevy::{
     app::{App, Startup},
     asset::{AssetApp, AssetLoader, AssetServer, Assets, LoadContext, io::Reader as BevyAssetIoReader},
     ecs::system::SystemParam,
-    prelude::{EventWriter, Handle, IntoSystemConfigs, Res, ResMut, Resource, SystemSet},
+    prelude::*,
 };
 use flagset::FlagSet;
 use tracing::{debug, error, instrument};

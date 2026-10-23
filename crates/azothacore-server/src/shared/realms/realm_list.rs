@@ -18,7 +18,7 @@ use azothacore_database::{
     args,
     database_env::{LoginDatabase, LoginPreparedStmts},
 };
-use bevy::prelude::{App, Commands, IntoSystemConfigs, Real, Res, ResMut, Resource, Startup, SystemSet, Time, Timer, TimerMode, Update};
+use bevy::prelude::*;
 use flagset::FlagSet;
 use futures::StreamExt;
 use ipnet::IpNet;
@@ -401,8 +401,8 @@ impl RealmList {
         RealmListUpdates {
             updates: self
                 .realms
-                .iter()
-                .filter_map(|(_, realm)| {
+                .values()
+                .filter_map(|realm| {
                     if realm.id.get_sub_region_address() != sub_region {
                         return None;
                     }

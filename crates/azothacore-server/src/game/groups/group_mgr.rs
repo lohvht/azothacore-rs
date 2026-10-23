@@ -11,10 +11,7 @@ use azothacore_database::{
     args_unwrap,
     database_env::{CharacterDatabase, CharacterPreparedStmts},
 };
-use bevy::{
-    ecs::system::SystemParam,
-    prelude::{Bundle, Commands, Entity, EventWriter, Res, Resource},
-};
+use bevy::{ecs::system::SystemParam, prelude::*};
 use flagset::FlagSet;
 use sqlx::{Transaction, query, query_as};
 use tracing::{error, info, warn};
@@ -282,6 +279,7 @@ impl DbGroupMemberRes {
 impl GroupMgr<'_> {
     /// GroupMgr::LoadGroups in TC / AC
     ///
+    #[expect(clippy::too_many_arguments)]
     pub fn load<C: KicksLeftConfig>(
         mut commands: Commands,
         rt: Res<TokioRuntime>,

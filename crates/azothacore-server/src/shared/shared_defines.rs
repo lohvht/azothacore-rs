@@ -1,5 +1,5 @@
 use azothacore_common::{AzError, az_error};
-use bevy::prelude::{Commands, Resource};
+use bevy::prelude::*;
 use flagset::flags;
 use num::FromPrimitive;
 use num_derive::{FromPrimitive, ToPrimitive};
@@ -193,7 +193,6 @@ pub enum FactionID {
 
 #[cfg(test)]
 mod tests {
-    use bevy::prelude::{App, Commands, Startup};
 
     use super::*;
 

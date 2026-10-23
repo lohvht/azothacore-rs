@@ -35,25 +35,7 @@ use azothacore_server::{
         tokio_signal_handling_bevy_plugin,
     },
 };
-use bevy::{
-    app::AppExit,
-    diagnostic::FrameTimeDiagnosticsPlugin,
-    prelude::{
-        Commands,
-        EventReader,
-        EventWriter,
-        In,
-        IntoSystem,
-        IntoSystemConfigs,
-        IntoSystemSetConfigs,
-        PostUpdate,
-        PreStartup,
-        Res,
-        ResMut,
-        Startup,
-        SystemSet,
-    },
-};
+use bevy::{app::AppExit, diagnostic::FrameTimeDiagnosticsPlugin, prelude::*};
 use clap::Parser;
 use flagset::FlagSet;
 use tracing::{error, info, info_span};

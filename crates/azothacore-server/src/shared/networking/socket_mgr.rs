@@ -4,12 +4,7 @@ use azothacore_common::{
     bevy_app::{AzStartupFailedEvent, TokioRuntime, az_startup_succeeded},
     configuration::ConfigMgr,
 };
-use bevy::{
-    app::AppExit,
-    ecs::world::CommandQueue,
-    prelude::{App, Commands, Component, EventReader, EventWriter, IntoSystemConfigs, PostUpdate, Query, Res, Resource, Startup, SystemSet, Update},
-    tasks::poll_once,
-};
+use bevy::{app::AppExit, ecs::world::CommandQueue, prelude::*, tasks::poll_once};
 use tokio::{
     net::{TcpListener, TcpStream, ToSocketAddrs},
     sync::{

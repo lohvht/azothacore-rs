@@ -1,4 +1,4 @@
-use bevy::{app::App, prelude::SystemSet};
+use bevy::{app::App, prelude::*};
 use tracing::info;
 
 pub mod script_defines;

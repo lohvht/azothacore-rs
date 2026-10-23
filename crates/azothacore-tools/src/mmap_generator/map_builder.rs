@@ -20,7 +20,7 @@ use azothacore_common::{
 use bevy::{
     app::{App, AppExit, PostUpdate, Startup, Update},
     ecs::system::SystemParam,
-    prelude::{Commands, Component, Entity, EventWriter, In, IntoSystem, IntoSystemConfigs, Local, Query, Res, Resource, SystemSet, With, Without},
+    prelude::*,
 };
 use flagset::FlagSet;
 use parry3d::bounding_volume::Aabb;

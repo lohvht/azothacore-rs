@@ -14,7 +14,7 @@ use azothacore_server::{
     game::map::MapLiquidTypeFlag,
     shared::data_stores::db2_structure::{LiquidType, Map},
 };
-use bevy::{app::Startup, prelude::IntoSystemSetConfigs};
+use bevy::{app::Startup, prelude::*};
 use map_builder::{LiquidTypes, MmapGenerationSets, VmapNotDisabled, mmap_generator_plugin};
 use tracing::{info, warn};
 use wow_db2::wdc1;

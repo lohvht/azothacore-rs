@@ -1,8 +1,5 @@
 use azothacore_common::AzResult;
-use bevy::{
-    ecs::system::SystemId,
-    prelude::{Component, IntoSystem, System, World},
-};
+use bevy::{ecs::system::SystemId, prelude::*};
 
 /// Component to keep track of afterload scripts
 #[derive(Component)]

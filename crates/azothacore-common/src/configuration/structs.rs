@@ -252,6 +252,8 @@ pub struct LogLoggerConfig {
 }
 
 #[cfg(test)]
+// figment::Jail::expect_with dictates the closure's error type
+#[expect(clippy::result_large_err)]
 mod tests {
     use std::{path::PathBuf, time::Duration};
 

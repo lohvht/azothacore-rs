@@ -141,11 +141,7 @@ pub fn compute_cell_coord2(x: f32, y: f32, x_off: &mut f32, y_off: &mut f32) -> 
 }
 
 pub fn normalize_map_coord(c: &mut f32) {
-    if *c > MAP_HALFSIZE - 0.5 {
-        *c = MAP_HALFSIZE - 0.5;
-    } else if *c < -(MAP_HALFSIZE - 0.5) {
-        *c = -(MAP_HALFSIZE - 0.5);
-    }
+    *c = c.clamp(-(MAP_HALFSIZE - 0.5), MAP_HALFSIZE - 0.5);
 }
 
 pub fn is_valid_map_coord1(c: f32) -> bool {

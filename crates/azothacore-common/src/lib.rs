@@ -15,7 +15,7 @@ pub type AzError = anyhow::Error;
 use std::{collections::HashMap, fmt::Debug};
 
 pub use anyhow::{Context as AzContext, anyhow as az_error};
-use bevy::prelude::Resource;
+use bevy::prelude::*;
 pub use compile_options::*;
 use flagset::{FlagSet, flags};
 pub use hex_fmt::HexFmt;

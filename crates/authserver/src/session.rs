@@ -37,10 +37,7 @@ use azothacore_server::shared::{
         realm_list::{JoinRealmError, RealmList},
     },
 };
-use bevy::{
-    ecs::world::CommandQueue,
-    prelude::{App, Commands, Component, Entity, FixedUpdate, IntoSystemConfigs, Query, Res, ResMut, SystemSet, Update, World},
-};
+use bevy::{ecs::world::CommandQueue, prelude::*};
 use bnet_rpc::{
     BattlenetRpcErrorCode,
     BnetRpcResult,
@@ -983,7 +980,7 @@ impl GameUtilitiesService for Session<'_> {
             error!(target:"session::rpc", client=self.caller_info(), "client sent ClientRequest with no command.");
             return Err(BattlenetRpcErrorCode::RpcMalformedRequest);
         };
-        let resp = match command.as_str() {
+        match command.as_str() {
             "Command_RealmListTicketRequest_v1_b9" => self.get_realm_list_ticket(params).await,
             "Command_LastCharPlayedRequest_v1_b9" => self.get_last_char_played(params).await,
             "Command_RealmListRequest_v1_b9" => self.get_realm_list(params).await,
@@ -994,10 +991,9 @@ impl GameUtilitiesService for Session<'_> {
                     client = self.caller_info(),
                     "client sent ClientRequest with unknown command {cmd}"
                 );
-                return Err(BattlenetRpcErrorCode::RpcNotImplemented);
+                Err(BattlenetRpcErrorCode::RpcNotImplemented)
             },
-        };
-        resp
+        }
     }
 
     async fn handle_srv_req_get_all_values_for_attribute(&self, request: GetAllValuesForAttributeRequest) -> BnetRpcResult<GetAllValuesForAttributeResponse>
@@ -1140,11 +1136,11 @@ impl Session<'_> {
                     warn!(target:"session", cause=?e, identity_val=String::from_utf8_lossy(json_start).to_string(), current=?accnt_info, "error serialising params identity from json");
                 },
                 Ok(RealmListTicketIdentity { game_account_id, .. }) => {
-                    if let Some(gai) = accnt_info.game_accounts.get(&game_account_id) {
-                        if let Err(new_val) = self.game_account_info.set(gai.clone()) {
-                            warn!(target:"session", new_val=?new_val, current=?accnt_info, "error overwriting existing game account");
-                            return Err(BattlenetRpcErrorCode::WowServicesDeniedRealmListTicket);
-                        }
+                    if let Some(gai) = accnt_info.game_accounts.get(&game_account_id)
+                        && let Err(new_val) = self.game_account_info.set(gai.clone())
+                    {
+                        warn!(target:"session", new_val=?new_val, current=?accnt_info, "error overwriting existing game account");
+                        return Err(BattlenetRpcErrorCode::WowServicesDeniedRealmListTicket);
                     }
                 },
             };

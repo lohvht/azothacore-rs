@@ -27,26 +27,7 @@ use azothacore_common::{
     utils::buffered_file_open,
 };
 use azothacore_database::{DbAcquire, DbDriver, database_env::HotfixDatabase};
-use bevy::{
-    app::App,
-    ecs::system::SystemParam,
-    prelude::{
-        Commands,
-        Event,
-        EventReader,
-        EventWriter,
-        IntoSystemConfigs,
-        IntoSystemSetConfigs,
-        Real,
-        Res,
-        Resource,
-        Startup,
-        SystemSet,
-        Time,
-        not,
-        on_event,
-    },
-};
+use bevy::{app::App, ecs::system::SystemParam, prelude::*};
 use db2_loader::DB2DatabaseLoader;
 use dbc_enums::{
     CharBaseSectionVariation,
@@ -74,7 +55,11 @@ use wow_db2::DB2;
 
 use crate::{
     game::world::WorldConfig,
-    shared::data_stores::{db2_loader::DB2FileLoader, db2_structure::*, dbc_enums::BATTLE_PET_SPECIES_MAX_ID},
+    shared::data_stores::{
+        db2_loader::DB2FileLoader,
+        db2_structure::{Curve, *},
+        dbc_enums::BATTLE_PET_SPECIES_MAX_ID,
+    },
 };
 
 #[derive(Resource)]
@@ -1233,7 +1218,7 @@ fn load_db2_store_after(
         }
     }
     for cps in m.values_mut() {
-        cps.sort_by(|p1, p2| p1.order_index.cmp(&p2.order_index));
+        cps.sort_by_key(|p| p.order_index);
     }
     commands.insert_resource(m);
     let mut m = EmotesTextSoundContainer::default();

@@ -75,7 +75,7 @@ pub fn tile_assembler_convert_world2(
         // build global map tree
         let mut map_spawns = Vec::with_capacity(data.len());
         info!("Calculating model bounds for map {map_id}...");
-        for (_spawn_id, entry) in data.iter_mut() {
+        for entry in data.values_mut() {
             // M2 models don't have a bound set in WDT/ADT placement data, i still think they're not used for LoS at all on retail
             if entry.flags.contains(ModelFlags::ModM2) && calculate_transformed_bound(&src, entry).is_err() {
                 continue;

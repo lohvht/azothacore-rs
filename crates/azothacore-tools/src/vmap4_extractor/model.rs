@@ -210,7 +210,7 @@ impl Model {
         //      You will need to re-extract vmaps and re-generate mmaps for these changes to take effect.
         //      ```
         // Swaps the middle and last values.
-        let mesh_triangle_indices = self.val_indices.chunks_exact(3).map(|r| Vector3::new(r[0], r[2], r[1])).collect();
+        let mesh_triangle_indices = self.val_indices.as_chunks::<3>().0.iter().map(|r| Vector3::new(r[0], r[2], r[1])).collect();
         let vertices_chunks = self.val_vertices.iter().map(|r| Vector3::new(r.x, -r.z, r.y)).collect();
         WorldModel_Raw {
             n_vectors:   self.bounding_vertices.number as usize,

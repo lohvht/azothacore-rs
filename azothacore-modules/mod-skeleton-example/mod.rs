@@ -3,7 +3,7 @@ use azothacore_server::game::{
     scripting::{script_defines::world_script::WorldScript, script_mgr::ScriptMgr, script_object::Script},
     world::WorldConfig,
 };
-use bevy::prelude::{Commands, In, IntoSystem, Res, System};
+use bevy::prelude::*;
 use serde::{Deserialize, Serialize};
 use tracing::info;
 #[derive(Deserialize, Serialize, Clone, Debug)]

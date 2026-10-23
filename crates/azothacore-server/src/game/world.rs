@@ -2,11 +2,10 @@ mod world_impl;
 mod world_trait;
 
 use azothacore_common::deref_boilerplate;
-use bevy::prelude::Resource;
+use bevy::prelude::*;
 use flagset::flags;
 use num_derive::{FromPrimitive, ToPrimitive};
 use thiserror::Error;
-use tracing::error;
 pub use world_impl::*;
 pub use world_trait::*;
 

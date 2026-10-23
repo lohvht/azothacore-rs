@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, fs, path::Path};
 
 use azothacore_common::{AzResult, recastnavigation_handles::DetourNavMeshParams};
 use azothacore_server::game::grid::grid_defines::{ADT_GRID_SIZE, ADT_GRID_SIZE_PLUS_ONE, SIZE_OF_GRIDS};
-use bevy::prelude::Component;
+use bevy::prelude::*;
 use nalgebra::Vector6;
 use recastnavigation_sys::rcCalcBounds;
 

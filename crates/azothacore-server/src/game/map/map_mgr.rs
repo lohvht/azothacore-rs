@@ -1,5 +1,5 @@
 use bevy::{
-    prelude::Resource,
+    prelude::*,
     time::{Timer, TimerMode},
 };
 

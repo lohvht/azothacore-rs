@@ -5,7 +5,7 @@ use azothacore_common::{
     configuration::{Config, ConfigMgr},
 };
 use azothacore_database::database_env::{LoginDatabase, WorldDatabase};
-use bevy::prelude::{Commands, In, Res, ResMut, Resource, SystemSet};
+use bevy::prelude::*;
 
 use crate::game::{scripting::script_mgr::ScriptMgr, world::CurrentRealm};
 

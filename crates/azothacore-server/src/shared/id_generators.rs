@@ -6,7 +6,7 @@ use std::{
 
 use azothacore_common::{AzContext, AzResult, az_error, bevy_app::TokioRuntime};
 use azothacore_database::DbDriver;
-use bevy::prelude::Resource;
+use bevy::prelude::*;
 use sqlx::{Database, FromRow, Pool, query_scalar};
 use tracing::info;
 

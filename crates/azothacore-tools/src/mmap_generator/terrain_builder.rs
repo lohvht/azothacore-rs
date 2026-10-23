@@ -8,7 +8,7 @@ use azothacore_common::{
     utils::buffered_file_open,
 };
 use azothacore_server::game::map::{GridMap, MapLiquidTypeFlag, map_file::MapFile};
-use bevy::{ecs::system::SystemParam, prelude::Res};
+use bevy::{ecs::system::SystemParam, prelude::*};
 use flagset::FlagSet;
 use nalgebra::{DMatrix, SMatrix, Vector3};
 use tracing::debug;

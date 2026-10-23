@@ -447,49 +447,49 @@ pub fn convert_adt(
         }
 
         // Liquid data
-        if mcnk.size_mclq > 8 {
-            if let Some(liquid) = &mcnk.mclq {
-                let mut count = 0usize;
-                for y in 0..ADT_CELL_SIZE {
-                    let cy = mcnk.iy() * ADT_CELL_SIZE + y;
-                    for x in 0..ADT_CELL_SIZE {
-                        let cx = mcnk.ix() * ADT_CELL_SIZE + x;
-                        if liquid.flags[y][x] != 0x0F {
-                            liquid_show[cy][cx] = true;
-                            if !ignore_deep_water && (liquid.flags[y][x] & (1 << 7) > 0) {
-                                map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::DarkWater;
-                            }
-                            count += 1;
+        if mcnk.size_mclq > 8
+            && let Some(liquid) = &mcnk.mclq
+        {
+            let mut count = 0usize;
+            for y in 0..ADT_CELL_SIZE {
+                let cy = mcnk.iy() * ADT_CELL_SIZE + y;
+                for x in 0..ADT_CELL_SIZE {
+                    let cx = mcnk.ix() * ADT_CELL_SIZE + x;
+                    if liquid.flags[y][x] != 0x0F {
+                        liquid_show[cy][cx] = true;
+                        if !ignore_deep_water && (liquid.flags[y][x] & (1 << 7) > 0) {
+                            map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::DarkWater;
                         }
+                        count += 1;
                     }
                 }
+            }
 
-                let c_flag = mcnk.flags;
-                if c_flag & (1 << 2) == (1 << 2) {
-                    // water
-                    map_liquid_entry[mcnk.iy()][mcnk.ix()] = 1;
-                    map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Water;
-                }
-                if c_flag & (1 << 3) == (1 << 3) {
-                    // ocean
-                    map_liquid_entry[mcnk.iy()][mcnk.ix()] = 2;
-                    map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Ocean;
-                }
-                if c_flag & (1 << 4) == (1 << 4) {
-                    // magma/slime
-                    map_liquid_entry[mcnk.iy()][mcnk.ix()] = 3;
-                    map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Magma;
-                }
+            let c_flag = mcnk.flags;
+            if c_flag & (1 << 2) == (1 << 2) {
+                // water
+                map_liquid_entry[mcnk.iy()][mcnk.ix()] = 1;
+                map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Water;
+            }
+            if c_flag & (1 << 3) == (1 << 3) {
+                // ocean
+                map_liquid_entry[mcnk.iy()][mcnk.ix()] = 2;
+                map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Ocean;
+            }
+            if c_flag & (1 << 4) == (1 << 4) {
+                // magma/slime
+                map_liquid_entry[mcnk.iy()][mcnk.ix()] = 3;
+                map_liquid_flags[mcnk.iy()][mcnk.ix()] |= MapLiquidTypeFlag::Magma;
+            }
 
-                if count == 0 && !map_liquid_flags[mcnk.iy()][mcnk.ix()].is_empty() {
-                    error!("Wrong liquid detect in MCLQ chunk");
-                }
-                for y in 0..ADT_CELL_SIZE + 1 {
-                    let cy = mcnk.iy() * ADT_CELL_SIZE + y;
-                    for x in 0..ADT_CELL_SIZE + 1 {
-                        let cx = mcnk.ix() * ADT_CELL_SIZE + x;
-                        map_liquid_height[cy][cx] = liquid.liquid[y][x].height;
-                    }
+            if count == 0 && !map_liquid_flags[mcnk.iy()][mcnk.ix()].is_empty() {
+                error!("Wrong liquid detect in MCLQ chunk");
+            }
+            for y in 0..ADT_CELL_SIZE + 1 {
+                let cy = mcnk.iy() * ADT_CELL_SIZE + y;
+                for x in 0..ADT_CELL_SIZE + 1 {
+                    let cx = mcnk.ix() * ADT_CELL_SIZE + x;
+                    map_liquid_height[cy][cx] = liquid.liquid[y][x].height;
                 }
             }
         }

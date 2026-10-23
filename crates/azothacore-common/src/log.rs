@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bevy::prelude::{App, Commands, IntoSystemConfigs, PreStartup, Res, Resource, SystemSet};
+use bevy::prelude::*;
 use chrono::Local;
 use flagset::FlagSet;
 use tracing::subscriber::set_global_default;
@@ -236,31 +236,24 @@ pub fn init<P: AsRef<Path>>(logs_dir: P, appenders: &[LogAppender], loggers: &[L
     let mut layers = vec![];
     let mut guards = vec![];
     for a in appenders {
-        if let LogAppender::File { flags, file, .. } = &a {
-            if flags.contains(LogFlags::TruncateFile) {
-                let original = logs_dir.as_ref().join(file);
-                if flags.contains(LogFlags::BackupBeforeOverwrite) {
-                    let now = Local::now().to_rfc3339();
-                    let dst_base_name = if let Some((left, right)) = file.rsplit_once('.') {
-                        format!("{left}_{now}.{right}")
-                    } else {
-                        format!("{file}.{now}")
-                    };
-                    let dst = logs_dir.as_ref().join(dst_base_name);
-                    let mut should_rename = false;
-                    if let Ok(mut m) = fs::File::open(&original) {
-                        if let Ok(n) = m.read_to_end(&mut vec![]) {
-                            if n > 0 {
-                                should_rename = true;
-                            }
-                        }
-                    }
-                    if should_rename {
-                        _ = fs::rename(&original, &dst);
-                    }
+        if let LogAppender::File { flags, file, .. } = &a
+            && flags.contains(LogFlags::TruncateFile)
+        {
+            let original = logs_dir.as_ref().join(file);
+            if flags.contains(LogFlags::BackupBeforeOverwrite) {
+                let now = Local::now().to_rfc3339();
+                let dst_base_name = if let Some((left, right)) = file.rsplit_once('.') {
+                    format!("{left}_{now}.{right}")
                 } else {
-                    _ = fs::File::create(&original);
+                    format!("{file}.{now}")
+                };
+                let dst = logs_dir.as_ref().join(dst_base_name);
+                let should_rename = fs::File::open(&original).and_then(|mut m| m.read_to_end(&mut vec![])).is_ok_and(|n| n > 0);
+                if should_rename {
+                    _ = fs::rename(&original, &dst);
                 }
+            } else {
+                _ = fs::File::create(&original);
             }
         }
         let ProcessedAppenderPart {

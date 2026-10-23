@@ -24,10 +24,7 @@ use azothacore_database::{
     database_env::{LoginDatabase, LoginPreparedStmts},
 };
 use azothacore_server::{game::accounts::battlenet_account_mgr::BattlenetAccountMgr, shared::networking::socket::AddressOrName};
-use bevy::{
-    app::AppExit,
-    prelude::{App, Commands, EventReader, EventWriter, IntoSystemConfigs, PostUpdate, Res, Resource, Startup, SystemSet},
-};
+use bevy::{app::AppExit, prelude::*};
 use hyper::{StatusCode, body::Incoming, service::service_fn};
 use hyper_util::{
     rt::{TokioExecutor, TokioIo},

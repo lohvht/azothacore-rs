@@ -7,7 +7,7 @@ use azothacore_database::{
     args,
     database_env::{CharacterDatabase, CharacterPreparedStmts, LoginDatabase, LoginPreparedStmts},
 };
-use bevy::prelude::Commands;
+use bevy::prelude::*;
 use sha2::{Digest, Sha256};
 use sqlx::{Connection, query_as};
 use tokio::{runtime::Runtime, time::Instant};

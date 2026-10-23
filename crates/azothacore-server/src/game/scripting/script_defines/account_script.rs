@@ -1,7 +1,4 @@
-use bevy::{
-    ecs::system::SystemId,
-    prelude::{Component, In, System, World},
-};
+use bevy::{ecs::system::SystemId, prelude::*};
 
 use crate::{
     game::scripting::script_object::{IntoScriptObject, Script, ScriptObjectTrait},

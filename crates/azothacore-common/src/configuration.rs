@@ -6,7 +6,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use bevy::prelude::{App, Commands, Event, EventReader, EventWriter, FixedUpdate, IntoSystemConfigs, PreStartup, ResMut, Resource, SystemSet};
+use bevy::prelude::*;
 use tracing::{error, warn};
 
 #[allow(non_snake_case)]
@@ -216,10 +216,11 @@ where
 }
 
 #[cfg(test)]
+// figment::Jail::expect_with dictates the closure's error type
+#[expect(clippy::result_large_err)]
 mod tests {
     use std::{thread::sleep, time::Duration};
 
-    use bevy::prelude::{Component, IntoSystemConfigs, IntoSystemSetConfigs, Res, State, Update};
     use figment::Jail;
     use serde::{Deserialize, Serialize};
     use serde_default::DefaultFromSerde;

@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use bevy::{
     diagnostic::{DiagnosticsStore, FrameTimeDiagnosticsPlugin},
-    prelude::{Res, ResMut, Resource},
+    prelude::*,
     time::{Time, Timer, TimerMode},
 };
 use tracing::info;

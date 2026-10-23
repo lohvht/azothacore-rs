@@ -14,7 +14,7 @@
 //! - Deny: Assignment of the object (role/permission) and deny it
 //! - Revoke: Removal of the object (role/permission) no matter if it was granted or denied
 //! - Global Permissions are computed as:
-//!       Group Grants + Role Grants + User Grans - Role Grants - User Grants
+//!   Group Grants + Role Grants + User Grans - Role Grants - User Grants
 //! - Groups, Roles and Permissions can be assigned by realm
 //!
 

@@ -11,7 +11,7 @@ use azothacore_database::database_env::WorldDatabase;
 use bevy::{
     app::{App, Startup},
     ecs::system::SystemId,
-    prelude::{Commands, EventWriter, IntoSystemConfigs, Res, Resource, SystemSet},
+    prelude::*,
 };
 use flagset::flags;
 use num::FromPrimitive;

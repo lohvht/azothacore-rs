@@ -11,7 +11,7 @@ use flagset::{FlagSet, flags};
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use thiserror::Error;
-use tracing::{error, info};
+use tracing::info;
 
 pub struct CascStorageHandle {
     h: HANDLE,
