@@ -107,3 +107,17 @@ The counts are from the 2026-10-24 import. The converters and reports live in
   and eventobject tables. AshamaneCore has equivalents for some (`areatrigger`, `world_quest*`,
   `zone_scripts`, kept as ADB-only tables).
 - **ADB:** 36 server-side areatrigger teleports with negative IDs were dropped.
+
+## 7. TrinityCore master (source 3): candidates needing a 7.3.5 check
+
+- Only master rows with a Legion `VerifiedBuild` (22248..26972) were imported automatically. Master
+  re-sniffs content, so Legion-era rows often carry a later build.
+- **Not yet imported:** 597 creatures and 368 gameobjects on Legion maps, in areas our data leaves
+  empty, with `VerifiedBuild` > 30000. They are mostly in Legion dungeons (Neltharion's Lair, Black
+  Rook Hold, Arcway, Vault of the Wardens, Trial of Valor) and the Broken Isles, likely from
+  timewalking or Legion Remix sniffs. Check each against 7.3.5 before importing.
+- **Scripts:**
+  - master has `BrokenIsles/` (15 files, including `zone_mardum.cpp`) and a 2,921-line `spell_dh.cpp`,
+    written for post-Legion builds.
+  - Demon Hunter spells were reworked after Legion, so use them only to fill gaps in AshamaneCore's
+    122 `BrokenIsles` files and its `spell_dh.cpp`, after checking each against 7.3.5 DB2 data.
