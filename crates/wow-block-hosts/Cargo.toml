@@ -1,0 +1,12 @@
+[package]
+name = "wow-block-hosts"
+version = "0.1.0"
+edition.workspace = true
+description = "LD_PRELOAD library for the 7.3.5 client under Wine: fails Blizzard launcher/CDN host lookups to avoid a loading-screen hang"
+
+[lib]
+# Loaded with LD_PRELOAD, so it must be a C-ABI shared library.
+crate-type = ["cdylib"]
+
+[dependencies]
+libc = "0.2"
