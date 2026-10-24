@@ -600,9 +600,9 @@ impl DatabaseLoader {
         warn!("> Table '{}' not exist! Trying adding base table", table_name);
 
         let mut is_gz = false;
-        let mut f = self.database_config.base_files_dir().join("{table_name}.sql");
+        let mut f = self.database_config.base_files_dir().join(format!("{table_name}.sql"));
         if !f.exists() {
-            f = self.database_config.base_files_dir().join("{table_name}.sql.gz");
+            f = self.database_config.base_files_dir().join(format!("{table_name}.sql.gz"));
             is_gz = true;
         }
 

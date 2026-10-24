@@ -161,7 +161,7 @@ fn start_db(
     let auth_db = rt
         .block_on(async {
             tokio::select! {
-                d = DatabaseLoader::new(DatabaseType::Character, cfg.LoginDatabaseInfo.clone(), updates.clone(), modules.clone()).load() => d,
+                d = DatabaseLoader::new(DatabaseType::Login, cfg.LoginDatabaseInfo.clone(), updates.clone(), modules.clone()).load() => d,
                 _ = signal.0.recv() => {
                     Err(DatabaseLoaderError::Generic { msg: "signal termination detected!".to_string() })
                 }
