@@ -689,6 +689,7 @@ pub struct CreatureDisplayInfo {
     pub portrait_creature_display_info_id: i32,
     pub blood_id: u8,
     pub particle_color_id: u16,
+    /// WoWDBDefs 7.3.5.26972: i32; kept to match the TC 7.3.5 hotfix column
     pub creature_geoset_data: u32,
     pub object_effect_package_id: u16,
     pub anim_replacement_set_id: u16,
@@ -785,6 +786,7 @@ pub struct CreatureType {
 #[layout_hash(0xA87A5BB9)]
 pub struct Criteria {
     pub id: u32,
+    /// WoWDBDefs 7.3.5.26972: i32; kept to match the TC 7.3.5 hotfix column
     pub asset: u32,
     pub start_asset: i32,
     pub fail_asset: i32,
@@ -985,6 +987,7 @@ pub struct Faction {
     pub reputation_max:        [i32; 4],
     pub reputation_index:      i16,
     #[sqlx(json)]
+    /// WoWDBDefs 7.3.5.26972: u16; kept to match the TC 7.3.5 hotfix column
     pub reputation_class_mask: [i16; 4],
     #[sqlx(json)]
     pub reputation_flags:      [u16; 4],
@@ -1342,9 +1345,9 @@ pub struct GemProperties {
 #[layout_hash(0xEA228DFA)]
 pub struct GlyphBindableSpell {
     pub id:                  u32,
-    pub spell_id:            u32,
+    pub spell_id:            i32,
     #[parent]
-    pub glyph_properties_id: u16,
+    pub glyph_properties_id: i16,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -1405,12 +1408,12 @@ pub struct GuildPerkSpells {
 pub struct Heirloom {
     #[sqlx(json)]
     pub source_text: LocalisedString,
-    pub item_id: u32,
-    pub legacy_item_id: u32,
-    pub legacy_upgraded_item_id: u32,
-    pub static_upgraded_item_id: u32,
+    pub item_id: i32,
+    pub legacy_item_id: i32,
+    pub legacy_upgraded_item_id: i32,
+    pub static_upgraded_item_id: i32,
     #[sqlx(json)]
-    pub upgrade_item_id: Vector3<u32>,
+    pub upgrade_item_id: Vector3<i32>,
     #[sqlx(json)]
     pub upgrade_item_bonus_list_id: Vector3<u16>,
     pub flags: u8,
@@ -1569,10 +1572,10 @@ pub struct ItemBonusTreeNode {
 #[layout_hash(0xB6940674)]
 pub struct ItemChildEquipment {
     pub id:                    u32,
-    pub child_item_id:         u32,
+    pub child_item_id:         i32,
     pub child_item_equip_slot: u8,
     #[parent]
-    pub parent_item_id:        u32,
+    pub parent_item_id:        i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -1582,7 +1585,7 @@ pub struct ItemClass {
     #[sqlx(json)]
     pub class_name:     LocalisedString,
     pub price_modifier: f32,
-    pub class_id:       u8,
+    pub class_id:       i8,
     pub flags:          u8,
 }
 
@@ -1591,7 +1594,7 @@ pub struct ItemClass {
 pub struct ItemCurrencyCost {
     pub id:      u32,
     #[parent(inline)]
-    pub item_id: u32,
+    pub item_id: i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -1646,9 +1649,9 @@ pub struct ItemDisenchantLoot {
     pub min_level:      u16,
     pub max_level:      u16,
     pub skill_required: u16,
-    pub subclass:       u8,
+    pub subclass:       i8,
     pub quality:        u8,
-    pub expansion_id:   u8,
+    pub expansion_id:   i8,
     #[parent]
     pub class:          u8,
 }
@@ -1710,7 +1713,7 @@ pub struct ItemLevelSelectorQuality {
     pub quality_item_bonus_list_id: i32,
     pub quality: i8,
     #[parent]
-    pub parent_ils_quality_set_id: u16,
+    pub parent_ils_quality_set_id: i16,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -1738,14 +1741,14 @@ pub struct ItemLimitCategoryCondition {
     pub add_quantity: i8,
     pub player_condition_id: u32,
     #[parent]
-    pub parent_item_limit_category_id: u32,
+    pub parent_item_limit_category_id: i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xE64FD18B)]
 pub struct ItemModifiedAppearance {
     #[parent]
-    pub item_id: u32,
+    pub item_id: i32,
     #[id_inline]
     pub id: u32,
     pub item_appearance_modifier_id: u8,
@@ -1931,7 +1934,7 @@ pub struct ItemSpecOverride {
     pub id:      u32,
     pub spec_id: u16,
     #[parent]
-    pub item_id: u32,
+    pub item_id: i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -1951,7 +1954,7 @@ pub struct ItemXBonusTree {
     pub id:                 u32,
     pub item_bonus_tree_id: u16,
     #[parent]
-    pub item_id:            u32,
+    pub item_id:            i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -1970,6 +1973,7 @@ pub struct LFGDungeons {
     pub name: LocalisedString,
     #[sqlx(json)]
     pub description: LocalisedString,
+    /// WoWDBDefs 7.3.5.26972: u32; kept to match the TC 7.3.5 hotfix column
     pub flags: i32,
     pub min_gear: f32,
     pub max_level: u16,
@@ -2271,7 +2275,7 @@ pub struct Mount {
     pub description:           LocalisedString,
     #[sqlx(json)]
     pub source_text:           LocalisedString,
-    pub source_spell_id:       u32,
+    pub source_spell_id:       i32,
     pub mount_fly_ride_height: f32,
     pub mount_type_id:         u16,
     pub flags:                 u16,
@@ -2316,10 +2320,10 @@ pub struct MountTypeXCapability {
 #[layout_hash(0xD59B9FE4)]
 pub struct MountXDisplay {
     pub id: u32,
-    pub creature_display_info_id: u32,
+    pub creature_display_info_id: i32,
     pub player_condition_id: u32,
     #[parent]
-    pub mount_id: u32,
+    pub mount_id: i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -2570,7 +2574,7 @@ pub struct PVPDifficulty {
 #[layout_hash(0xBD449801)]
 pub struct PVPItem {
     pub id:               u32,
-    pub item_id:          u32,
+    pub item_id:          i32,
     pub item_level_delta: u8,
 }
 
@@ -2578,9 +2582,9 @@ pub struct PVPItem {
 #[layout_hash(0x72F4C016)]
 pub struct PvpReward {
     pub id:             u32,
-    pub honor_level:    u32,
-    pub prestige_level: u32,
-    pub reward_pack_id: u32,
+    pub honor_level:    i32,
+    pub prestige_level: i32,
+    pub reward_pack_id: i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -2589,14 +2593,14 @@ pub struct PvpTalent {
     pub id:                  u32,
     #[sqlx(json)]
     pub description:         LocalisedString,
-    pub spell_id:            u32,
-    pub overrides_spell_id:  u32,
-    pub action_bar_spell_id: u32,
+    pub spell_id:            i32,
+    pub overrides_spell_id:  i32,
+    pub action_bar_spell_id: i32,
     pub tier_id:             u32,
     pub column_index:        u32,
-    pub flags:               u32,
-    pub class_id:            u32,
-    pub spec_id:             u32,
+    pub flags:               i32,
+    pub class_id:            i32,
+    pub spec_id:             i32,
     pub role:                u32,
 }
 
@@ -2698,17 +2702,17 @@ pub struct RewardPackXCurrencyType {
 #[layout_hash(0x74F6B9BD)]
 pub struct RewardPackXItem {
     pub id:             u32,
-    pub item_id:        u32,
+    pub item_id:        i32,
     pub item_quantity:  i32,
     #[parent]
-    pub reward_pack_id: u32,
+    pub reward_pack_id: i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
 #[layout_hash(0xFB641AE0)]
 pub struct RulesetItemUpgrade {
     pub id:              u32,
-    pub item_id:         u32,
+    pub item_id:         i32,
     pub item_upgrade_id: u16,
 }
 
@@ -2841,12 +2845,12 @@ pub struct SkillRaceClassInfo {
     pub id:            u32,
     pub race_mask:     i64,
     #[parent]
-    pub skill_id:      u16,
+    pub skill_id:      i16,
     pub flags:         u16,
-    pub skill_tier_id: u16,
-    pub availability:  u8,
-    pub min_level:     u8,
-    pub class_mask:    u32,
+    pub skill_tier_id: i16,
+    pub availability:  i8,
+    pub min_level:     i8,
+    pub class_mask:    i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -2861,6 +2865,7 @@ pub struct SoundKit {
     pub sound_entries_advanced_id: u16,
     pub sound_type: u8,
     pub dialog_type: u8,
+    /// WoWDBDefs 7.3.5.26972: i8; kept to match the TC 7.3.5 hotfix column
     pub eax_def: u8,
     pub volume_variation_plus: f32,
     pub volume_variation_minus: f32,
@@ -2904,7 +2909,9 @@ pub struct Spell {
 pub struct SpellAuraOptions {
     pub id: u32,
     pub proc_charges: i32,
-    pub proc_type_mask: i32,
+    /// WoWDBDefs 7.3.5.26972 (layout E05BE94F): ProcTypeMask<32>[2]; TC 7.3.5 read only the first element
+    #[sqlx(json)]
+    pub proc_type_mask: [i32; 2],
     pub proc_category_recovery: i32,
     pub cumulative_aura: u16,
     pub spell_procs_per_minute_id: u16,
@@ -2988,6 +2995,7 @@ pub struct SpellClassOptions {
     pub id:               u32,
     pub spell_id:         i32,
     #[sqlx(json)]
+    /// WoWDBDefs 7.3.5.26972: i32; kept to match the TC 7.3.5 hotfix column
     pub spell_class_mask: [u32; 4],
     pub spell_class_set:  u8,
     pub modal_next_spell: u32,
@@ -3044,6 +3052,7 @@ pub struct SpellEffect {
     pub resource_coefficient: f32,
     pub group_size_base_points_coefficient: f32,
     #[sqlx(json)]
+    /// WoWDBDefs 7.3.5.26972: i32; kept to match the TC 7.3.5 hotfix column
     pub effect_spell_class_mask: [u32; 4],
     #[sqlx(json)]
     pub effect_misc_value: [i32; 2],
@@ -3078,11 +3087,11 @@ pub struct SpellFocusObject {
 pub struct SpellInterrupts {
     pub id: u32,
     pub difficulty_id: u8,
-    pub interrupt_flags: u16,
+    pub interrupt_flags: i16,
     #[sqlx(json)]
-    pub aura_interrupt_flags: [u32; 2],
+    pub aura_interrupt_flags: [i32; 2],
     #[sqlx(json)]
-    pub channel_interrupt_flags: [u32; 2],
+    pub channel_interrupt_flags: [i32; 2],
     #[parent]
     pub spell_id: i32,
 }
@@ -3165,15 +3174,15 @@ pub struct SpellMisc {
     pub duration_index: u16,
     pub range_index: u16,
     pub school_mask: u8,
-    pub spell_icon_file_data_id: u32,
+    pub spell_icon_file_data_id: i32,
     pub speed: f32,
-    pub active_icon_file_data_id: u32,
+    pub active_icon_file_data_id: i32,
     pub launch_delay: f32,
     pub difficulty_id: u8,
     #[sqlx(json)]
-    pub attributes: [u32; 14],
+    pub attributes: [i32; 14],
     #[parent]
-    pub spell_id: u32,
+    pub spell_id: i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -3194,9 +3203,9 @@ pub struct SpellPower {
     ///   only SPELL_EFFECT_WEAPON_DAMAGE_NOSCHOOL, SPELL_EFFECT_WEAPON_PERCENT_DAMAGE, SPELL_EFFECT_WEAPON_DAMAGE, SPELL_EFFECT_NORMALIZED_WEAPON_DMG
     pub optional_cost:          u32,
     pub power_display_id:       u32,
-    pub alt_power_bar_id:       u32,
+    pub alt_power_bar_id:       i32,
     #[parent]
-    pub spell_id:               u32,
+    pub spell_id:               i32,
 }
 
 #[derive(WDC1, Clone, sqlx::FromRow, Default, Debug)]
@@ -3278,7 +3287,7 @@ pub struct SpellScaling {
 #[layout_hash(0xA461C24D)]
 pub struct SpellShapeshift {
     pub id:                 u32,
-    pub spell_id:           u32,
+    pub spell_id:           i32,
     #[sqlx(json)]
     pub shapeshift_exclude: [i32; 2],
     #[sqlx(json)]
@@ -3432,6 +3441,7 @@ pub struct TaxiPathNode {
     pub node_index:         u8,
     #[id_inline]
     pub id:                 u32,
+    /// WoWDBDefs 7.3.5.26972: i8; kept to match the TC 7.3.5 hotfix column
     pub flags:              u8,
     pub delay:              u32,
     pub arrival_event_id:   u16,
@@ -3453,7 +3463,7 @@ pub struct TotemCategory {
 pub struct Toy {
     #[sqlx(json)]
     pub source_text:      LocalisedString,
-    pub item_id:          u32,
+    pub item_id:          i32,
     pub flags:            u8,
     pub source_type_enum: i8,
     #[id_inline]
@@ -3673,14 +3683,15 @@ pub struct WMOAreaTable {
     #[sqlx(json)]
     pub area_name: LocalisedString,
     ///  used in group WMO
-    pub wmo_group_id: u32,
+    pub wmo_group_id: i32,
     pub ambience_id: u16,
     pub zone_music: u16,
     pub intro_sound: u16,
     pub area_table_id: u16,
     pub uw_intro_sound: u16,
     ///  used in adt file
-    pub name_set_id: u8,
+    /// WoWDBDefs 7.3.5.26972 (layout 4616C893): NameSetID<u16>; TC 7.3.5 had uint8
+    pub name_set_id: u16,
     pub sound_provider_pref: u8,
     pub sound_provider_pref_underwater: u8,
     pub flags: u8,

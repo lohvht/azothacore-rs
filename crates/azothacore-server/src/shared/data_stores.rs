@@ -915,8 +915,8 @@ pub struct TransmogSetItemsByTransmogSet(pub BTreeMap<u32, Vec<TransmogSetItem>>
 deref_boilerplate!(TransmogSetItemsByTransmogSet, BTreeMap<u32, Vec<TransmogSetItem>> , 0);
 
 #[derive(Resource, Default)]
-pub struct WMOAreaTableLookupContainer(pub BTreeMap<(u16, u8, u32), WMOAreaTable>);
-deref_boilerplate!(WMOAreaTableLookupContainer, BTreeMap<(u16, u8, u32), WMOAreaTable>, 0);
+pub struct WMOAreaTableLookupContainer(pub BTreeMap<(u16, u16, i32), WMOAreaTable>);
+deref_boilerplate!(WMOAreaTableLookupContainer, BTreeMap<(u16, u16, i32), WMOAreaTable>, 0);
 
 #[derive(Resource, Default)]
 pub struct WorldMapAreaByAreaIDContainer(pub BTreeMap<u32, WorldMapArea>);
@@ -1261,13 +1261,13 @@ fn load_db2_store_after(
 
     let mut m = HeirloomItemsContainer::default();
     for e in stores.heirloom_store.values() {
-        m.entry(e.item_id).or_insert(e.clone());
+        m.entry(e.item_id as u32).or_insert(e.clone());
     }
     commands.insert_resource(m);
 
     let mut m = GlyphBindableSpellsContainer::default();
     for e in stores.glyph_bindable_spell_store.values() {
-        m.entry(e.glyph_properties_id.into()).or_default().push(e.spell_id);
+        m.entry(e.glyph_properties_id as u32).or_default().push(e.spell_id as u32);
     }
     commands.insert_resource(m);
 
@@ -1301,18 +1301,18 @@ fn load_db2_store_after(
 
     let mut m = ItemChildEquipmentContainer::default();
     for e in stores.item_child_equipment_store.values() {
-        if m.get(&e.parent_item_id).is_some() {
+        if m.get(&(e.parent_item_id as u32)).is_some() {
             error!(target:"server::loading", "Item must have max 1 child item.");
             ev_startup_failed.send_default();
             return;
         }
-        m.insert(e.parent_item_id, e.clone());
+        m.insert(e.parent_item_id as u32, e.clone());
     }
     commands.insert_resource(m);
 
     let mut m = ItemClassByOldEnumContainer::default();
     for e in stores.item_class_store.values() {
-        let item_class_id = match ItemClassID::try_from(e.class_id) {
+        let item_class_id = match ItemClassID::try_from(e.class_id as u8) {
             Err(err) => {
                 error!(target:"server::loading", "unrecognised item class ID, err={err}.");
                 ev_startup_failed.send_default();
@@ -1331,25 +1331,25 @@ fn load_db2_store_after(
 
     let mut m = ItemIDsWithCurrencyCost::default();
     for e in stores.item_currency_cost_store.values() {
-        m.insert(e.item_id);
+        m.insert(e.item_id as u32);
     }
     commands.insert_resource(m);
 
     let mut m = ItemLimitCategoryConditionContainer::default();
     for e in stores.item_limit_category_condition_store.values() {
-        m.entry(e.parent_item_limit_category_id).or_default().push(e.clone());
+        m.entry(e.parent_item_limit_category_id as u32).or_default().push(e.clone());
     }
     commands.insert_resource(m);
 
     let mut m = ItemLevelSelectorQualityContainer::default();
     for e in stores.item_level_selector_quality_store.values() {
-        m.entry(e.parent_ils_quality_set_id.into()).or_default().insert(e.clone());
+        m.entry(e.parent_ils_quality_set_id as u32).or_default().insert(e.clone());
     }
     commands.insert_resource(m);
 
     let mut m = ItemModifiedAppearanceByItemContainer::default();
     for e in stores.item_modified_appearance_store.values() {
-        m.insert((e.item_id, e.item_appearance_modifier_id), e.clone());
+        m.insert((e.item_id as u32, e.item_appearance_modifier_id), e.clone());
     }
     commands.insert_resource(m);
 
@@ -1361,13 +1361,13 @@ fn load_db2_store_after(
 
     let mut m = ItemSpecOverridesContainer::default();
     for e in stores.item_spec_override_store.values() {
-        m.entry(e.item_id).or_default().push(e.clone());
+        m.entry(e.item_id as u32).or_default().push(e.clone());
     }
     commands.insert_resource(m);
 
     let mut m: ItemToBonusTreeContainer = ItemToBonusTreeContainer::default();
     for e in stores.item_x_bonus_tree_store.values() {
-        m.entry(e.item_id).or_default().push(e.item_bonus_tree_id.into());
+        m.entry(e.item_id as u32).or_default().push(e.item_bonus_tree_id.into());
     }
     commands.insert_resource(m);
 
@@ -1379,7 +1379,7 @@ fn load_db2_store_after(
 
     let mut m = MountsBySpellIDContainer::default();
     for e in stores.mount_store.values() {
-        m.insert(e.source_spell_id, e.clone());
+        m.insert(e.source_spell_id as u32, e.clone());
     }
     commands.insert_resource(m);
 
@@ -1391,7 +1391,7 @@ fn load_db2_store_after(
 
     let mut m = MountDisplaysContainer::default();
     for e in stores.mount_x_display_store.values() {
-        m.entry(e.mount_id).or_default().push(e.clone());
+        m.entry(e.mount_id as u32).or_default().push(e.clone());
     }
     commands.insert_resource(m);
 
@@ -1517,19 +1517,22 @@ fn load_db2_store_after(
 
     let mut m = PvpItemBonusContainer::default();
     for e in stores.pvp_item_store.values() {
-        m.insert(e.item_id, e.item_level_delta);
+        m.insert(e.item_id as u32, e.item_level_delta);
     }
     commands.insert_resource(m);
 
     let mut m = PvpRewardPackContainer::default();
     for e in stores.pvp_reward_store.values() {
-        m.insert((e.prestige_level, e.honor_level), e.reward_pack_id);
+        m.insert((e.prestige_level as u32, e.honor_level as u32), e.reward_pack_id as u32);
     }
     commands.insert_resource(m);
 
     let mut m = PvpTalentsByPosition::default();
     for e in stores.pvp_talent_store.values() {
-        let class = match u8::try_from(e.class_id).map_err(|_| ClassError { got: e.class_id }).and_then(Class::try_from) {
+        let class = match u8::try_from(e.class_id)
+            .map_err(|_| ClassError { got: e.class_id as u32 })
+            .and_then(Class::try_from)
+        {
             Err(err) => {
                 error!(target: "server::loading", "Class is invalid for PvpTalentsByPosition; err={err}");
                 ev_startup_failed.send_default();
@@ -1587,20 +1590,20 @@ fn load_db2_store_after(
 
     let mut m = RewardPackItems::default();
     for e in stores.reward_pack_x_item_store.values() {
-        m.entry(e.reward_pack_id).or_default().push(e.clone());
+        m.entry(e.reward_pack_id as u32).or_default().push(e.clone());
     }
     commands.insert_resource(m);
 
     let mut m = RulesetItemUpgradeContainer::default();
     for e in stores.ruleset_item_upgrade_store.values() {
-        m.insert(e.item_id, e.item_upgrade_id.into());
+        m.insert(e.item_id as u32, e.item_upgrade_id.into());
     }
     commands.insert_resource(m);
 
     let mut m = SkillRaceClassInfoContainer::default();
     for e in stores.skill_race_class_info_store.values() {
-        if stores.skill_line_store.contains_key(&e.skill_id.into()) {
-            m.entry(e.skill_id.into()).or_default().push(e.clone());
+        if stores.skill_line_store.contains_key(&(e.skill_id as u32)) {
+            m.entry(e.skill_id as u32).or_default().push(e.clone());
         }
     }
     commands.insert_resource(m);
@@ -1622,7 +1625,7 @@ fn load_db2_store_after(
     for power in stores.spell_power_store.values() {
         if let Some(power_diff) = stores.spell_power_difficulty_store.get(&power.id) {
             let pows = spell_power_difficulties
-                .entry(power.spell_id)
+                .entry(power.spell_id as u32)
                 .or_default()
                 .entry(power_diff.difficulty_id.into())
                 .or_default();
@@ -1732,7 +1735,7 @@ fn load_db2_store_after(
 
     let mut m = ToyItemIdsContainer::default();
     for e in stores.toy_store.values() {
-        m.insert(e.item_id);
+        m.insert(e.item_id as u32);
     }
     commands.insert_resource(m);
 

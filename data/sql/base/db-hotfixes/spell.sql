@@ -21,10 +21,10 @@ CREATE TABLE `spell` (
 LOCK TABLES `spell` WRITE;
 /*!40000 ALTER TABLE `spell` DISABLE KEYS */;
 INSERT INTO `spell` VALUES
-(14252,'Summon Enraged Felbat',NULL,NULL,NULL,0),
-(14307,'Summon Enraged Wyvern',NULL,NULL,NULL,0),
-(14313,'Summon Enraged Gryphon',NULL,NULL,NULL,0),
-(14329,'Summon Enraged Hippogryph',NULL,NULL,NULL,0);
+(14252,'Summon Enraged Felbat','','','',0),
+(14307,'Summon Enraged Wyvern','','','',0),
+(14313,'Summon Enraged Gryphon','','','',0),
+(14329,'Summon Enraged Hippogryph','','','',0);
 /*!40000 ALTER TABLE `spell` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

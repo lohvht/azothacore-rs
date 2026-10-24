@@ -10,7 +10,8 @@ DROP TABLE IF EXISTS `spell_aura_options`;
 CREATE TABLE `spell_aura_options` (
   `ID` int(10) unsigned NOT NULL DEFAULT 0,
   `ProcCharges` int(11) NOT NULL DEFAULT 0,
-  `ProcTypeMask` int(11) NOT NULL DEFAULT 0,
+  `ProcTypeMask1` int(11) NOT NULL DEFAULT 0,
+  `ProcTypeMask2` int(11) NOT NULL DEFAULT 0,
   `ProcCategoryRecovery` int(11) NOT NULL DEFAULT 0,
   `CumulativeAura` smallint(5) unsigned NOT NULL DEFAULT 0,
   `SpellProcsPerMinuteID` smallint(5) unsigned NOT NULL DEFAULT 0,

@@ -16,7 +16,7 @@ CREATE TABLE `wmo_area_table` (
   `AreaTableID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `UwIntroSound` smallint(5) unsigned NOT NULL DEFAULT 0,
   `UwAmbience` smallint(5) unsigned NOT NULL DEFAULT 0,
-  `NameSetID` tinyint(3) unsigned NOT NULL DEFAULT 0,
+  `NameSetID` smallint(5) unsigned NOT NULL DEFAULT 0,
   `SoundProviderPref` tinyint(3) unsigned NOT NULL DEFAULT 0,
   `SoundProviderPrefUnderwater` tinyint(3) unsigned NOT NULL DEFAULT 0,
   `Flags` tinyint(3) unsigned NOT NULL DEFAULT 0,
