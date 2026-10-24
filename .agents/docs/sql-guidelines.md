@@ -8,7 +8,7 @@ TODO: Make sure that the sqlx migrations are somewhat comparable to the existing
 
 3. Conventions (linted): every `INSERT` preceded by a matching `DELETE` (idempotency); spawn `DELETE` and `UPDATE` (`creature`, `gameobject`) target that table alone (no join, comma list or schema qualifier) and filter on both `id` and `guid` with `=`/`IN`/`BETWEEN`, never `OR`; no double semicolons; no multiple blank lines; InnoDB engine.
 
-## Data conventions (TODO: ADAPT TO 7.3.5 specific detailsm, below are lifted from AzerothCore 3.3.5)
+## Data conventions (TODO: ADAPT TO 7.3.5 specific details, below are lifted from AzerothCore 3.3.5)
 
 - Set `flags_extra` on every `difficulty_entry_*` template, not just the base entry: which of the two the engine reads varies by call site.
 - `smart_scripts` edits always rewrite the full block — `DELETE` + `INSERT` of every row for the `(entryorguid, source_type)` pair, with the `DELETE` matching both columns — never a partial `UPDATE`, not even for a comment-only fix.
