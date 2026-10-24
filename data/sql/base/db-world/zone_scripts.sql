@@ -11,7 +11,7 @@ CREATE TABLE `zone_scripts` (
   `zoneId` int(10) unsigned NOT NULL,
   `scriptname` char(64) NOT NULL DEFAULT '',
   PRIMARY KEY (`zoneId`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `zone_scripts` WRITE;

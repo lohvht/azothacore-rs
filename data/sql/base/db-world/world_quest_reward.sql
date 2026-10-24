@@ -15,7 +15,7 @@ CREATE TABLE `world_quest_reward` (
   `rewardCount` int(11) DEFAULT NULL,
   `rewardContext` int(11) unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`,`questType`,`rewardType`,`rewardId`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `world_quest_reward` WRITE;

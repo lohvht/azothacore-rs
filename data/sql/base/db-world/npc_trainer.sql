@@ -18,7 +18,7 @@ CREATE TABLE `npc_trainer` (
   PRIMARY KEY (`ID`,`SpellID`),
   KEY `INX_ID` (`ID`),
   KEY `INX_SPELLID` (`SpellID`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `npc_trainer` WRITE;

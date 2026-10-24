@@ -11,7 +11,7 @@ CREATE TABLE `creature_template_journal` (
   `entry` int(10) unsigned NOT NULL,
   `JournalEncounterID` int(10) unsigned NOT NULL,
   PRIMARY KEY (`entry`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb3 COLLATE=utf8mb3_general_ci ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `creature_template_journal` WRITE;

@@ -17,7 +17,7 @@ CREATE TABLE `areatrigger` (
   `position_z` float NOT NULL,
   `ScriptName` char(64) DEFAULT '',
   PRIMARY KEY (`guid`)
-) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
+) ENGINE=InnoDB AUTO_INCREMENT=48 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `areatrigger` WRITE;

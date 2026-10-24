@@ -11,7 +11,7 @@ CREATE TABLE `garrison_scripts` (
   `GarSiteLevelId` int(11) unsigned NOT NULL,
   `ScriptName` char(64) NOT NULL,
   PRIMARY KEY (`GarSiteLevelId`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `garrison_scripts` WRITE;

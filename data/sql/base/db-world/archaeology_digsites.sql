@@ -13,7 +13,7 @@ CREATE TABLE `archaeology_digsites` (
   `minSkillLevel` smallint(5) unsigned NOT NULL DEFAULT 0,
   `currencyId` smallint(5) unsigned NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`)
-) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci;
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 COLLATE=latin1_swedish_ci ROW_FORMAT=DYNAMIC;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 LOCK TABLES `archaeology_digsites` WRITE;
