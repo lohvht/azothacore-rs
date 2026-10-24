@@ -34,6 +34,7 @@ INSERT INTO `player_factionchange_reputations` VALUES
 (1094,1124),
 (1126,1067),
 (1134,1133),
+(1172,1174),
 (1174,1172),
 (1177,1178),
 (1242,1228),

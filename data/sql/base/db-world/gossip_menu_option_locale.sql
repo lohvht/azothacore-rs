@@ -19,6 +19,25 @@ CREATE TABLE `gossip_menu_option_locale` (
 
 LOCK TABLES `gossip_menu_option_locale` WRITE;
 /*!40000 ALTER TABLE `gossip_menu_option_locale` DISABLE KEYS */;
+INSERT INTO `gossip_menu_option_locale` VALUES
+(5853,0,'ruRU','Обучи меня.',''),
+(5855,0,'ruRU','Обучи меня.',''),
+(10841,0,'ruRU','Можно мне взглянуть на товар?',''),
+(11741,0,'frFR','Larosse, j\'ai besoin de te demander quelque chose de génial. J\'ai besoin de te couper la tête pour prouver ma loyauté envers les Boucaniers de la Voile sanglante, alors ils vont me permettre d\'infiltrer leurs rangs et, je l\'espère, de découvrir leurs vraies intentions.\r\n\r\nBaie du Butin a besoin de toi, Bossy ... MAINTENANT plus que jamais.',NULL),
+(11741,1,'frFR','Meuuh.',NULL),
+(12180,11,'ruRU','Расскажи мне подробнее о профессиях, связанных с собирательством и добычей ресурсов.',''),
+(12180,12,'ruRU','Расскажи мне подробнее о ремесленных профессиях.',''),
+(12185,11,'ruRU','Расскажи мне о травничестве.',''),
+(12185,12,'ruRU','Расскажи мне о горном деле.',''),
+(12185,13,'ruRU','Расскажи мне о снятии шкур.',''),
+(12185,14,'ruRU','Расскажи мне подробнее о ремесленных профессиях.',''),
+(12188,11,'ruRU','Обучи меня травничеству.',''),
+(12188,12,'ruRU','Расскажи мне об алхимии.',''),
+(12188,13,'ruRU','Расскажи мне о начертании.',''),
+(12188,14,'ruRU','Расскажи мне подробнее о профессиях, связанных с собирательством и добычей ресурсов.',''),
+(12188,15,'ruRU','Расскажи мне подробнее о ремесленных профессиях.',''),
+(20457,1,'frFR','Je suis prêt, commencez la téléportation de Dalaran vers les îles Brisées.',NULL),
+(63908,1,'frFR','Niuzao... nous devons le sauver !',NULL);
 /*!40000 ALTER TABLE `gossip_menu_option_locale` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

@@ -18,6 +18,16 @@ CREATE TABLE `phase_x_phase_group` (
 
 LOCK TABLES `phase_x_phase_group` WRITE;
 /*!40000 ALTER TABLE `phase_x_phase_group` DISABLE KEYS */;
+INSERT INTO `phase_x_phase_group` VALUES
+(0,169,696,0),
+(1,171,696,0),
+(2,174,696,0),
+(3,175,696,0),
+(4,176,696,0),
+(5,175,351,0),
+(6,176,351,0),
+(10000,176,10000,0),
+(10001,177,10000,0);
 /*!40000 ALTER TABLE `phase_x_phase_group` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

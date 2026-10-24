@@ -636,7 +636,25 @@ INSERT INTO `instance_encounters` VALUES
 (1337,0,54590,0,'Arcurion'),
 (1339,0,54938,439,'Archbishop Benedictus'),
 (1340,0,54968,0,'Asira Dawnslayer'),
-(1348,0,16089,0,'Omar the Test Dragon');
+(1348,0,16089,0,'Omar the Test Dragon'),
+(1805,0,94960,0,'Hymdall'),
+(1806,0,95833,0,'Hyrja'),
+(1807,0,99868,0,'Fenryr'),
+(1808,0,95675,0,'God-King Skovald'),
+(1809,0,95676,1193,'Odyn'),
+(1810,0,91784,0,'Warlord Parjesh'),
+(1811,0,91789,0,'Lady Hatecoil'),
+(1812,0,91797,0,'King Deepbeard'),
+(1813,0,91808,0,'Serpentrix'),
+(1814,0,96028,1492,'Wrath of Azshara'),
+(1832,0,98542,0,'Amalgam of Souls'),
+(1833,0,98696,0,'Ilysanna Ravencrest'),
+(1834,0,98949,0,'Smashspite the Hateful'),
+(1835,0,99611,1204,'Lord Kur\'talos Ravencrest'),
+(1836,0,96512,0,'Archidruid Glaidalis'),
+(1837,0,103344,0,'Oakheart'),
+(1838,0,99200,0,'Dresaron'),
+(1839,0,99192,1201,'Shade of Xavius');
 /*!40000 ALTER TABLE `instance_encounters` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

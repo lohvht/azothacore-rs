@@ -121,6 +121,9 @@ CREATE TABLE `item_sparse` (
 
 LOCK TABLES `item_sparse` WRITE;
 /*!40000 ALTER TABLE `item_sparse` DISABLE KEYS */;
+INSERT INTO `item_sparse` VALUES
+(23472,-1,'Trapper\'s Boots','','','','',0,8192,8388608,0,1.0391,1,1,10,2,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1,8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,7,0,0,0,0,0,0,0,0,0,26635),
+(138019,-1,'Mythic Keystone','','','','Place within the Font of Power inside the dungeon on Mythic difficulty.',65536,64,-2139095040,0,0.9803,1,1,2000,0,0,0,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,-1,1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,4,0,1,0,0,0,0,-1,-1,-1,-1,-1,-1,-1,-1,-1,-1,0,1,0,0,1,0,0,0,0,0,0,0,0,26654);
 /*!40000 ALTER TABLE `item_sparse` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

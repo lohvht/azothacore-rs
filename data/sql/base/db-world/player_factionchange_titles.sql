@@ -38,7 +38,8 @@ INSERT INTO `player_factionchange_titles` VALUES
 (146,152),
 (147,154),
 (148,151),
-(149,150);
+(149,150),
+(382,383);
 /*!40000 ALTER TABLE `player_factionchange_titles` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

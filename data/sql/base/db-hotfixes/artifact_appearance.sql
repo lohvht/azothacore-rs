@@ -30,6 +30,8 @@ CREATE TABLE `artifact_appearance` (
 
 LOCK TABLES `artifact_appearance` WRITE;
 /*!40000 ALTER TABLE `artifact_appearance` DISABLE KEYS */;
+INSERT INTO `artifact_appearance` VALUES
+(NULL,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
 /*!40000 ALTER TABLE `artifact_appearance` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

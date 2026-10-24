@@ -19,6 +19,18 @@ CREATE TABLE `creature_text_locale` (
 
 LOCK TABLES `creature_text_locale` WRITE;
 /*!40000 ALTER TABLE `creature_text_locale` DISABLE KEYS */;
+INSERT INTO `creature_text_locale` VALUES
+(15367,0,0,'ruRU','ћужайс¤! “вои друзь¤ недолго будут оплакивать твою гибель!'),
+(42937,0,0,'frFR','Orc TUER $r !'),
+(42937,0,1,'frFR','Rochenoire prend forêt !'),
+(42937,0,2,'frFR','Les raisins étaient DÉLICIEUX !'),
+(42937,0,3,'frFR','Manger toi !'),
+(42937,0,4,'frFR','Suppliez pour rester en vie !'),
+(49874,0,0,'frFR','Orc TUER $r !'),
+(49874,0,1,'frFR','Rochenoire prend forêt !'),
+(49874,0,2,'frFR','Les raisins étaient DÉLICIEUX !'),
+(50039,0,0,'frFR','On peut tuer n\'importe qui si le prix est correct !'),
+(50039,0,1,'frFR','On va tout brûler ici !');
 /*!40000 ALTER TABLE `creature_text_locale` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

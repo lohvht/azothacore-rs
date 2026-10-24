@@ -21,7 +21,15 @@ INSERT INTO `terrain_swap_defaults` VALUES
 (0,736,'Twilight Highlands - Dragonmaw Port'),
 (0,1190,'Blasted Land Terrian'),
 (1,719,'Mount Hyjal default terrain'),
-(654,638,'Gilneas default terrain');
+(648,659,'Lost Isles - Volcano Eruption'),
+(648,661,'Lost Isles - Town in the Box'),
+(654,638,'Gilneas default terrain'),
+(654,655,'Gilneas duskhaven phase 1'),
+(654,656,'Gilneas duskhaven phase 2'),
+(860,975,'Wandering Isle terrain injured'),
+(860,976,'Wandering Isle terrain healed'),
+(1220,1527,'Highmoutain'),
+(1220,1532,'Highmoutain - Mesa');
 /*!40000 ALTER TABLE `terrain_swap_defaults` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

@@ -23,6 +23,9 @@ CREATE TABLE `playerchoice_response` (
 
 LOCK TABLES `playerchoice_response` WRITE;
 /*!40000 ALTER TABLE `playerchoice_response` DISABLE KEYS */;
+INSERT INTO `playerchoice_response` VALUES
+(231,478,0,1274664,'Devastation','Devastation','Continue your mastery of Havoc.\n\nHavos specialized demon hunters can use Metamorphosis to turn into winged demons. They focus on Melee DPS.\n\nChoosing Havoc grants |cFFFF0000|Hspell:162264|h[Metamorphosis]|h|r as well as |cFFFF0000|Hspell:185164|h[Mastery: Furious Havoc]|h|r.','',25549),
+(231,479,1,1274665,'Vengeance','Vengeance','Change to mastery of Vengeance.\n\nVengeance specialized demon hunters can use Metamorphosis to turn into spiked demons. They focus on Tanking.\n\nChoosing Vengeance grants |cFFFF0000|Hspell:187827|h[Metamorphosis]|h|r as well as |cFFFF0000|Hspell:203747|h[Mastery: Fel Blood]|h|r.\n\nYour |cFFFF0000|Hspell:193921|h[Eye Beam]|h|r will change into |cFFFF0000|Hspell:203720|h[Demon Spikes]|h|r.','',25549);
 /*!40000 ALTER TABLE `playerchoice_response` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

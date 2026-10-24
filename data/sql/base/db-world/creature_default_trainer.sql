@@ -31,6 +31,7 @@ INSERT INTO `creature_default_trainer` VALUES
 (4258,27),
 (4732,46),
 (4752,46),
+(4753,46),
 (4772,46),
 (4898,133),
 (5164,27),
@@ -152,6 +153,7 @@ INSERT INTO `creature_default_trainer` VALUES
 (43769,386),
 (44782,196),
 (44919,386),
+(45286,105),
 (45540,160),
 (45545,407),
 (45548,27),
@@ -181,7 +183,9 @@ INSERT INTO `creature_default_trainer` VALUES
 (93525,774),
 (93529,160),
 (93541,196),
-(98135,133);
+(98135,133),
+(133109,880),
+(133236,91);
 /*!40000 ALTER TABLE `creature_default_trainer` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

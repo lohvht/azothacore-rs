@@ -19,6 +19,8 @@ CREATE TABLE `playerchoice` (
 
 LOCK TABLES `playerchoice` WRITE;
 /*!40000 ALTER TABLE `playerchoice` DISABLE KEYS */;
+INSERT INTO `playerchoice` VALUES
+(231,0,'Which demon hunter specialization do you want to learn?',0,25549);
 /*!40000 ALTER TABLE `playerchoice` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

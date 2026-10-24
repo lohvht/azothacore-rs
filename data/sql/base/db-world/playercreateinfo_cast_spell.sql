@@ -19,6 +19,8 @@ CREATE TABLE `playercreateinfo_cast_spell` (
 LOCK TABLES `playercreateinfo_cast_spell` WRITE;
 /*!40000 ALTER TABLE `playercreateinfo_cast_spell` DISABLE KEYS */;
 INSERT INTO `playercreateinfo_cast_spell` VALUES
+(0,256,688,'Warlock - Summon Imp'),
+(0,2048,90266,'Demon Hunter - Fly'),
 (1,4,79597,'Human - Hunter - Young Wolf'),
 (2,4,79598,'Orc - Hunter - Young Boar'),
 (4,4,79593,'Dwarf - Hunter - Young Bear'),
@@ -26,28 +28,24 @@ INSERT INTO `playercreateinfo_cast_spell` VALUES
 (16,4,79600,'Undead - Hunter - Young Widow'),
 (16,925,73523,'Undead - Rigor Mortis'),
 (32,4,79603,'Tauren - Hunter - Young Tallstrider'),
-(64,1,80653,'Warrior - Gnome - Irradiated Aura'),
-(64,4,80653,'Hunter - Gnome - Irradiated Aura'),
 (64,4,153724,'Gnome - Hunter - Mechanical Bunny'),
-(64,8,80653,'Rogue - Gnome - Irradiated Aura'),
-(64,16,80653,'Priest - Gnome - Irradiated Aura'),
-(64,128,80653,'Mage - Gnome - Irradiated Aura'),
-(64,256,80653,'Warlock - Gnome - Irradiated Aura'),
-(64,512,80653,'Monk - Gnome - Irradiated Aura'),
 (128,4,79599,'Troll - Hunter - Young Raptor'),
-(128,2015,71033,'Troll - Calm of the Novice'),
 (256,4,79595,'Goblin - Hunter - Young Crab'),
+(256,477,77534,'Goblin - Pack Hobgoblin'),
 (512,4,79594,'Blood Elf - Hunter - Young Dragonhawk'),
 (1024,4,79601,'Draenei - Hunter - Young Moth'),
 (2097152,4,79596,'Worgen - Hunter - Young Mastiff'),
-(8388608,0,107027,'Pandaren - See Quest Invis 20'),
+(2097152,1437,72792,'Worgen - Learn Racials'),
+(2097152,1437,72857,'Worgen - Learn Two Forms'),
+(2097152,1437,95759,'Worgen - Learn Darkflight'),
 (8388608,1,108059,'Pandaren - Warrior - Remove weapon'),
-(8388608,4,108061,'Pandaren - Hunter - Remove weapon'),
+(8388608,4,107924,'Pandaren - Hunter - Wise Turtle'),
 (8388608,8,108058,'Pandaren - Rogue - Remove weapon'),
 (8388608,16,108057,'Pandaren - Priest - Remove weapon'),
 (8388608,64,108056,'Pandaren - Shaman - Remove weapon'),
 (8388608,128,108055,'Pandaren - Mage - Remove weapon'),
-(8388608,512,108060,'Pandaren - Monk - Remove weapon');
+(8388608,512,108060,'Pandaren - Monk - Remove weapon'),
+(8388608,512,166646,'Pandaren - Monk - Windwalking');
 /*!40000 ALTER TABLE `playercreateinfo_cast_spell` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

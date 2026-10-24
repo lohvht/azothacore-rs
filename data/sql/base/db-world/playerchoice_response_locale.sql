@@ -22,6 +22,9 @@ CREATE TABLE `playerchoice_response_locale` (
 
 LOCK TABLES `playerchoice_response_locale` WRITE;
 /*!40000 ALTER TABLE `playerchoice_response_locale` DISABLE KEYS */;
+INSERT INTO `playerchoice_response_locale` VALUES
+(231,478,'frFR','Dévastation','Dévastation','Conserver votre spécialisation : Dévastation.\n\nLes chasseurs de démons Dévastation peuvent utiliser Métamorphose pour se transformer en démons ailés. Ils se concentrent sur les dégâts en mêlée.\n\nChoisir Dévastation confère |cFFFF0000|Hspell:162264|h[Métamorphose]|h|r et |cFFFF0000|Hspell:185164|h[Maîtrise : Présence démoniaque]|h|r.','',25549),
+(231,479,'frFR','Vengeance','Vengeance','Changer de spécialisation : Vengeance.\n\nLes chasseurs de démons Vengeance peuvent utiliser Métamorphose pour se transformer en démons couverts de pointes. Ils se concentrent sur le rôle de tank.\n\nChoisir Vengeance confère |cFFFF0000|Hspell:187827|h[Métamorphose]|h|r et |cFFFF0000|Hspell:203747|h[Maîtrise : Gangresang]|h|r.\n\nVotre technique |cFFFF0000|Hspell:193921|h[Rayon accablant]|h|r est remplacée par |cFFFF0000|Hspell:203720|h[Pointes démoniaques]|h|r.','',25549);
 /*!40000 ALTER TABLE `playerchoice_response_locale` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

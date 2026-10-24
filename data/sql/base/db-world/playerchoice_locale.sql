@@ -18,6 +18,8 @@ CREATE TABLE `playerchoice_locale` (
 
 LOCK TABLES `playerchoice_locale` WRITE;
 /*!40000 ALTER TABLE `playerchoice_locale` DISABLE KEYS */;
+INSERT INTO `playerchoice_locale` VALUES
+(231,'frFR','Quelle spécialisation de chasseur de démons voulez-vous apprendre ?',25549);
 /*!40000 ALTER TABLE `playerchoice_locale` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

@@ -25,6 +25,9 @@ CREATE TABLE `playerchoice_response_reward` (
 
 LOCK TABLES `playerchoice_response_reward` WRITE;
 /*!40000 ALTER TABLE `playerchoice_response_reward` DISABLE KEYS */;
+INSERT INTO `playerchoice_response_reward` VALUES
+(231,478,0,0,0,0,0,0,0,0,25549),
+(231,479,0,0,0,0,0,0,0,0,25549);
 /*!40000 ALTER TABLE `playerchoice_response_reward` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

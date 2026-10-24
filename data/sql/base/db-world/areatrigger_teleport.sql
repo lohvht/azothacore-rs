@@ -19,7 +19,7 @@ CREATE TABLE `areatrigger_teleport` (
 LOCK TABLES `areatrigger_teleport` WRITE;
 /*!40000 ALTER TABLE `areatrigger_teleport` DISABLE KEYS */;
 INSERT INTO `areatrigger_teleport` VALUES
-(45,4078,'Scarlet Monastery Entrance Target'),
+(45,4078,'Scarlet Monastery 5.0 Entrance'),
 (78,3598,'Deadmines Entrance Target'),
 (101,3599,'Stormwind Jail Entrance Target'),
 (109,3600,'Stormwind High Prison Exit Target'),
@@ -50,7 +50,9 @@ INSERT INTO `areatrigger_teleport` VALUES
 (604,3624,'Scarlet Monastery Exit Target 02'),
 (606,3625,'Scarlet Monastery Exit Target 03'),
 (608,3626,'Scarlet Monastery Exit Target 04'),
-(614,4077,'Scarlet Halls Entrance Target'),
+(610,3627,'Scarlet Monastery Entrance Target 02'),
+(612,3628,'Scarlet Monastery Entrance Target 03'),
+(614,4077,'Scarlet Halls 5.0 Entrance'),
 (702,3630,'Stormwind - Mage Exit Target'),
 (704,3631,'Stormwind - Mage Entrance Target'),
 (882,3632,'Uldaman Exit Target Rear'),
@@ -341,6 +343,7 @@ INSERT INTO `areatrigger_teleport` VALUES
 (7801,3626,'Scarlet Halls Exit Target'),
 (7802,3623,'Scarlet Monastery Exit Target'),
 (7838,4094,'Mogu\'shan Vaults - Entrance Target'),
+(7839,4093,'Mogu\'shan Vaults - Exit Target'),
 (7854,4024,'Jade Temple - Entrance Target'),
 (7999,4139,'Ring of Valor - Entrance Target'),
 (8001,4140,'Ring of Valor - Exit Target'),
@@ -363,6 +366,7 @@ INSERT INTO `areatrigger_teleport` VALUES
 (10098,4680,'Iron Docks - Entrance Target (Inside)'),
 (10104,4831,'Blackrock Train Depot - Exit Target - KJD'),
 (10124,3644,'Lower Blackrock Spire Entrance Target'),
+(10157,4698,'Skyreach Entrance'),
 (10205,3645,'Blackrock Spire Exit Target (New)'),
 (10232,4831,'Blackrock Train Depot - Exit Target - KJD'),
 (10237,4712,'Blackrock Train Depot - Entrance Target - KJD'),

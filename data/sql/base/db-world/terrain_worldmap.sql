@@ -22,7 +22,9 @@ INSERT INTO `terrain_worldmap` VALUES
 (638,545,'Gilneas'),
 (655,678,'Gilneas_terrain1'),
 (656,679,'Gilneas_terrain2'),
-(719,683,'Hyjal_terrain1');
+(719,683,'Hyjal_terrain1'),
+(975,683,'TurtleShipPhase01'),
+(976,683,'TurtleShipPhase02');
 /*!40000 ALTER TABLE `terrain_worldmap` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

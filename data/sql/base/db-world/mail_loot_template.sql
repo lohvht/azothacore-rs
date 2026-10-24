@@ -26,7 +26,8 @@ LOCK TABLES `mail_loot_template` WRITE;
 /*!40000 ALTER TABLE `mail_loot_template` DISABLE KEYS */;
 INSERT INTO `mail_loot_template` VALUES
 (87,6529,0,100,0,1,0,1,1,NULL),
-(93,20469,0,100,0,1,0,1,1,''),
+(92,20469,0,100,0,1,0,1,1,NULL),
+(93,20469,0,100,0,1,0,1,1,NULL),
 (94,20469,0,100,0,1,0,1,1,''),
 (98,13158,0,100,0,1,0,1,1,NULL),
 (99,11423,0,100,0,1,0,1,1,NULL),

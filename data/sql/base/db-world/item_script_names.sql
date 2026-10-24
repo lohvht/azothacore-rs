@@ -30,7 +30,10 @@ INSERT INTO `item_script_names` VALUES
 (35850,'item_Trident_of_Nazjan'),
 (39878,'item_mysterious_egg'),
 (44717,'item_disgusting_jar'),
-(53510,'item_captured_frog');
+(49944,'item_belysras_talisman_49944'),
+(53510,'item_captured_frog'),
+(94295,'item_primal_egg'),
+(137599,'item_pulsating_sac');
 /*!40000 ALTER TABLE `item_script_names` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

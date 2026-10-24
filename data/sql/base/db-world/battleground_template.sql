@@ -26,21 +26,23 @@ CREATE TABLE `battleground_template` (
 LOCK TABLES `battleground_template` WRITE;
 /*!40000 ALTER TABLE `battleground_template` DISABLE KEYS */;
 INSERT INTO `battleground_template` VALUES
-(1,10,40,45,100,611,610,150,1,'','Alterac Valley'),
-(2,5,10,10,100,769,770,75,1,'','Warsong Gulch'),
-(3,8,15,10,100,890,889,75,1,'','Arathi Basin'),
-(4,0,5,10,100,929,936,0,1,'','Nagrand Arena'),
-(5,0,5,10,100,939,940,0,1,'','Blades\'s Edge Arena'),
-(6,0,5,10,100,0,0,0,1,'','All Arena'),
-(7,8,15,35,100,1103,1104,75,1,'','Eye of The Storm'),
-(8,0,5,10,100,1258,1259,0,1,'','Ruins of Lordaeron'),
-(9,8,15,65,100,1367,1368,0,1,'','Strand of the Ancients'),
-(10,0,5,10,100,1362,1363,0,1,'','Dalaran Sewers'),
-(11,0,5,10,100,1364,1365,0,1,'','The Ring of Valor'),
-(30,10,40,71,100,1299,1245,200,1,'','Isle of Conquest'),
-(32,5,40,45,100,0,0,0,1,'','Random battleground'),
-(108,5,10,85,100,1726,1727,0,0,'','Twin Peaks'),
-(120,5,10,85,100,1798,1799,0,0,'','The Battle for Gilneas');
+(1,10,40,45,110,611,610,150,1,'','Alterac Valley'),
+(2,2,10,10,110,769,770,75,1,'','Warsong Gulch'),
+(3,2,15,10,110,890,889,75,1,'','Arathi Basin'),
+(4,0,5,10,110,929,936,0,1,'','Nagrand Arena'),
+(5,0,5,10,110,939,940,0,1,'','Blades\'s Edge Arena'),
+(6,0,5,10,110,0,0,0,1,'','All Arena'),
+(7,2,15,35,110,1103,1104,75,1,'','Eye of The Storm'),
+(8,0,5,10,110,1258,1259,0,1,'','Ruins of Lordaeron'),
+(9,2,15,65,110,1367,1368,0,1,'','Strand of the Ancients'),
+(10,0,5,10,110,1362,1363,0,1,'','Dalaran Sewers'),
+(11,0,5,10,110,1364,1365,0,1,'','The Ring of Valor'),
+(30,10,40,71,110,1299,1245,200,1,'','Isle of Conquest'),
+(32,2,40,45,110,0,0,0,1,'','Random battleground'),
+(108,2,10,85,110,1726,1727,0,0,'','Twin Peaks'),
+(120,2,10,85,110,1798,1799,0,0,'','The Battle for Gilneas'),
+(719,0,5,90,110,4136,4137,10,1,'','Tol\'viron Arena'),
+(757,0,5,90,110,4534,4535,0,1,'','The Tiger\'s Peak');
 /*!40000 ALTER TABLE `battleground_template` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

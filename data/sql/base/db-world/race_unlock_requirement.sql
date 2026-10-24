@@ -32,7 +32,11 @@ INSERT INTO `race_unlock_requirement` VALUES
 (22,1,0),
 (24,1,0),
 (25,1,0),
-(26,1,0);
+(26,1,0),
+(27,7,0),
+(28,7,0),
+(29,7,0),
+(30,7,0);
 /*!40000 ALTER TABLE `race_unlock_requirement` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

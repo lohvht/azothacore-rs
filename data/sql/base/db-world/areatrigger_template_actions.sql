@@ -18,6 +18,11 @@ CREATE TABLE `areatrigger_template_actions` (
 
 LOCK TABLES `areatrigger_template_actions` WRITE;
 /*!40000 ALTER TABLE `areatrigger_template_actions` DISABLE KEYS */;
+INSERT INTO `areatrigger_template_actions` VALUES
+(3313,0,125236,0),
+(3435,0,128641,0),
+(9905,0,195401,2),
+(11203,0,209426,1);
 /*!40000 ALTER TABLE `areatrigger_template_actions` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;

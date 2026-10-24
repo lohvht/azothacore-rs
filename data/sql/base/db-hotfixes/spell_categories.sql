@@ -25,6 +25,10 @@ CREATE TABLE `spell_categories` (
 
 LOCK TABLES `spell_categories` WRITE;
 /*!40000 ALTER TABLE `spell_categories` DISABLE KEYS */;
+INSERT INTO `spell_categories` VALUES
+(48624,1479,0,0,0,0,0,28,0,188800,0),
+(48625,1479,0,0,0,0,0,28,0,188801,0),
+(48626,1479,0,0,0,0,0,28,0,188802,0);
 /*!40000 ALTER TABLE `spell_categories` ENABLE KEYS */;
 UNLOCK TABLES;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
