@@ -32,7 +32,7 @@ impl WorldUpdateTime {
     pub fn record_update(mut this: ResMut<Self>, time: Res<Time>, diagnostics: Res<DiagnosticsStore>) {
         let diff = time.delta();
         this.update_timer.tick(diff);
-        if !this.update_timer.finished() {
+        if !this.update_timer.is_finished() {
             return;
         }
         if diff <= this.update_time_threshold {

@@ -100,10 +100,10 @@ struct MapBuilder<'w> {
     vmap_mgr: MmapBuilderVmapMgr<'w>,
 }
 
-fn handle_discover_tiles_error(In(res): In<AzResult<()>>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
+fn handle_discover_tiles_error(In(res): In<AzResult<()>>, mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>) {
     if let Err(e) = res {
         error!(cause=?e, "error when discovering tiles");
-        ev_startup_failed.send_default();
+        ev_startup_failed.write_default();
     }
 }
 
@@ -205,11 +205,11 @@ impl MapBuilder<'_> {
         Ok(())
     }
 
-    fn populate_tiles_to_build(this: MapBuilder, mut commands: Commands, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
+    fn populate_tiles_to_build(this: MapBuilder, mut commands: Commands, mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>) {
         info!("Begin populating tiles to build");
         if let Err(e) = this.build_maps(&mut commands) {
             error!(cause=?e, "error when populating tiles to build");
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
         }
     }
 
@@ -513,7 +513,7 @@ fn exit_when_all_tiles_attempted_generated(
         Option<&AttemptedLoadMesh>,
         Option<&AttemptedBuildMmapTile>,
     )>,
-    mut ev_app_exit: EventWriter<AppExit>,
+    mut ev_app_exit: MessageWriter<AppExit>,
 ) {
     let mut all_attempted = true;
     for (e, ti, md, alm, abm) in &tile_infos {
@@ -539,7 +539,7 @@ fn exit_when_all_tiles_attempted_generated(
     }
     let time_run = started.0.elapsed();
     info!("Finished. MMAPS were built in {}s", time_run.as_secs());
-    ev_app_exit.send(AppExit::Success);
+    ev_app_exit.write(AppExit::Success);
 }
 
 fn get_grid_bounds(tb: &mut TerrainBuilder, map_id: u32) -> AzResult<(u16, u16, u16, u16)> {

@@ -11,7 +11,10 @@ use azothacore_database::{
     args_unwrap,
     database_env::{CharacterDatabase, CharacterPreparedStmts},
 };
-use bevy::{ecs::system::SystemParam, prelude::*};
+use bevy::{
+    ecs::system::SystemParam,
+    prelude::{Bundle, Commands, Entity, MessageWriter, Res, Resource},
+};
 use flagset::FlagSet;
 use sqlx::{Transaction, query, query_as};
 use tracing::{error, info, warn};
@@ -288,7 +291,7 @@ impl GroupMgr<'_> {
         character_cache: Res<CharacterCache>,
         difficulty_store: Res<DB2Storage<Difficulty>>,
         lfg_mgr: LFGMgr<C>,
-        mut ev_startup_failed: EventWriter<AzStartupFailedEvent>,
+        mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>,
     ) {
         let res: AzResult<()> = rt.block_on(async {
             let mut tx = char_db.begin().await.context("unable to begin transaction to init group manager")?;
@@ -354,7 +357,7 @@ impl GroupMgr<'_> {
 
         if let Err(e) = res {
             error!(cause=?e, "group loading error");
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
             return;
         }
         info!("Loaded groups successfully");

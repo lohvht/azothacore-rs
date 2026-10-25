@@ -170,7 +170,7 @@ fn load_db2_before() {
 }
 
 pub fn db2_mgr_plugin(app: &mut App) {
-    app.add_event::<DB2LoadStartEvent>()
+    app.add_message::<DB2LoadStartEvent>()
         .add_systems(Startup, load_db2_before.in_set(DB2StoresMgrSet::Start));
     load_db2!(app, Achievement);
     load_db2!(app, AnimKit);
@@ -412,7 +412,7 @@ pub fn db2_mgr_plugin(app: &mut App) {
         ((
             DB2StoresMgrSet::Start,
             DB2StoresMgrSet::LoadStores,
-            DB2StoresMgrSet::SetupStoreHelpers.run_if(not(on_event::<AzStartupFailedEvent>)),
+            DB2StoresMgrSet::SetupStoreHelpers.run_if(not(on_message::<AzStartupFailedEvent>)),
         )
             .chain()
             .in_set(InitDB2MgrSet),),
@@ -1065,8 +1065,8 @@ pub struct DB2Mgr<'w> {
 fn load_db2_store_after(
     mut commands: Commands,
     stores: DB2Stores,
-    mut ev_db2_load_started: EventReader<DB2LoadStartEvent>,
-    mut ev_startup_failed: EventWriter<AzStartupFailedEvent>,
+    mut ev_db2_load_started: MessageReader<DB2LoadStartEvent>,
+    mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>,
 ) {
     let mut earliest_start = None;
     let mut num_db2s = 0;
@@ -1081,7 +1081,7 @@ fn load_db2_store_after(
 
     let Some(earliest_start) = earliest_start else {
         info!(target:"server::loading", "no DB2 set up");
-        ev_startup_failed.send_default();
+        ev_startup_failed.write_default();
         return;
     };
     let mut m = AreaGroupMembers::default();
@@ -1114,7 +1114,7 @@ fn load_db2_store_after(
             bpet_max_id=BATTLE_PET_SPECIES_MAX_ID,
             bpet_species=stores.battle_pet_species_store.len(),
         );
-        ev_startup_failed.send_default();
+        ev_startup_failed.write_default();
         return;
     }
     let mut m = CharFacialHairStyles::default();
@@ -1126,7 +1126,7 @@ fn load_db2_store_after(
         let r = match CharSectionType::try_from(e.resolution_variation_enum) {
             Err(err) => {
                 error!(target: "server::loading", "CharSectionType is invalid; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1134,7 +1134,7 @@ fn load_db2_store_after(
         let s = match CharBaseSectionVariation::try_from(e.variation_enum) {
             Err(err) => {
                 error!(target: "server::loading", "CharBaseSectionVariation is invalid; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1147,7 +1147,7 @@ fn load_db2_store_after(
         let s = match CharSectionType::try_from(e.base_section as u8) {
             Err(err) => {
                 error!(target: "server::loading", "CharSectionType is invalid; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1174,7 +1174,7 @@ fn load_db2_store_after(
         let class = match Class::try_from(e.class_id) {
             Err(err) => {
                 error!(target: "server::loading", "Class is invalid; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1182,7 +1182,7 @@ fn load_db2_store_after(
         let power = match Power::try_from(e.class_id as i8) {
             Err(err) => {
                 error!(target: "server::loading", "Power is invalid; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1190,7 +1190,7 @@ fn load_db2_store_after(
         let power_indexes = powers_by_classes.entry(class).or_default();
         let Ok(power_idx) = u32::try_from(power_indexes.len()) else {
             error!(target: "server::loading", "Power index is cannot be retrieved from '{class:?}' and '{power:?}', idx={idx}", idx=power_indexes.len());
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
             return;
         };
         power_indexes.entry(power).or_insert(power_idx);
@@ -1202,7 +1202,7 @@ fn load_db2_store_after(
         let class = match Class::try_from(e.class_id as u8) {
             Err(err) => {
                 error!(target: "server::loading", "Class is invalid for chr_specialization_store; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1226,7 +1226,7 @@ fn load_db2_store_after(
         let race = match Race::try_from(e.race_id) {
             Err(err) => {
                 error!(target:"server::loading", "Race is invalid; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1234,7 +1234,7 @@ fn load_db2_store_after(
         let gender = match Gender::try_from(e.sex_id) {
             Err(err) => {
                 error!(target:"server::loading", "Sex is invalid; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1242,7 +1242,7 @@ fn load_db2_store_after(
         let class = match Class::try_from(e.class_id) {
             Err(err) => {
                 error!(target:"server::loading", "Class is invalid; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1303,7 +1303,7 @@ fn load_db2_store_after(
     for e in stores.item_child_equipment_store.values() {
         if m.get(&(e.parent_item_id as u32)).is_some() {
             error!(target:"server::loading", "Item must have max 1 child item.");
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
             return;
         }
         m.insert(e.parent_item_id as u32, e.clone());
@@ -1315,12 +1315,12 @@ fn load_db2_store_after(
         let item_class_id = match ItemClassID::try_from(e.class_id as u8) {
             Err(err) => {
                 error!(target:"server::loading", "unrecognised item class ID, err={err}.");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) if m.get(&v).is_some() => {
                 error!(target:"server::loading", "item class ID already filled, item_class_id={v:?}, item_class={e:?}.");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1400,7 +1400,7 @@ fn load_db2_store_after(
         let race = match Race::try_from(e.race_id) {
             Err(err) => {
                 error!(target: "server::loading", "Invalid Race for name gen container; entry={e:?}, err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1408,7 +1408,7 @@ fn load_db2_store_after(
         let gender = match Gender::try_from(e.sex) {
             Err(err) => {
                 error!(target: "server::loading", "Invalid Gender for name gen container; entry={e:?}, err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1422,7 +1422,7 @@ fn load_db2_store_after(
         let name_regex = match RegexBuilder::new(&e.name).case_insensitive(true).build() {
             Err(err) => {
                 error!(target: "server::loading", "Invalid regex for names_profanity_store; entry={e:?}, err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1432,7 +1432,7 @@ fn load_db2_store_after(
             let l = match Locale::try_from(e.language as u32) {
                 Err(err) => {
                     error!(target: "server::loading", "Invalid Locale for names_profanity_store; entry={e:?}, err={err}");
-                    ev_startup_failed.send_default();
+                    ev_startup_failed.write_default();
                     return;
                 },
                 Ok(v) => v,
@@ -1451,7 +1451,7 @@ fn load_db2_store_after(
         let name_regex = match RegexBuilder::new(&e.name).case_insensitive(true).build() {
             Err(err) => {
                 error!(target: "server::loading", "Invalid regex for names_profanity_store; entry={e:?}, err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1464,7 +1464,7 @@ fn load_db2_store_after(
         let name_regex = match RegexBuilder::new(&e.name).case_insensitive(true).build() {
             Err(err) => {
                 error!(target: "server::loading", "Invalid regex for names_profanity_store; entry={e:?}, err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1472,7 +1472,7 @@ fn load_db2_store_after(
         let locales = match FlagSet::<Locale>::new(u32::from(e.locale_mask)) {
             Err(err) => {
                 error!(target: "server::loading", "Invalid regex for names_profanity_store; entry={e:?}, err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1496,14 +1496,14 @@ fn load_db2_store_after(
         let power = match Power::try_from(e.power_type_enum) {
             Err(err) => {
                 error!(target: "server::loading", "Power is invalid for power_type_store; e={e:?} err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
         };
         if let Some(prev_type) = m.insert(power, e.clone()) {
             error!(target: "server::loading", "PowerType already seen for power_type_store; e={e:?}, prev_e={prev_type:?}");
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
             return;
         }
     }
@@ -1535,7 +1535,7 @@ fn load_db2_store_after(
         {
             Err(err) => {
                 error!(target: "server::loading", "Class is invalid for PvpTalentsByPosition; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1649,7 +1649,7 @@ fn load_db2_store_after(
         let class = match Class::try_from(e.class_id) {
             Err(err) => {
                 error!(target: "server::loading", "Class is invalid; err={err}");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) => v,
@@ -1786,7 +1786,7 @@ fn load_db2_store_after(
     let check_spell = stores.spell_store.get(&263166).is_none();
     if check_area || check_titles || check_gem_property || check_item || check_item_extended_cost || check_map || check_spell {
         error!(target:"misc", "You have _outdated_ DB2 files. Please extract correct versions from current using client.");
-        ev_startup_failed.send_default();
+        ev_startup_failed.write_default();
         return;
     }
 
@@ -1809,7 +1809,7 @@ fn load_db2_store_after(
     info!(target:"server.loading", ">> Initialized {num_db2s} DB2 data stores in {duration:?}");
 }
 
-#[derive(Event)]
+#[derive(Message)]
 struct DB2LoadStartEvent(Instant);
 
 /// LOAD_DB2 macro in TC, LOAD_DBC macro in AC
@@ -1820,16 +1820,16 @@ fn load_db2<D: DB2 + From<wow_db2::DB2RawRecord> + for<'r> FromRow<'r, <DbDriver
     rt: Res<TokioRuntime>,
     cfg: Res<ConfigMgr<WorldConfig>>,
     hotfix_db: Res<HotfixDatabase>,
-    mut ev_db2_load_started: EventWriter<DB2LoadStartEvent>,
-    mut ev_startup_failed: EventWriter<AzStartupFailedEvent>,
+    mut ev_db2_load_started: MessageWriter<DB2LoadStartEvent>,
+    mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>,
 ) {
-    ev_db2_load_started.send(DB2LoadStartEvent(time.startup() + time.elapsed()));
+    ev_db2_load_started.write(DB2LoadStartEvent(time.startup() + time.elapsed()));
 
     let db2_dir = cfg.db2_dir();
     let available_db2_locales = match fs::read_dir(&db2_dir) {
         Err(e) => {
             error!(cause=?e, "Unable to read DB2 directory");
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
             return;
         },
         Ok(r_dir) => r_dir.filter_map(|de| {
@@ -1845,7 +1845,7 @@ fn load_db2<D: DB2 + From<wow_db2::DB2RawRecord> + for<'r> FromRow<'r, <DbDriver
     let store = match rt.block_on(DB2Storage::<D>::load(db2_dir, &**hotfix_db, cfg.DBCLocale, available_db2_locales)) {
         Err(e) => {
             error!(cause=?e, "Unable to load DB2 {}", D::db2_file());
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
             return;
         },
         Ok(s) => s,

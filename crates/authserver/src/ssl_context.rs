@@ -41,10 +41,10 @@ pub trait SslContextConfig: Send + Sync + 'static {
     fn privkey_file(&self) -> PathBuf;
 }
 
-fn init_ssl_context<C: SslContextConfig>(mut commands: Commands, cfg: Res<ConfigMgr<C>>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
+fn init_ssl_context<C: SslContextConfig>(mut commands: Commands, cfg: Res<ConfigMgr<C>>, mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>) {
     let ssl_context = match SslContext::new(cfg.certs_file(), cfg.privkey_file()) {
         Err(e) => {
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
             error!(cause=?e, "error initialising SSL context");
             return;
         },

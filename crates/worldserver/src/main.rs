@@ -48,7 +48,7 @@ fn main() {
     let mut app = bevy_app();
     app.insert_resource(TokioRuntime(rt))
         .add_plugins((
-            FrameTimeDiagnosticsPlugin,
+            FrameTimeDiagnosticsPlugin::default(),
             tokio_signal_handling_bevy_plugin,
             query_callbacks_plugin,
             config_mgr_plugin::<WorldConfig, _>(vm.config, vm.dry_run),
@@ -288,7 +288,7 @@ fn stop_db(
     world_db: Option<Res<WorldDatabase>>,
     characters_db: Option<Res<CharacterDatabase>>,
     hotfix_db: Option<Res<HotfixDatabase>>,
-    mut app_exit_events: EventReader<AppExit>,
+    mut app_exit_events: MessageReader<AppExit>,
 ) {
     let mut stopped = false;
     for _ev in app_exit_events.read() {
@@ -316,10 +316,10 @@ fn stop_db(
     }
 }
 
-fn handle_startup_errors(In(result): In<AzResult<()>>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
+fn handle_startup_errors(In(result): In<AzResult<()>>, mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>) {
     if let Err(e) = result {
         error!(cause=?e, "Startup err");
-        ev_startup_failed.send_default();
+        ev_startup_failed.write_default();
     }
 }
 

@@ -106,7 +106,7 @@ impl LoginRESTService {
         rt: Res<TokioRuntime>,
         ssl_ctx: Res<SslContext>,
         login_db: Res<LoginDatabase>,
-        mut ev_startup_failed: EventWriter<AzStartupFailedEvent>,
+        mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>,
     ) {
         let (term_snd, mut term_rcv) = unbounded_channel();
         commands.insert_resource(LoginRestTermSender(term_snd));
@@ -114,7 +114,7 @@ impl LoginRESTService {
             Ok(a) => a,
             Err(e) => {
                 error!(target:"server::rest", cause=?e, "Couldn't bind to {}", cfg.login_rest_bind_addr());
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
         };
@@ -196,7 +196,7 @@ impl LoginRESTService {
         });
     }
 
-    fn terminate(mut app_exit_events: EventReader<AppExit>, term_snds: Res<LoginRestTermSender>) {
+    fn terminate(mut app_exit_events: MessageReader<AppExit>, term_snds: Res<LoginRestTermSender>) {
         let mut sent_exit = false;
         for _ev in app_exit_events.read() {
             if !sent_exit {

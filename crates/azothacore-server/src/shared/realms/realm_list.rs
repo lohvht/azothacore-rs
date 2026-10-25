@@ -365,7 +365,7 @@ fn update_realmlists(time: Res<Time<Real>>, rt: Res<TokioRuntime>, login_db: Res
         realm_list.has_run_once = true;
         rt.block_on(realm_list.update(login_db.clone()));
     }
-    if !realm_list.update_timer.finished() {
+    if !realm_list.update_timer.is_finished() {
         return;
     }
     rt.block_on(realm_list.update(login_db.clone()));

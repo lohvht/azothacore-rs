@@ -82,7 +82,7 @@ impl DisableMgr {
     }
 
     /// LoadDisables in TC / AC
-    fn load(mut commands: Commands, rt: Res<TokioRuntime>, world_database: Res<WorldDatabase>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
+    fn load(mut commands: Commands, rt: Res<TokioRuntime>, world_database: Res<WorldDatabase>, mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>) {
         let old_ms_time = Instant::now();
         let disable_map = Default::default();
         #[derive(FromRow)]
@@ -98,7 +98,7 @@ impl DisableMgr {
         let res = match rt.block_on(query_as::<_, Disable>("SELECT sourceType, entry, flags, params_0, params_1 FROM disables").fetch_all(&**world_database)) {
             Err(e) => {
                 error!(cause=?e, "error retrieving disables. if terminating if startup");
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 return;
             },
             Ok(v) if v.is_empty() => {

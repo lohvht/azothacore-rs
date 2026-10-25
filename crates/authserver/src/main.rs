@@ -87,7 +87,7 @@ fn insert_ban_expiry_timer(mut commands: Commands, cfg: Res<ConfigMgr<Authserver
 
 fn ban_expiry_task(mut timer: ResMut<BanExpiryTimer>, time: Res<Time<Real>>, login_db: Res<LoginDatabase>, rt: Res<TokioRuntime>) {
     timer.0.tick(time.delta());
-    if !timer.0.finished() {
+    if !timer.0.is_finished() {
         return;
     }
     // Fire and forget, like LoginDatabase.Execute in TC
@@ -116,12 +116,12 @@ fn show_banner(cfg: Res<ConfigMgr<AuthserverConfig>>) {
 }
 
 /// Initialize connection to the database
-fn start_db(mut commands: Commands, cfg: Res<ConfigMgr<AuthserverConfig>>, rt: Res<TokioRuntime>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
+fn start_db(mut commands: Commands, cfg: Res<ConfigMgr<AuthserverConfig>>, rt: Res<TokioRuntime>, mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>) {
     let login_db_loader = DatabaseLoader::new(DatabaseType::Login, cfg.LoginDatabaseInfo.clone(), cfg.Updates.clone(), vec![]);
     let auth_db = match rt.block_on(login_db_loader.load()) {
         Err(e) => {
             error!(target:"server::authserver", cause=?e, "error starting/stopping DB");
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
             return;
         },
         Ok(d) => d,
@@ -129,7 +129,7 @@ fn start_db(mut commands: Commands, cfg: Res<ConfigMgr<AuthserverConfig>>, rt: R
     commands.insert_resource(LoginDatabase(auth_db));
 }
 
-fn stop_db(rt: Res<TokioRuntime>, login_db: Option<Res<LoginDatabase>>, mut app_exit_events: EventReader<AppExit>) {
+fn stop_db(rt: Res<TokioRuntime>, login_db: Option<Res<LoginDatabase>>, mut app_exit_events: MessageReader<AppExit>) {
     let mut stopped = false;
     for _ev in app_exit_events.read() {
         if stopped {

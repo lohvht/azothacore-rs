@@ -123,10 +123,10 @@ fn try_receive_signal(
     mut commands: Commands,
     rt: Res<TokioRuntime>,
     mut tasks: Query<(Entity, &mut SignalHandlerTokioTask)>,
-    mut app_exit_events: EventWriter<AppExit>,
+    mut app_exit_events: MessageWriter<AppExit>,
 ) {
     // anticipate only a single task, will panic if the app doesnt exit by then
-    let (e, mut task) = tasks.get_single_mut().unwrap();
+    let (e, mut task) = tasks.single_mut().unwrap();
     let Some(res) = rt.block_on(poll_once(&mut task.0)) else {
         // Has yet to be been signalled
         return;
@@ -143,7 +143,7 @@ fn try_receive_signal(
             info!(signal = sig, "Terminating due to receiving a stop signal");
         },
     };
-    app_exit_events.send(AppExit::Success);
+    app_exit_events.write(AppExit::Success);
     // Not entirely necessary but this ensure that if the app has already ran the
     // app exit, we will forcefully panic instead.
     commands.entity(e).remove::<SignalHandlerTokioTask>();

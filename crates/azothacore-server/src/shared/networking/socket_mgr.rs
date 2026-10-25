@@ -202,7 +202,7 @@ pub struct SocketReceiver<S: ConnectionComponent>(pub UnboundedReceiver<NewTcpCo
 #[derive(Resource)]
 struct TermSender<S: ConnectionComponent>(UnboundedSender<()>, PhantomData<S>);
 
-fn start_network<C, S>(cfg: Res<ConfigMgr<C>>, mut commands: Commands, rt: Res<TokioRuntime>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>)
+fn start_network<C, S>(cfg: Res<ConfigMgr<C>>, mut commands: Commands, rt: Res<TokioRuntime>, mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>)
 where
     C: SocketMgrConfig<S>,
     S: ConnectionComponent,
@@ -215,7 +215,7 @@ where
     let bind_addr = cfg.retrieve_bind_addr();
     let acceptor = match rt.block_on(TcpListener::bind(bind_addr)) {
         Err(e) => {
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
             error!(cause=?e, "TCP network startup failed due to acceptor error");
             return;
         },
@@ -226,7 +226,7 @@ where
     rt.spawn(accept_sockets::<S>(acceptor, sem, term_rcv, sock_snd));
 }
 
-fn handle_terminate_network<S: ConnectionComponent>(mut app_exit_events: EventReader<AppExit>, term_snds: Res<TermSender<S>>) {
+fn handle_terminate_network<S: ConnectionComponent>(mut app_exit_events: MessageReader<AppExit>, term_snds: Res<TermSender<S>>) {
     let mut sent_exit = false;
     for _ev in app_exit_events.read() {
         if !sent_exit {

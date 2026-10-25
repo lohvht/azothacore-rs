@@ -2,10 +2,11 @@ use std::{collections::BTreeMap, marker::PhantomData};
 
 use azothacore_common::{configuration::DatabaseType, deref_boilerplate};
 use bevy::{
-    ecs::{system::SystemParam, world::Command},
+    ecs::system::{Command, SystemParam},
     prelude::*,
 };
 use flagset::FlagSet;
+use tracing::{error, warn};
 
 use crate::game::{
     globals::object_mgr::DBScriptNameStore,
@@ -52,7 +53,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_open_state_change(&self, commands: &mut Commands, open: bool) {
         for (_, script) in &self.world.script_pointer_list {
             if let Some(i) = script.on_open_state_change {
-                commands.run_system_with_input(i, open)
+                commands.run_system_with(i, open)
             }
         }
     }
@@ -60,7 +61,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_before_config_load(&self, commands: &mut Commands, reload: bool) {
         for (_, script) in &self.world.script_pointer_list {
             if let Some(i) = script.on_before_config_load {
-                commands.run_system_with_input(i, reload)
+                commands.run_system_with(i, reload)
             }
         }
     }
@@ -68,7 +69,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_after_config_load(&self, commands: &mut Commands, reload: bool) {
         for (_, script) in &self.world.script_pointer_list {
             if let Some(i) = script.on_after_config_load {
-                commands.run_system_with_input(i, reload)
+                commands.run_system_with(i, reload)
             }
         }
     }
@@ -76,7 +77,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_before_finalize_player_world_session(&self, commands: &mut Commands, cache_version: u32) {
         for (_, script) in &self.world.script_pointer_list {
             if let Some(i) = script.on_before_finalize_player_world_session {
-                commands.run_system_with_input(i, cache_version)
+                commands.run_system_with(i, cache_version)
             }
         }
     }
@@ -84,7 +85,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_motd_change(&self, commands: &mut Commands, new_motd: &str) {
         for (_, script) in &self.world.script_pointer_list {
             if let Some(i) = script.on_motd_change {
-                commands.run_system_with_input(i, new_motd.to_string())
+                commands.run_system_with(i, new_motd.to_string())
             }
         }
     }
@@ -92,7 +93,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_shutdown_initiate(&self, commands: &mut Commands, shutdown_exit_code: u32, shutdown_mask: u64) {
         for (_, script) in &self.world.script_pointer_list {
             if let Some(i) = script.on_shutdown_initiate {
-                commands.run_system_with_input(i, (shutdown_exit_code, shutdown_mask))
+                commands.run_system_with(i, (shutdown_exit_code, shutdown_mask))
             }
         }
     }
@@ -158,7 +159,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_after_databases_loaded(&self, commands: &mut Commands, update_flags: FlagSet<DatabaseType>) {
         for (_, script) in &self.database.script_pointer_list {
             if let Some(i) = script.on_after_databases_loaded {
-                commands.run_system_with_input(i, update_flags)
+                commands.run_system_with(i, update_flags)
             }
         }
     }
@@ -176,7 +177,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_account_login(&self, commands: &mut Commands, account_id: u32) {
         for (_, script) in &self.account.script_pointer_list {
             if let Some(i) = script.on_account_login {
-                commands.run_system_with_input(i, account_id)
+                commands.run_system_with(i, account_id)
             }
         }
     }
@@ -185,7 +186,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_last_ip_update(&self, commands: &mut Commands, account_id: u32, ip: String) {
         for (_, script) in &self.account.script_pointer_list {
             if let Some(i) = script.on_last_ip_update {
-                commands.run_system_with_input(i, (account_id, ip.clone()))
+                commands.run_system_with(i, (account_id, ip.clone()))
             }
         }
     }
@@ -193,7 +194,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_failed_account_login(&self, commands: &mut Commands, account_id: u32) {
         for (_, script) in &self.account.script_pointer_list {
             if let Some(i) = script.on_failed_account_login {
-                commands.run_system_with_input(i, account_id)
+                commands.run_system_with(i, account_id)
             }
         }
     }
@@ -201,7 +202,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_email_change(&self, commands: &mut Commands, account_id: u32) {
         for (_, script) in &self.account.script_pointer_list {
             if let Some(i) = script.on_email_change {
-                commands.run_system_with_input(i, account_id)
+                commands.run_system_with(i, account_id)
             }
         }
     }
@@ -209,7 +210,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_failed_email_change(&self, commands: &mut Commands, account_id: u32) {
         for (_, script) in &self.account.script_pointer_list {
             if let Some(i) = script.on_failed_email_change {
-                commands.run_system_with_input(i, account_id)
+                commands.run_system_with(i, account_id)
             }
         }
     }
@@ -217,7 +218,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_password_change(&self, commands: &mut Commands, account_id: u32) {
         for (_, script) in &self.account.script_pointer_list {
             if let Some(i) = script.on_password_change {
-                commands.run_system_with_input(i, account_id)
+                commands.run_system_with(i, account_id)
             }
         }
     }
@@ -225,7 +226,7 @@ impl ScriptMgr<'_, '_> {
     pub fn on_failed_password_change(&self, commands: &mut Commands, account_id: u32) {
         for (_, script) in &self.account.script_pointer_list {
             if let Some(i) = script.on_failed_password_change {
-                commands.run_system_with_input(i, account_id)
+                commands.run_system_with(i, account_id)
             }
         }
     }
@@ -234,7 +235,7 @@ impl ScriptMgr<'_, '_> {
     pub fn can_account_create_character(&self, commands: &mut Commands, account_id: u32, char_race: u8, char_class: u8) {
         for (_, script) in &self.account.script_pointer_list {
             if let Some(i) = script.can_account_create_character {
-                commands.run_system_with_input(i, (account_id, char_race, char_class))
+                commands.run_system_with(i, (account_id, char_race, char_class))
             }
         }
     }
@@ -329,6 +330,8 @@ where
     S: Script + IntoScriptObject<S, O> + Send + Sync + 'static,
     O: ScriptObjectTrait,
 {
+    type Out = ();
+
     fn apply(self, bevy_world: &mut World) {
         let Self(script_sys, _) = self;
         let base = ScriptObject::create_from_systems(bevy_world, &script_sys);
@@ -379,6 +382,8 @@ impl<O> Command for AddAfterLoadScripts<O>
 where
     O: ScriptObjectTrait,
 {
+    type Out = ();
+
     fn apply(self, bevy_world: &mut World) {
         let al_script_entities = bevy_world
             .query_filtered::<Entity, (With<ScriptObject>, With<AfterLoadScriptObject<O>>)>()

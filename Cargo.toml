@@ -33,7 +33,7 @@ wow-db2-proc-macros = { path = "crates/wow-db2-proc-macros" }
 # External crates
 axum = { version = "0.8" }
 axum-extra = { version = "0.10", features = ["typed-header"] }
-bevy = { version = "0.15", features = ["multi_threaded", "bevy_state", "bevy_asset"], default-features = false }
+bevy = { version = "0.20", features = ["std", "async_executor", "multi_threaded", "bevy_state", "bevy_asset"], default-features = false }
 bytes = { version = "1" }
 cfg-if = { version = "1" }
 chrono = { version = "0.4" }

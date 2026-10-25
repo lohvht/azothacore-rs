@@ -50,10 +50,10 @@ impl<C> DerefMut for ConfigMgr<C> {
     }
 }
 
-#[derive(Event)]
+#[derive(Message)]
 pub struct ConfigReloadEvent;
 
-#[derive(Event)]
+#[derive(Message)]
 pub struct ConfigReloadFinishedEvent<C>(PhantomData<C>);
 
 impl<C> Default for ConfigReloadFinishedEvent<C> {
@@ -139,8 +139,8 @@ where
     let filename = init_file_name.as_ref().to_path_buf();
     move |app: &mut App| {
         let f = filename.clone();
-        app.add_event::<ConfigReloadEvent>()
-            .add_event::<ConfigReloadFinishedEvent<C>>()
+        app.add_message::<ConfigReloadEvent>()
+            .add_message::<ConfigReloadFinishedEvent<C>>()
             .add_systems(PreStartup, load_initial_configs::<_, C>(f, dry_run).in_set(ConfigMgrSet::<C>::load_initial()))
             .add_systems(
                 FixedUpdate,
@@ -150,15 +150,15 @@ where
 }
 
 // Loads the main app configuration.
-fn load_initial_configs<P, C>(path: P, is_dry_run: bool) -> impl FnMut(Commands, EventWriter<AzStartupDryRunEvent>, EventWriter<AzStartupFailedEvent>)
+fn load_initial_configs<P, C>(path: P, is_dry_run: bool) -> impl FnMut(Commands, MessageWriter<AzStartupDryRunEvent>, MessageWriter<AzStartupFailedEvent>)
 where
     P: AsRef<Path>,
     C: Config,
 {
-    move |mut commands: Commands, mut ev_startup_dryrun: EventWriter<AzStartupDryRunEvent>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>| {
+    move |mut commands: Commands, mut ev_startup_dryrun: MessageWriter<AzStartupDryRunEvent>, mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>| {
         let cfg: C = match Config::load(&path) {
             Err(e) => {
-                ev_startup_failed.send_default();
+                ev_startup_failed.write_default();
                 error!(cause=?e, "error initialising config");
                 return;
             },
@@ -171,15 +171,15 @@ where
         });
 
         if is_dry_run {
-            ev_startup_dryrun.send_default();
+            ev_startup_dryrun.write_default();
         }
     }
 }
 
 fn reload_config<C>(
-    mut reload_cfg_events: EventReader<ConfigReloadEvent>,
+    mut reload_cfg_events: MessageReader<ConfigReloadEvent>,
     mut cfg: ResMut<ConfigMgr<C>>,
-    mut ev_cfg_reload_finished: EventWriter<ConfigReloadFinishedEvent<C>>,
+    mut ev_cfg_reload_finished: MessageWriter<ConfigReloadFinishedEvent<C>>,
 ) where
     C: Config,
 {
@@ -200,7 +200,7 @@ fn reload_config<C>(
         }
     }
     if reloaded {
-        ev_cfg_reload_finished.send_default();
+        ev_cfg_reload_finished.write_default();
     }
 }
 
@@ -258,7 +258,7 @@ mod tests {
             let cfg_path = "config.toml";
             let mut app = bevy_app();
             let (snd, mut rcv) = channel(1);
-            let closure = move |mut ev_reloaded: EventReader<ConfigReloadFinishedEvent<TestConfig>>| {
+            let closure = move |mut ev_reloaded: MessageReader<ConfigReloadFinishedEvent<TestConfig>>| {
                 for _ in ev_reloaded.read() {
                     snd.try_send("Reloaded".to_string()).unwrap();
                 }
@@ -271,7 +271,7 @@ mod tests {
 
             jail.create_file(cfg_path, "integer = 3")?;
 
-            app.world_mut().send_event(ConfigReloadEvent);
+            app.world_mut().write_message(ConfigReloadEvent);
             // Simulate fixed update
             sleep(Duration::from_secs_f64(2.0 / DEFAULT_FRAME_RATE));
             app.update();
@@ -303,7 +303,7 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "could not access system parameter Res<ConfigMgr<TestConfig>>")]
+    #[should_panic(expected = "failed validation: Resource does not exist")]
     fn cfg_mgr_systemset_reordering_works_panic_if_resource_asked_before_load_initial() {
         #[derive(Component)]
         struct A;

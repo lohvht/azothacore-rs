@@ -40,11 +40,11 @@ pub struct TokioRuntime(pub Runtime);
 deref_boilerplate!(TokioRuntime, Runtime, 0);
 
 /// See [bevy_app] for the documentation regarding how this event should be used
-#[derive(Event, Default)]
+#[derive(Message, Default)]
 pub struct AzStartupFailedEvent;
 
 /// See [bevy_app] for the documentation regarding how this event should be used
-#[derive(Event, Default)]
+#[derive(Message, Default)]
 pub struct AzStartupDryRunEvent;
 
 /// shared bevy app set up used by all cores.
@@ -61,19 +61,12 @@ pub struct AzStartupDryRunEvent;
 pub fn bevy_app() -> App {
     let mut app = App::new();
 
-    app.add_plugins((
-        MinimalPlugins,
-        StatesPlugin,
-        TransformPlugin,
-        DiagnosticsPlugin,
-        HierarchyPlugin,
-        AssetPlugin::default(),
-    ))
-    .init_state::<AzStartupState>()
-    .add_event::<AzStartupFailedEvent>()
-    .add_event::<AzStartupDryRunEvent>()
-    .add_systems(PostStartup, check_startup_failures)
-    .insert_resource(Time::<Fixed>::from_hz(DEFAULT_FRAME_RATE));
+    app.add_plugins((MinimalPlugins, StatesPlugin, TransformPlugin, DiagnosticsPlugin, AssetPlugin::default()))
+        .init_state::<AzStartupState>()
+        .add_message::<AzStartupFailedEvent>()
+        .add_message::<AzStartupDryRunEvent>()
+        .add_systems(PostStartup, check_startup_failures)
+        .insert_resource(Time::<Fixed>::from_hz(DEFAULT_FRAME_RATE));
 
     app
 }
@@ -81,9 +74,9 @@ pub fn bevy_app() -> App {
 fn check_startup_failures(
     current_state: Res<State<AzStartupState>>,
     mut next_state: ResMut<NextState<AzStartupState>>,
-    mut ev_app_exit: EventWriter<AppExit>,
-    mut ev_startup_failed: EventReader<AzStartupFailedEvent>,
-    mut ev_startup_dryrun: EventReader<AzStartupDryRunEvent>,
+    mut ev_app_exit: MessageWriter<AppExit>,
+    mut ev_startup_failed: MessageReader<AzStartupFailedEvent>,
+    mut ev_startup_dryrun: MessageReader<AzStartupDryRunEvent>,
 ) {
     let mut transiton_state = (**current_state).clone();
     for _ev in ev_startup_failed.read() {
@@ -107,7 +100,7 @@ fn check_startup_failures(
             AppExit::error()
         };
         next_state.set(transiton_state);
-        ev_app_exit.send(exit);
+        ev_app_exit.write(exit);
     }
 }
 

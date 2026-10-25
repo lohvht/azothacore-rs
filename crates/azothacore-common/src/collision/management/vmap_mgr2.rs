@@ -50,7 +50,7 @@ fn vmap_mgr2_init_check<C: VmapConfig, L: LiquidFlagsGetter, V: VmapDisabledChec
     vmap_disabled_checker: Option<Res<V>>,
     child_map_data: Option<Res<ChildMapData>>,
     parent_map_data: Option<Res<ParentMapData>>,
-    mut ev_startup_failed: EventWriter<AzStartupFailedEvent>,
+    mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>,
 ) {
     let mut missing_resources = vec![];
     if cfg.is_none() {
@@ -70,7 +70,7 @@ fn vmap_mgr2_init_check<C: VmapConfig, L: LiquidFlagsGetter, V: VmapDisabledChec
     }
 
     if !missing_resources.is_empty() {
-        ev_startup_failed.send_default();
+        ev_startup_failed.write_default();
         error!(
             missing = ?missing_resources,
             "required resources needed for Vmap management. Possible programming error?"
@@ -192,7 +192,7 @@ where
     }
 }
 
-#[derive(Default)]
+#[derive(Default, TypePath)]
 pub struct WorldModelAssetLoader;
 
 impl AssetLoader for WorldModelAssetLoader {
@@ -207,7 +207,7 @@ impl AssetLoader for WorldModelAssetLoader {
         load_context: &mut LoadContext<'_>,
     ) -> Result<Self::Asset, Self::Error> {
         let mut bytes = vec![];
-        let filename = load_context.asset_path();
+        let filename = load_context.path();
         reader
             .read_to_end(&mut bytes)
             .await

@@ -14,7 +14,7 @@ use azothacore_database::{
     args,
     database_env::{CharacterDatabase, WorldDatabase},
 };
-use bevy::prelude::*;
+use bevy::prelude::{Commands, In, MessageWriter, Res, Resource};
 use sqlx::{query_as, query_with};
 use tracing::{error, info, warn};
 
@@ -105,10 +105,10 @@ impl DBIDGenerator<CharacterDatabase, u32> for HiPetNumberGenerator {
     const DB_SELECT_MAX_ID_QUERY: &str = "SELECT CAST(COALESCE(MAX(id), 0) AS UNSIGNED INT)+1 FROM character_pet";
 }
 
-pub fn handle_set_highest_guids_error(In(res): In<AzResult<()>>, mut ev_startup_failed: EventWriter<AzStartupFailedEvent>) {
+pub fn handle_set_highest_guids_error(In(res): In<AzResult<()>>, mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>) {
     if let Err(e) = res {
         error!(target: "server::loading", cause=?e, "error initialising highest guid generators");
-        ev_startup_failed.send_default();
+        ev_startup_failed.write_default();
     }
 }
 
@@ -166,7 +166,7 @@ pub fn load_script_names(
     mut commands: Commands,
     rt: Res<TokioRuntime>,
     world_db: Res<WorldDatabase>,
-    mut ev_startup_failed: EventWriter<AzStartupFailedEvent>,
+    mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>,
 ) {
     info!(target:"server.loading", "Loading Script Names...");
     let mut name_store = DBScriptNameStore::default();
@@ -210,7 +210,7 @@ pub fn load_script_names(
     );
     let res = match rt.block_on(stmt.fetch_all(&**world_db)) {
         Err(e) => {
-            ev_startup_failed.send_default();
+            ev_startup_failed.write_default();
             error!(cause=?e, "error retrieving script names");
             return;
         },

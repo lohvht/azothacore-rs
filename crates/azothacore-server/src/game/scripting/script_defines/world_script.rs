@@ -21,7 +21,7 @@ pub trait WorldScript: Script {
 
     /// Called when loading custom database tables
     fn on_load_custom_database_table(&self) -> Option<impl System<In = (), Out = ()>> {
-        None::<FunctionSystem<fn(), fn()>>
+        None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
     /// Called before the world configuration is (re)loaded.
@@ -41,27 +41,27 @@ pub trait WorldScript: Script {
 
     /// Called when a world shutdown is cancelled.
     fn on_shutdown_cancel(&self) -> Option<impl System<In = (), Out = ()>> {
-        None::<FunctionSystem<fn(), fn()>>
+        None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
     /// Called on every world tick (don't execute too heavy code here).
     fn on_update(&self) -> Option<impl System<In = (), Out = ()>> {
-        None::<FunctionSystem<fn(), fn()>>
+        None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
     /// Called when the world is started.
     fn on_startup(&self) -> Option<impl System<In = (), Out = ()>> {
-        None::<FunctionSystem<fn(), fn()>>
+        None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
     /// Called when the world is actually shut down.
     fn on_shutdown(&self) -> Option<impl System<In = (), Out = ()>> {
-        None::<FunctionSystem<fn(), fn()>>
+        None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
     /// Called after all maps are unloaded from core
     fn on_after_unload_all_maps(&self) -> Option<impl System<In = (), Out = ()>> {
-        None::<FunctionSystem<fn(), fn()>>
+        None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
     ///
@@ -77,7 +77,7 @@ pub trait WorldScript: Script {
     /// @brief This hook runs after all scripts loading and before itialized
     ///
     fn on_before_world_initialized(&self) -> Option<impl System<In = (), Out = ()>> {
-        None::<FunctionSystem<fn(), fn()>>
+        None::<FunctionSystem<fn(), (), (), fn()>>
     }
 }
 

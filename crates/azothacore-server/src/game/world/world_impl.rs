@@ -136,7 +136,7 @@ impl WorldTrait<WorldConfig> for World {
         let res = rt.block_on(async { LoginDatabase::sel_realmlist_security_level::<_, (u8,)>(&**login_db, args!(current_realm.id.realm)?).await });
         if let Ok(Some((account_type,))) = res {
             let account_type = AccountTypes::try_from(account_type).unwrap_or(AccountTypes::SecPlayer);
-            commands.run_system_with_input(this.sysid_set_player_security_limit, account_type);
+            commands.run_system_with(this.sysid_set_player_security_limit, account_type);
         }
     }
 
@@ -249,6 +249,6 @@ impl WorldTrait<WorldConfig> for World {
 
 impl World {
     fn load_initial_config(this: Res<Self>, mut commands: Commands) {
-        commands.run_system_with_input(this.sysid_load_config_settings, false);
+        commands.run_system_with(this.sysid_load_config_settings, false);
     }
 }
