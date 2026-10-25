@@ -19,6 +19,7 @@ Read the matching doc(s) BEFORE starting the task:
 - Creating or modifying SQL → `.agents/docs/sql-guidelines.md`
 - Implementing a world system (SmartAI, conditions, gossip, phasing, loot, scripts, hotfix stores) or importing Legion data → `.agents/docs/legion-engine-backlog.md`
 - Changing DB2 structs (`db2_structure/wow7_3_5_26972.rs`) or the hotfixes schema → `.agents/docs/systems/db2-stores.md`
+- Touching `ScriptMgr`, `scripts_plugin` or content scripts (`cs_*`, `spell_*`, AI) → `.agents/docs/systems/script-mgr.md`
 
 ## Modules
 
