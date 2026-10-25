@@ -1,7 +1,7 @@
 # Legion engine backlog (data waiting for engine support)
 
 World data imported from AshamaneCore (ADB_735.10) and LegionCore is limited to what the
-TrinityCore 7.3.5/26972 engine (`trinitycore-dockerfile/TrinityCore/`) can represent, because
+TrinityCore 7.3.5/26972 engine (`references-cores/trinitycore-dockerfile/TrinityCore/`) can represent, because
 Azothacore ports that engine. The items below are real 7.3.5 content that was left out or kept
 inert because TC 7.3.5 has no support for it. Revisit them when the matching Rust system is built.
 The counts are from the 2026-10-24 import. The converters and reports live in
@@ -13,7 +13,7 @@ The counts are from the 2026-10-24 import. The converters and reports live in
   source types, gossip option types, `flags_extra`) so imported TC-format data stays valid.
 - **Missing feature:** add it as an extension of the TC 7.3.5 enum, in a reserved range after the
   TC 7.3.5 values. Look for references in this order:
-  1. **TC `master`** (`TrinityCore-master/`). It is maintained and has since implemented much of
+  1. **TC `master`** (`references-cores/TrinityCore-master/`). It is maintained and has since implemented much of
      what the Legion forks invented, e.g. `SMART_ACTION_CREATE_CONVERSATION`,
      `BECOME_PERSONAL_CLONE_FOR_PLAYER`, `CONDITION_SCENARIO_STEP`, `CONDITION_PLAYER_CONDITION`,
      and currency loot via `ItemType`. Take names and semantics from it, but check that the

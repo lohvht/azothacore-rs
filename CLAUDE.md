@@ -20,6 +20,7 @@ Read the matching doc(s) BEFORE starting the task:
 - Implementing a world system (SmartAI, conditions, gossip, phasing, loot, scripts, hotfix stores) or importing Legion data → `.agents/docs/legion-engine-backlog.md`
 - Changing DB2 structs (`db2_structure/wow7_3_5_26972.rs`) or the hotfixes schema → `.agents/docs/systems/db2-stores.md`
 - Touching `ScriptMgr`, `scripts_plugin` or content scripts (`cs_*`, `spell_*`, AI) → `.agents/docs/systems/script-mgr.md`
+- Porting C++ code from TrinityCore or AzerothCore → `.agents/docs/porting-parity.md` (update the port-tracking copies in the same change)
 
 ## Modules
 
