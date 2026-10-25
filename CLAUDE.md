@@ -8,8 +8,13 @@ NOTE: INCOMPLETE, THIS IS LIFTED FROM ITS AZEROTHCORE SOURCE
 
 - Formatting follows `rustfmt.toml` in NIGHTLY mode, despite the project using the stable toolchain. This allows for us to group imports and other lints that are not stabilised yet.
 - **Do not write or add live-stack e2e tests unless the user explicitly asks.** Do not create `e2e/local/` scratch tests to validate a fix. Existing `e2e/` tests that break after a change may be updated. Do not mention missing coverage unless the user asked about it.
-- Planning docs go in `.agents/plans/<task-slug>/` (gitignored), named `<task-slug>.<TYPE>.md` (`PLAN`, `REQUIREMENTS`, `ANALYSIS`, …).
+- Planning docs go in `.agents/plans/<YYYY-MM-DD>-<task-slug>/` (gitignored; the date is the day the folder is created, and stays fixed), named `<task-slug>.<TYPE>.md` (`PLAN`, `REQUIREMENTS`, `ANALYSIS`, …).
 - **Credit upstream authors.** Code, a mechanism, or data mirrored from another core (TrinityCore, cMaNGOS, AzerothCore, …) is committed with `--author` naming the original commit's author (extra sources as `Co-authored-by`), even when rewritten against AZC or confirmed by own sniffs; find them in the upstream file's commit history.
+- logic for any implementation details should always refer to the porting-parity.md document
+- **No local-only paths in committed files.** Plan folders, reference checkouts, port-tracking copies and other
+  directories outside this repo are named by role ("the TC port-tracking copy", "a local checker script"), never by
+  path. Their paths, and an index of the plan folders, go in the workspace-level `CLAUDE.md` one directory above the
+  repo, which is not committed.
 
 ## Mandatory reading per task
 

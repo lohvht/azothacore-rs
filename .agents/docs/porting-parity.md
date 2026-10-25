@@ -4,11 +4,14 @@ Decided 2026-10-25. Applies to engine and script code ported from C++ into Azoth
 
 ## Layout
 
-| Path (from `azothacore-dev/`) | Role | Edited? |
+| Checkout | Role | Edited? |
 |---|---|---|
-| `references-cores/` | Pristine upstream sources: TrinityCore 7.3.5 (in `trinitycore-dockerfile/`), TrinityCore `master`, AshamaneCore, LegionCore, AzerothCore, AzerothCore playerbots. Builds and `run-*.sh` scripts use these. | Never |
-| `trinitycore-dockerfile/TrinityCore/` | Port-tracking copy of TC 7.3.5/26972. | Yes, deletions only |
-| `azerothcore-wotlk2/` | Port-tracking copy of AzerothCore. | Yes, deletions only |
+| Pristine reference sources | Upstream TrinityCore 7.3.5, TrinityCore `master`, AshamaneCore, LegionCore, AzerothCore, AzerothCore playerbots. The reference-server builds and run scripts use these. | Never |
+| TC port-tracking copy | Port-tracking copy of TC 7.3.5/26972. | Yes, deletions only |
+| AC port-tracking copy | Port-tracking copy of AzerothCore. | Yes, deletions only |
+
+These checkouts live outside this repo. Their local paths are in the workspace-level `CLAUDE.md`
+one directory above the repo, which is not committed.
 
 ## Decision
 
@@ -44,8 +47,8 @@ The deletions are tracked in git, so each one is reviewable and can be undone:
   parts that do not apply to 7.3.5 are deleted as `skip:`.
 - Keep the copies on the checked-out upstream revision. Do not paste code from another revision of
   the same core (e.g. pre-`WorldSessionMgr` AC session code) into them.
-- The copies do not need to compile. To run the reference servers, use the `run-*.sh` scripts,
-  which build from `references-cores/`.
+- The copies do not need to compile. To run the reference servers, use the run scripts, which
+  build from the pristine sources.
 
 ### Choosing between TC and AC
 

@@ -12,7 +12,7 @@
   stub today.
 - A crate-level `azothacore_server::scripts` module was started for this, then stalled. It was
   removed because it was never committed and broke clean builds of `main`. Its draft (a commented
-  `cs_battlenet_account` port) is kept, gitignored, in `.agents/plans/script-mgr-init/`.
+  `cs_battlenet_account` port) is kept locally, outside the repo.
 - `game::scripts` (empty) remains as a placeholder. Do not add content scripts to
   `azothacore-server`.
 

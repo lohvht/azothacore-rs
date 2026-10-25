@@ -9,7 +9,7 @@ read `<col>` plus `<table>_locale.<col>_lang`.
 ## Field types: two sources must agree
 
 - **The file layout** (field order, width, array size) comes from **WoWDBDefs**
-  (`https://github.com/wowdev/WoWDBDefs`, cloned at `azothacore-dev/WoWDBDefs/`).
+  (`https://github.com/wowdev/WoWDBDefs`).
   - Pick the `LAYOUT` block whose hash equals the struct's `#[layout_hash]` and whose `BUILD` list includes
     `7.3.5.26972`.
   - TC 7.3.5's own `DB2Structure.h` has known errors: `SpellAuraOptions.ProcTypeMask` is `[2]`, and
@@ -25,7 +25,7 @@ read `<col>` plus `<table>_locale.<col>_lang`.
 
 ## Checking
 
-`azothacore-rs/.agents/plans/legion-smoke-test/db2_check.py` compares every struct against WoWDBDefs (by layout hash +
-build) and against a hotfix schema: width/array, sign vs WoWDBDefs, sign vs SQL, and WoWDBDefs vs SQL. Run it after
-editing a struct or the hotfix schema. The real test is a worldserver start with populated hotfix tables, which must
+After editing a struct or the hotfix schema, compare every struct against WoWDBDefs (by layout hash + build) and
+against the hotfix schema: width/array, sign vs WoWDBDefs, sign vs SQL, and WoWDBDefs vs SQL. A local checker script
+does this; it is not in the repo. The real test is a worldserver start with populated hotfix tables, which must
 log `>> Initialized 233 DB2 data stores`.
