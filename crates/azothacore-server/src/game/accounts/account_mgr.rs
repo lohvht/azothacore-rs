@@ -18,7 +18,7 @@ use super::{
     AccountOpResult,
     rbac::{RawRbacPermId, RbacPermission},
 };
-use crate::{game::scripting::script_mgr::ScriptMgr, shared::query_callbacks::QueryCallbacks};
+use crate::game::scripting::script_mgr::ScriptMgr;
 
 pub const MAX_ACCOUNT_STR: usize = 20;
 pub const MAX_PASS_STR: usize = 16;
@@ -201,21 +201,21 @@ impl AccountMgr {
         Ok(())
     }
 
-    /// Changes the password asynchronously, running the account script hooks once done.
-    pub fn change_password_scripted(callbacks: &QueryCallbacks, login_db: LoginDatabase, account_id: u32, new_password: String) {
-        callbacks.add_commands_system_callback(
-            async move { (account_id, Self::change_password(&*login_db, account_id, &new_password).await) },
-            Self::change_password_callback,
-        );
-    }
-
-    fn change_password_callback(In((account_id, res)): In<(u32, AccountOpResult<()>)>, mut commands: Commands, script_mgr: ScriptMgr) {
-        if let Err(e) = res {
-            error!(cause=?e, account_id, "error changing account password");
-            script_mgr.on_failed_password_change(&mut commands, account_id);
-            return;
+    pub fn change_password_scripted<'a, A: DbAcquire<'a>>(
+        rt: &Runtime,
+        commands: &mut Commands<'a, 'a>,
+        script_mgr: &ScriptMgr,
+        login_db: A,
+        account_id: u32,
+        new_password: &str,
+    ) -> AccountOpResult<()> {
+        let res = rt.block_on(Self::change_password(login_db, account_id, new_password));
+        if res.is_err() {
+            script_mgr.on_failed_password_change(commands, account_id);
+        } else {
+            script_mgr.on_password_change(commands, account_id);
         }
-        script_mgr.on_password_change(&mut commands, account_id);
+        res
     }
 
     pub async fn change_password<'a, A: DbAcquire<'a>>(login_db: A, account_id: u32, new_password: &str) -> AccountOpResult<()> {

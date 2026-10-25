@@ -90,14 +90,16 @@ fn ban_expiry_task(mut timer: ResMut<BanExpiryTimer>, time: Res<Time<Real>>, log
     if !timer.0.finished() {
         return;
     }
-    rt.block_on(async {
-        if let Err(e) = LoginDatabase::del_expired_ip_bans(&**login_db, args_unwrap!()).await {
+    // Fire and forget, like LoginDatabase.Execute in TC
+    let login_db = login_db.clone();
+    rt.spawn(async move {
+        if let Err(e) = LoginDatabase::del_expired_ip_bans(&*login_db, args_unwrap!()).await {
             error!(target:"bnetserver", cause=?e, "del_expired_ip_bans err");
         };
-        if let Err(e) = LoginDatabase::upd_expired_account_bans(&**login_db, args_unwrap!()).await {
+        if let Err(e) = LoginDatabase::upd_expired_account_bans(&*login_db, args_unwrap!()).await {
             error!(target:"bnetserver", cause=?e, "upd_expired_account_bans err");
         };
-        if let Err(e) = LoginDatabase::del_bnet_expired_account_banned(&**login_db, args_unwrap!()).await {
+        if let Err(e) = LoginDatabase::del_bnet_expired_account_banned(&*login_db, args_unwrap!()).await {
             error!(target:"bnetserver", cause=?e, "del_bnet_expired_account_banned err");
         };
     });

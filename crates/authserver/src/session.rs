@@ -614,8 +614,14 @@ impl SessionInner {
     {
         // CheckIpCallback routine
         let ip_address = name.ip_str_or_name();
-        // Verify that this IP is not in the ip_banned table
-        LoginDatabase::del_expired_ip_bans(&*login_db, args!()?).await?;
+        // Verify that this IP is not in the ip_banned table. Fire and forget like
+        // LoginDatabase.Execute in TC, sel_ip_info computes the ban state from the dates anyway.
+        let db = login_db.clone();
+        tokio::spawn(async move {
+            if let Err(e) = LoginDatabase::del_expired_ip_bans(&*db, args_unwrap!()).await {
+                error!(target:"session", cause=?e, "error deleting expired ip bans");
+            }
+        });
         for fields in LoginDatabase::sel_ip_info(&*login_db, args!(ip_address)?).await? {
             let banned = fields.get::<u32, _>("banned") != 0;
             if banned {
@@ -1178,17 +1184,17 @@ impl Session<'_> {
             return Err(BattlenetRpcErrorCode::WowServicesDeniedRealmListTicket);
         }
 
-        LoginDatabase::upd_bnet_last_login_info(
-            &**self.login_db,
-            args_unwrap!(
-                self.remote_name().ip_str_or_name(),
-                self.locale.get().map_or(Locale::enUS as u32, |l| *l as u32),
-                self.os.get(),
-                accnt_info.id
-            ),
-        )
-        .await
-        .map_err(map_err_to_internal)?;
+        // Fire and forget, like LoginDatabase.Execute in TC
+        let login_db = self.login_db.clone();
+        let ip_address = self.remote_name().ip_str_or_name();
+        let locale = self.locale.get().map_or(Locale::enUS as u32, |l| *l as u32);
+        let os = self.os.get().cloned();
+        let account_id = accnt_info.id;
+        tokio::spawn(async move {
+            if let Err(e) = LoginDatabase::upd_bnet_last_login_info(&*login_db, args_unwrap!(ip_address, locale, os, account_id)).await {
+                error!(target:"session", cause=?e, account_id, "error updating bnet last login info");
+            }
+        });
 
         Ok(ClientResponse {
             attribute: vec![Attribute {
