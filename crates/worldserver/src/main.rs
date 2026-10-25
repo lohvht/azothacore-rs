@@ -27,6 +27,7 @@ use azothacore_server::{
     },
     shared::{
         SignalReceiver,
+        query_callbacks::query_callbacks_plugin,
         realms::{
             RealmFlags,
             realm_list::{RealmList, RealmListStartSet, realm_list_plugin},
@@ -49,6 +50,7 @@ fn main() {
         .add_plugins((
             FrameTimeDiagnosticsPlugin,
             tokio_signal_handling_bevy_plugin,
+            query_callbacks_plugin,
             config_mgr_plugin::<WorldConfig, _>(vm.config, vm.dry_run),
             logging_plugin::<WorldConfig>,
             // Get the list of realms for the server

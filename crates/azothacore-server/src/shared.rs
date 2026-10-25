@@ -1,6 +1,7 @@
 pub mod data_stores;
 pub mod id_generators;
 pub mod networking;
+pub mod query_callbacks;
 pub mod realms;
 pub mod secrets;
 pub mod shared_defines;
