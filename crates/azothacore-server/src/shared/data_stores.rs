@@ -166,7 +166,7 @@ macro_rules! load_db2 {
 
 fn load_db2_before() {
     //- Load DB2s
-    info!(target = "server.loading", "Initialising DB2 stores...");
+    info!(target:"server.loading", "Initialising DB2 stores...");
 }
 
 pub fn db2_mgr_plugin(app: &mut App) {

@@ -892,7 +892,7 @@ pub struct RbacPermission {
 //     ///     TC_LOG_DEBUG("entities.player", "Failed to grant permission %u, already denied", permission_id);
 //     /// @endcode
 //     ///
-//     #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
+//     #[instrument(skip_all, target:"rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
 //     pub async fn grant_permission(&mut self, permission_id: RawRbacPermId, realm_id: Option<u32>) -> RbacCommandResult<()> {
 //         // Check if permission Id exists
 //         if ACCOUNT_MGR.read().await.get_rbac_permission(permission_id).is_none() {
@@ -946,7 +946,7 @@ pub struct RbacPermission {
 //     ///     TC_LOG_DEBUG("entities.player", "Role Id %u does not exists", permission_id);
 //     /// @endcode
 //     ///
-//     #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
+//     #[instrument(skip_all, target:"rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
 //     pub async fn deny_permission(&mut self, permission_id: RawRbacPermId, realm_id: Option<u32>) -> RbacCommandResult<()> {
 //         // Check if permission Id exists
 //         if ACCOUNT_MGR.blocking_read().get_rbac_permission(permission_id).is_none() {
@@ -1002,7 +1002,7 @@ pub struct RbacPermission {
 //     ///     TC_LOG_DEBUG("entities.player", "Permission %u succesfully removed", permission_id);
 //     /// @endcode
 //     ///
-//     #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
+//     #[instrument(skip_all, target:"rbac", fields(id=self.id, name=self.name, permission=?permission_id, realm=realm_id))]
 //     pub async fn revoke_permission(&mut self, permission_id: RawRbacPermId, realm_id: Option<u32>) -> RbacCommandResult<()> {
 //         // Check if it's present in any list
 //         if !self.has_granted_permission(permission_id) && !self.has_denied_permission(permission_id) {
@@ -1028,7 +1028,7 @@ pub struct RbacPermission {
 //     }
 
 //     /// Loads all permissions assigned to current account
-//     #[instrument(skip_all, target="rbac", fields(id=self.id, name=self.name))]
+//     #[instrument(skip_all, target:"rbac", fields(id=self.id, name=self.name))]
 //     pub async fn load_from_db(&mut self) -> RbacCommandResult<()> {
 //         self.clear_data();
 

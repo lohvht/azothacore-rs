@@ -2,11 +2,14 @@ use std::{
     fs,
     io,
     net::{self, ToSocketAddrs},
+    num::ParseIntError,
     path::Path,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 use bincode::Options;
+use chrono::Utc;
+use num::Integer;
 
 use crate::deref_boilerplate;
 
@@ -47,7 +50,7 @@ pub fn buffered_file_create<P: AsRef<Path>>(p: P) -> io::Result<io::BufWriter<fs
 }
 
 pub fn unix_now() -> Duration {
-    SystemTime::now().duration_since(UNIX_EPOCH).unwrap()
+    Duration::from_secs(Utc::now().timestamp() as u64)
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -114,6 +117,31 @@ impl MessageBuffer {
 }
 
 deref_boilerplate!(MessageBuffer, bytes::BytesMut, storage);
+
+#[derive(Debug, thiserror::Error)]
+pub enum DecodeHexError {
+    #[error("decode hex failed due to odd length")]
+    OddLength,
+    #[error("decode hex failed due to output buffer being too small")]
+    BufferTooSmall,
+    #[error(transparent)]
+    ParseInt(#[from] ParseIntError),
+}
+
+/// HexStrToByteArray in TC / AC
+pub fn hex_str_to_bytes(s: &str, out: &mut [u8]) -> Result<(), DecodeHexError> {
+    if s.len().is_odd() {
+        return Err(DecodeHexError::OddLength);
+    }
+
+    for (j, i) in (0..s.len()).step_by(2).enumerate() {
+        if j >= out.len() {
+            return Err(DecodeHexError::BufferTooSmall);
+        }
+        out[j] = u8::from_str_radix(&s[i..i + 2], 16)?;
+    }
+    Ok(())
+}
 
 #[cfg(test)]
 mod tests {

@@ -94,13 +94,13 @@ impl QueryCallbacks {
     where
         Fut: Future<Output = T> + Send + 'static,
         T: Send + 'static,
-        F: FnOnce(T, Entity, &mut World) + Send + 'static,
+        F: FnOnce(&mut World, Entity, T) + Send + 'static,
     {
         self.add_callback(fut, move |res, world| {
             if !world.entities().contains(entity) {
                 return;
             }
-            cb(res, entity, world);
+            cb(world, entity, res);
         });
     }
 
@@ -118,6 +118,39 @@ impl QueryCallbacks {
     {
         self.spawn(&self.commands_tx, fut, |res| -> CommandsCallback {
             Box::new(move |commands| commands.run_system_cached_with(system, res))
+        });
+    }
+
+    pub fn add_commands_entity_callback<T, Fut, F>(&self, entity: Entity, fut: Fut, cb: F)
+    where
+        Fut: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+        F: FnOnce(&mut Commands, Entity, T) + Send + 'static,
+    {
+        self.spawn(&self.commands_tx, fut, move |res| -> CommandsCallback {
+            Box::new(move |commands| {
+                if commands.get_spawned_entity(entity).is_err() {
+                    return;
+                }
+                cb(commands, entity, res);
+            })
+        });
+    }
+
+    pub fn add_commands_entity_system_callback<T, Fut, S, M>(&self, entity: Entity, fut: Fut, system: S)
+    where
+        Fut: Future<Output = T> + Send + 'static,
+        T: Send + 'static,
+        S: IntoSystem<In<(Entity, T)>, (), M> + Send + 'static,
+        M: 'static,
+    {
+        self.spawn(&self.commands_tx, fut, move |res| -> CommandsCallback {
+            Box::new(move |commands| {
+                if commands.get_spawned_entity(entity).is_err() {
+                    return;
+                }
+                commands.run_system_cached_with(system, (entity, res));
+            })
         });
     }
 }

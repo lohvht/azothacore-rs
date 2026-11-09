@@ -23,7 +23,13 @@ use crate::{
     game::{
         conditions::disable_mgr::{DisableMgr, DisableMgrInitialLoadSet, disable_mgr_plugin},
         entities::unit::{BASE_MOVE_SPEED, PlayerBaseMoveSpeed},
-        globals::object_mgr::{handle_set_highest_guids_error, set_highest_guids},
+        globals::object_mgr::{
+            handle_race_and_class_expansion_error,
+            handle_set_highest_guids_error,
+            load_class_expansion_requirements,
+            load_race_unlock_requirements,
+            set_highest_guids,
+        },
         map::map_mgr::{GridCleanupTimer, MapUpdateTimer},
         scripting::script_mgr::ScriptMgr,
         time::WorldUpdateTime,
@@ -104,6 +110,11 @@ fn add_set_initial_world_settings_system(app: &mut App) {
             World::load_db_allowed_security_level,
             // Init highest guids before any table loading to prevent using not initialized guids in some code.
             set_highest_guids.pipe(handle_set_highest_guids_error),
+            // Init race & class expansion requirements,
+            load_race_unlock_requirements.pipe(handle_race_and_class_expansion_error).after(InitDB2MgrSet),
+            load_class_expansion_requirements
+                .pipe(handle_race_and_class_expansion_error)
+                .after(InitDB2MgrSet),
         )
             .in_set(WorldSets::SetInitialWorldSettings),),
     )

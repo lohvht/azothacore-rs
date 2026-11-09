@@ -10,6 +10,11 @@ pub mod macros;
 pub mod recastnavigation_handles;
 pub mod utils;
 
+pub mod chrono {
+    // Re-exported for our convenience
+    pub use chrono::{TimeDelta, prelude::*};
+}
+
 pub type AzResult<T> = anyhow::Result<T>;
 pub type AzError = anyhow::Error;
 use std::{collections::HashMap, fmt::Debug};

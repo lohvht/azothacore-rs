@@ -69,10 +69,13 @@ impl ExtendedDBInfo {
 cfg_if::cfg_if! {
 if #[cfg(feature = "postgres")] {
     pub type DbArguments = sqlx::postgres::PgArguments;
+    pub type DbRow = sqlx::postgres::PgRow;
 } else if #[cfg(feature = "mysql")] {
     pub type DbArguments = sqlx::mysql::MySqlArguments;
+    pub type DbRow = sqlx::mysql::MySqlRow;
 } else {
     pub type DbArguments = sqlx::sqlite::SqliteArguments;
+    pub type DbRow = sqlx::sqlite::SqliteRow;
 }
 }
 

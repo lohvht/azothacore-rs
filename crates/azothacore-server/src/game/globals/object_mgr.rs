@@ -1,5 +1,5 @@
 use std::{
-    collections::BTreeSet,
+    collections::{BTreeMap, BTreeSet},
     sync::atomic::{AtomicU32, AtomicU64},
     time::Instant,
 };
@@ -24,7 +24,14 @@ use crate::{
         entities::object::object_guid::{HighGuidItem, HighGuidPlayer, HighGuidTransport, ObjectGuidLowGenerator},
         guilds::GuildIDGenerator,
     },
-    shared::id_generators::{DBIDGenerator, IDGenerator, IDGeneratorTrait},
+    shared::{
+        data_stores::{
+            DB2Storage,
+            db2_structure::{Achievement, ChrClasses, ChrRaces},
+        },
+        id_generators::{DBIDGenerator, IDGenerator, IDGeneratorTrait},
+        shared_defines::Expansion,
+    },
 };
 
 /// max allowed by client name length
@@ -225,4 +232,116 @@ pub fn load_script_names(
     let elapsed = Instant::now() - old_ms_time;
     info!(target:"server.loading", ">> Loaded {} ScriptNames in {} ms", name_store.len(), elapsed.as_millis());
     commands.insert_resource(name_store);
+}
+
+pub fn handle_race_and_class_expansion_error(In(res): In<AzResult<()>>, mut ev_startup_failed: MessageWriter<AzStartupFailedEvent>) {
+    if let Err(e) = res {
+        error!(target: "server::loading", cause=?e, "error initialising race & class expansion error");
+        ev_startup_failed.write_default();
+    }
+}
+
+pub struct RaceUnlockRequirement {
+    expansion:      Expansion,
+    achievement_id: u32,
+}
+
+#[derive(Resource)]
+/// Race ID to Achievement ID / Expansion required
+pub struct RaceUnlockRequirementStore(BTreeMap<u8, RaceUnlockRequirement>);
+
+deref_boilerplate!(RaceUnlockRequirementStore, BTreeMap<u8, RaceUnlockRequirement>, 0);
+
+#[derive(Resource)]
+/// Class ID to Expansions required
+pub struct ClassExpansionRequirementStore(BTreeMap<u8, Expansion>);
+
+deref_boilerplate!(ClassExpansionRequirementStore, BTreeMap<u8, Expansion>, 0);
+
+/// ObjectMgr::LoadRaceAndClassExpansionRequirements()'s _raceUnlockRequirementStore half in TC
+pub fn load_race_unlock_requirements(
+    mut commands: Commands,
+    rt: Res<TokioRuntime>,
+    world_db: Res<WorldDatabase>,
+    chr_races_store: Res<DB2Storage<ChrRaces>>,
+    achievement_store: Res<DB2Storage<Achievement>>,
+) -> AzResult<()> {
+    info!(target:"server.loading", "Loading race unlock requirements...");
+    let mut store = RaceUnlockRequirementStore(BTreeMap::new());
+
+    let stmt = query_as::<_, (u8, u8, u32)>("SELECT raceID, expansion, achievementId FROM `race_unlock_requirement`");
+    let res = rt
+        .block_on(stmt.fetch_all(&**world_db))
+        .with_context(|| "error retrieving race unlock requirements".to_string())?;
+    if res.is_empty() {
+        info!(target:"server.loading", ">> Loaded 0 race expansion requirements. DB table `race_expansion_requirement` is empty.");
+        commands.insert_resource(store);
+        return Ok(());
+    }
+
+    let old_time = Instant::now();
+    let mut count = 0;
+    for (race_id, expansion_u8, achievement_id) in res {
+        if chr_races_store.get(&(race_id as u32)).is_none() {
+            error!(target:"sql.sql", race_id, "Race defined in `race_unlock_requirement` does not exists, skipped.");
+            continue;
+        }
+        let expansion = match Expansion::try_from(expansion_u8) {
+            Err(e) => {
+                error!(target:"sql.sql", cause=?e, race_id, expansion=expansion_u8, "Race defined in `race_unlock_requirement` has incorrect expansion, skipped.");
+                continue;
+            },
+            Ok(v) => v,
+        };
+        if achievement_id != 0 && achievement_store.get(&achievement_id).is_none() {
+            error!(target:"sql.sql", race_id, achievement_id, "Race defined in `race_unlock_requirement` has incorrect achievement, skipped.");
+            continue;
+        }
+        store.insert(race_id, RaceUnlockRequirement { expansion, achievement_id });
+        count += 1;
+    }
+    info!(target:"server.loading", ">> Loaded {count} race expansion requirements in {} ms.", old_time.elapsed().as_millis());
+    commands.insert_resource(store);
+    Ok(())
+}
+
+/// ObjectMgr::LoadRaceAndClassExpansionRequirements()'s _classExpansionRequirementStore half in TC
+pub fn load_class_expansion_requirements(
+    mut commands: Commands,
+    rt: Res<TokioRuntime>,
+    world_db: Res<WorldDatabase>,
+    chr_classes_store: Res<DB2Storage<ChrClasses>>,
+) -> AzResult<()> {
+    info!(target:"server.loading", "Loading class expansion requirements...");
+    let mut store = ClassExpansionRequirementStore(BTreeMap::new());
+
+    let stmt = query_as::<_, (u8, u8)>("SELECT classID, expansion FROM `class_expansion_requirement`");
+    let res = rt
+        .block_on(stmt.fetch_all(&**world_db))
+        .with_context(|| "error retrieving class expansion requirements".to_string())?;
+    if res.is_empty() {
+        info!(target:"server.loading", ">> Loaded 0 class expansion requirements. DB table `class_expansion_requirement` is empty.");
+        commands.insert_resource(store);
+        return Ok(());
+    }
+    let old_time = Instant::now();
+    let mut count = 0;
+    for (class_id, expansion_u8) in res {
+        if chr_classes_store.get(&(class_id as u32)).is_none() {
+            error!(target:"sql.sql", class_id, "Class defined in `class_expansion_requirement` does not exists, skipped.");
+            continue;
+        }
+        let expansion = match Expansion::try_from(expansion_u8) {
+            Err(e) => {
+                error!(target:"sql.sql", cause=?e, class_id, expansion=expansion_u8, "Class defined in `class_expansion_requirement` has incorrect expansion, skipped.");
+                continue;
+            },
+            Ok(v) => v,
+        };
+        store.insert(class_id, expansion);
+        count += 1;
+    }
+    info!(target:"server.loading", ">> Loaded {count} class expansion requirements in {} ms.", old_time.elapsed().as_millis());
+    commands.insert_resource(store);
+    Ok(())
 }

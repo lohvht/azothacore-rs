@@ -371,7 +371,7 @@ impl GroupMgr<'_> {
         lfg_mgr: &LFGMgr<'_, '_, C>,
     ) -> AzResult<BTreeMap<u32, (GroupLoadedBundle, Option<LfgGroupData>)>> {
         let old_ms_time = Instant::now();
-        info!(target = "server.loading", "Loading Group Definitons...");
+        info!(target:"server.loading", "Loading Group Definitons...");
         // Delete all groups whose leader does not exist
         query("DELETE FROM `groups` WHERE leaderGuid NOT IN (SELECT guid FROM characters)")
             .execute(&mut **chardb_tx)
@@ -424,7 +424,7 @@ impl GroupMgr<'_> {
             count += 1;
         }
         let elapsed = old_ms_time - Instant::now();
-        info!(target = "server.loading", ">> Loaded {count} group definitions in {elapsed:?}");
+        info!(target:"server.loading", ">> Loaded {count} group definitions in {elapsed:?}");
         Ok(dbid_to_group)
     }
 
@@ -437,7 +437,7 @@ impl GroupMgr<'_> {
     ) -> AzResult<()> {
         let old_ms_time = Instant::now();
 
-        info!(target = "server.loading", "Loading Group Members...");
+        info!(target:"server.loading", "Loading Group Members...");
         // Delete all rows from group_member or group_instance with no group
         query("DELETE FROM `group_member` WHERE guid NOT IN (SELECT guid FROM groups)")
             .execute(&mut **chardb_tx)
@@ -462,7 +462,7 @@ impl GroupMgr<'_> {
             let db_id = fields.stored_id;
             let Some((group, lfg)) = group_bundles.get_mut(&db_id) else {
                 warn!(
-                    target = "misc",
+                    target:"misc",
                     "GroupMgr::LoadGroups: Consistency failed, can't find group (storage id: {db_id})"
                 );
                 continue;
@@ -480,7 +480,7 @@ impl GroupMgr<'_> {
             count += 1;
         }
         let elapsed = old_ms_time - Instant::now();
-        info!(target = "server.loading", ">> Loaded {count} group members in {elapsed:?}");
+        info!(target:"server.loading", ">> Loaded {count} group members in {elapsed:?}");
         Ok(())
     }
 }

@@ -9,7 +9,7 @@ DELETE FROM ip_banned WHERE unbandate<>bandate AND unbandate<=UNIX_TIMESTAMP();
 -- :name upd_expired_account_bans
 UPDATE account_banned SET active = 0 WHERE active = 1 AND unbandate<>bandate AND unbandate<=UNIX_TIMESTAMP();
 
--- :name sel_ip_info :*
+-- :name sel_ip_info :typed :*
 -- :doc Select IP Info. NOTE: TrinityCore's query is as below, we are not interested in ip2nation yet.
 --      (SELECT unbandate > UNIX_TIMESTAMP() OR unbandate = bandate AS banned, NULL as country FROM ip_banned WHERE ip = ?)
 --      UNION
@@ -49,7 +49,7 @@ SELECT id FROM account WHERE username = ?;
 -- :name sel_account_list_by_name
 SELECT id, username FROM account WHERE username = ?;
 
--- :name sel_account_info_by_name
+-- :name sel_account_info_by_name :?
 SELECT a.id, a.sessionkey, ba.last_ip, ba.locked, ba.lock_country, a.expansion, a.mutetime, ba.locale, a.recruiter, a.os, ba.id, aa.gmLevel,
 bab.unbandate > UNIX_TIMESTAMP() OR bab.unbandate = bab.bandate, ab.unbandate > UNIX_TIMESTAMP() OR ab.unbandate = ab.bandate, r.id
 FROM account a LEFT JOIN account r ON a.id = r.recruiter LEFT JOIN battlenet_accounts ba ON a.battlenet_account = ba.id

@@ -23,10 +23,12 @@ use azothacore_modules::{MODULES_LIST, ModulesInitSet, modules_plugin};
 use azothacore_server::{
     game::{
         scripting::{ScriptsInitSet, script_mgr::ScriptMgr, scripts_plugin},
+        server::world_socket::{WorldSocket, world_socket_handling_plugin},
         world::{CurrentRealm, WorldConfig, WorldDbVersion, WorldSets, world_plugin},
     },
     shared::{
         SignalReceiver,
+        networking::socket_mgr::{SocketMgrStartNetworkSet, socket_mgr_plugin},
         query_callbacks::query_callbacks_plugin,
         realms::{
             RealmFlags,
@@ -58,8 +60,8 @@ fn main() {
             modules_plugin,
             scripts_plugin,
             world_plugin,
-            // socket_mgr_plugin::<WorldConfig, SessionInner>,
-            // bnet_session_handling_plugin,
+            socket_mgr_plugin::<WorldConfig, WorldSocket>,
+            world_socket_handling_plugin,
             // // TODO: Impl me? Init Secret Manager
             // sSecretMgr->Initialize();
         ))
@@ -72,6 +74,9 @@ fn main() {
                 set_server_unconnectable
                     .pipe(handle_startup_errors)
                     .in_set(WorldserverMainSets::SetRealmNotConnectable),
+                set_server_connectable
+                    .pipe(handle_startup_errors)
+                    .in_set(WorldserverMainSets::SetRealmConnectable),
                 load_realm_info.pipe(handle_startup_errors).in_set(WorldserverMainSets::LoadCurrentRealm),
             ),
         )
@@ -90,6 +95,8 @@ fn main() {
                 RealmListStartSet,
                 WorldserverMainSets::LoadCurrentRealm,
                 WorldSets::SetInitialWorldSettings,
+                SocketMgrStartNetworkSet::<WorldConfig, WorldSocket>::default(),
+                WorldserverMainSets::SetRealmConnectable,
             )
                 .chain(),),
         )
@@ -134,6 +141,7 @@ pub enum WorldserverMainSets {
     LoadScript,
     SetRealmNotConnectable,
     LoadCurrentRealm,
+    SetRealmConnectable,
 }
 
 fn show_banner(cfg: Res<ConfigMgr<WorldConfig>>) {
@@ -279,6 +287,27 @@ fn set_server_unconnectable(rt: Res<TokioRuntime>, login_db: Res<LoginDatabase>,
         .execute(&**login_db)
         .await
     })?;
+    Ok(())
+}
+
+fn set_server_connectable(rt: Res<TokioRuntime>, login_db: Res<LoginDatabase>, mut realm: ResMut<CurrentRealm>) -> AzResult<()> {
+    info!("setting worldserver as connectable");
+
+    // Set server online (allow connecting now)
+    let login_db = login_db.clone();
+    let realm_id = realm.id.realm;
+    rt.block_on(async {
+        query_with(
+            "UPDATE realmlist SET flag = flag & ~?, population = 0 WHERE id = ?",
+            args!(FlagSet::from(RealmFlags::VersionMismatch).bits(), realm_id)?,
+        )
+        .execute(&*login_db)
+        .await?;
+        Ok::<(), sqlx::Error>(())
+    })?;
+    realm.population_level = 0.0;
+    realm.flag &= !FlagSet::from(RealmFlags::VersionMismatch);
+
     Ok(())
 }
 

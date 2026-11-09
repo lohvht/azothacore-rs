@@ -1012,6 +1012,7 @@ mod tests {
             port:                   8085,
             realm_type:             RealmType::Normal,
             name:                   "TEST_CLIENT".to_string(),
+            normalised_name:        "TEST_CLIENT".to_string(),
             flag:                   RealmFlags::None.into(),
             timezone:               0,
             allowed_security_level: AccountTypes::SecPlayer,

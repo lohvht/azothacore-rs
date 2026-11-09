@@ -26,6 +26,7 @@ use flagset::FlagSet;
 use serde::{Deserialize, Serialize};
 use serde_default::DefaultFromSerde;
 use serde_inline_default::serde_inline_default;
+use tokio::net::ToSocketAddrs;
 use tracing::error;
 
 use crate::{
@@ -47,6 +48,7 @@ use crate::{
             DEFAULT_VISIBILITY_NOTIFY_PERIOD,
             grid_defines::{MIN_GRID_DELAY, MIN_MAP_UPDATE_DELAY},
         },
+        server::world_socket::WorldSocket,
         world::{
             ArenaQueueAnnouncerDetail,
             CharDeleteMethod,
@@ -66,6 +68,7 @@ use crate::{
     },
     shared::{
         data_stores::dbc_enums::{LEVEL_LIMIT_MAX, LEVEL_LIMIT_MAX_DEFAULT},
+        networking::socket_mgr::SocketMgrConfig,
         realms::{RealmType, realm_list::RealmListConfig},
         shared_defines::{
             AccountPasswordChangeSecurityPolicy,
@@ -521,7 +524,7 @@ pub struct WorldConfig {
     /// Time for weather update interval.
     #[serde(default)] pub ChangeWeatherInterval: LowerBoundedNum<Duration, { durationb_s!(0) }, { durationb_mins!(10) }>,
     /// TCP port to reach the world server.
-    #[serde_inline_default(8085)] pub WorldServerPort: u32,
+    #[serde_inline_default(8085)] pub WorldServerPort: u16,
     /// TCP port to for second world connection.
     #[serde_inline_default(8086)] pub InstanceServerPort: u16,
     /// Time after which a connection being idle on the character
@@ -1209,5 +1212,10 @@ impl LoggingConfig for WorldConfig {
 impl RealmListConfig for WorldConfig {
     fn realms_state_update_delay(&self) -> Duration {
         *self.RealmsStateUpdateDelay
+    }
+}
+impl SocketMgrConfig<WorldSocket> for WorldConfig {
+    fn retrieve_bind_addr(&self) -> impl ToSocketAddrs {
+        (self.BindIP, self.WorldServerPort)
     }
 }

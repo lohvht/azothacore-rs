@@ -300,6 +300,9 @@ impl TryFrom<LoginDbRealm> for Realm {
             battlegroup,
         } = value;
 
+        // Normalised name, similar to realm.SetName()
+        let normalised_name = name.chars().filter(|c| !c.is_whitespace()).to_owned().collect();
+
         let external_address =
             net_resolve((address.as_str(), port)).map_err(|e| az_error!("Could not resolve address {address} for realm \"{name}\", err={e}"))?;
         let local_address = net_resolve((local_address.as_str(), port))
@@ -328,6 +331,7 @@ impl TryFrom<LoginDbRealm> for Realm {
             port,
             realm_type: icon,
             name,
+            normalised_name,
             flag: FlagSet::new_truncated(flag),
             timezone,
             allowed_security_level,

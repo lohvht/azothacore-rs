@@ -10,6 +10,7 @@ azothacore-tests-utils.workspace = true
 # Local crates
 azothacore-common.workspace = true
 azothacore-database.workspace = true
+bnet-rpc.workspace=true
 wow-db2-proc-macros.workspace = true
 wow-db2.workspace = true
 # External crates
@@ -38,3 +39,5 @@ structstruck.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+hmac.workspace = true
+sha1.workspace = true

@@ -1,7 +1,7 @@
 use azothacore_common::{AzError, az_error};
 use bevy::prelude::*;
 use flagset::flags;
-use num::FromPrimitive;
+use num::{FromPrimitive, ToPrimitive};
 use num_derive::{FromPrimitive, ToPrimitive};
 use serde::{Deserialize, Serialize};
 use serde_repr::{Deserialize_repr, Serialize_repr};
@@ -25,7 +25,7 @@ pub const GUILD_NEWSLOG_MAX_RECORDS: u8 = 25;
 pub const GUILD_EVENTLOG_MAX_RECORDS: u8 = 100;
 pub const GUILD_BANKLOG_MAX_RECORDS: u8 = 250;
 
-#[derive(Debug, serde::Deserialize, serde::Serialize, Clone, PartialEq)]
+#[derive(Debug, serde::Deserialize, serde::Serialize, ToPrimitive, FromPrimitive, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 pub enum Expansion {
     /// -1, as expansion, is used in CreatureDifficulty.db2 for
     /// auto-updating the levels of creatures having their expansion
@@ -43,6 +43,39 @@ pub enum Expansion {
 }
 
 pub const CURRENT_EXPANSION: Expansion = Expansion::Legion;
+
+macro_rules! impl_expansion_try_from {
+    ( $( $typ:ty => $func:ident ),+ $(,)? ) => {
+        $(
+            impl TryFrom<$typ> for Expansion {
+                type Error = AzError;
+
+                fn try_from(value: $typ) -> Result<Self, Self::Error> {
+                    Self::$func(value)
+                        .ok_or(az_error!("unable to convert $typ '{value}' to Expansion"))
+                        .map(|v| if matches!(v, Self::LevelCurrent) { return CURRENT_EXPANSION } else { v })
+                }
+            }
+        )+
+    };
+}
+
+impl_expansion_try_from! {
+    u8 => from_u8,
+    u16=> from_u16,
+    u32=> from_u32,
+    u64=> from_u64,
+    i8=> from_i8,
+    i16=> from_i16,
+    i32=> from_i32,
+    i64=> from_i64,
+}
+
+impl Expansion {
+    pub fn into_u8(&self) -> u8 {
+        self.to_u8().unwrap_or(CURRENT_EXPANSION.to_u8().unwrap())
+    }
+}
 
 #[derive(Debug, serde::Deserialize, serde::Serialize, FromPrimitive, Clone, Copy, PartialOrd, Ord, PartialEq, Eq)]
 #[repr(u8)]

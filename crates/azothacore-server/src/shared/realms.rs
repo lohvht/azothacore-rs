@@ -65,6 +65,7 @@ pub struct Realm {
     pub port:                   u16,
     pub realm_type:             RealmType,
     pub name:                   String,
+    pub normalised_name:        String,
     pub flag:                   FlagSet<RealmFlags>,
     pub timezone:               u8,
     pub allowed_security_level: AccountTypes,

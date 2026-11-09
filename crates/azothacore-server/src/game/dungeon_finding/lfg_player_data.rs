@@ -6,7 +6,7 @@ use crate::{
     game::{
         dungeon_finding::lfg::LfgState,
         entities::object::object_guid::{HighGuidParty, ObjectGuid},
-        server::world_packets::lfg_packets_common::LFGRideTicket,
+        server::packets::lfg_common::LFGRideTicket,
     },
     shared::shared_defines::FactionID,
 };

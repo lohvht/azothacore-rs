@@ -197,6 +197,13 @@ where
 }
 
 #[derive(Resource)]
+// SocketReceiver component. This may not actually use the generic <S>
+// passed in, the generics are there just to ensure that the resources
+// do not clash.
+// What is received is an actual raw TCP connection
+// TODO: Evaluate the need for SocketMgr to have the `ConnectionComponent` generic
+//       Similarly for the need of RunStartTcpSocketTask + receive_spawned_sockets as well
+//       Probably only need the generic just to differentiate the SocketReceiver resource
 pub struct SocketReceiver<S: ConnectionComponent>(pub UnboundedReceiver<NewTcpConnection>, PhantomData<S>);
 
 #[derive(Resource)]

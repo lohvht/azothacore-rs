@@ -591,6 +591,13 @@ impl Session<'_> {
     }
 }
 
+#[derive(sqlx::FromRow)]
+struct IpInfoRow {
+    banned:  u32,
+    #[expect(unused)]
+    country: Option<String>,
+}
+
 impl SessionInner {
     async fn start_from_tcp(
         login_db: LoginDatabase,
@@ -622,8 +629,8 @@ impl SessionInner {
                 error!(target:"session", cause=?e, "error deleting expired ip bans");
             }
         });
-        for fields in LoginDatabase::sel_ip_info(&*login_db, args!(ip_address)?).await? {
-            let banned = fields.get::<u32, _>("banned") != 0;
+        for fields in LoginDatabase::sel_ip_info::<_, IpInfoRow>(&*login_db, args!(ip_address)?).await? {
+            let banned = fields.banned != 0;
             if banned {
                 let e = az_error!("[CheckIpCallback] Banned ip '{}' tries to login!", name);
                 debug!(target:"session", cause=?e);
