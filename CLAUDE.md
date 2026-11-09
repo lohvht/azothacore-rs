@@ -8,9 +8,6 @@ NOTE: INCOMPLETE, THIS IS LIFTED FROM ITS AZEROTHCORE SOURCE
 
 - Formatting follows `rustfmt.toml` in NIGHTLY mode, despite the project using the stable toolchain. This allows for us to group imports and other lints that are not stabilised yet.
 - **Do not write or add live-stack e2e tests unless the user explicitly asks.** Do not create `e2e/local/` scratch tests to validate a fix. Existing `e2e/` tests that break after a change may be updated. Do not mention missing coverage unless the user asked about it.
-- Planning docs go in `.agents/plans/<YYYY-MM-DD>-<task-slug>/` (gitignored; the date is the day the folder is created, and stays fixed), named `<task-slug>.<TYPE>.md` (`PLAN`, `REQUIREMENTS`, `ANALYSIS`, …). A finished doc moves to
-  `.agents/plans/done/<same folder name>/` with `**Status: done** (<date>, <commits>)` on top and its
-  content updated to what was implemented; the whole folder moves once its task is done.
 - **Credit upstream authors.** Code, a mechanism, or data mirrored from another core (TrinityCore, cMaNGOS, AzerothCore, …) is committed with `--author` naming the original commit's author (extra sources as `Co-authored-by`), even when rewritten against AZC or confirmed by own sniffs; find them in the upstream file's commit history.
 - logic for any implementation details should always refer to the porting-parity.md document
 - **No local-only paths in committed files.** Plan folders, reference checkouts, port-tracking copies and other
@@ -28,6 +25,7 @@ Read the matching doc(s) BEFORE starting the task:
 - Changing DB2 structs (`db2_structure/wow7_3_5_26972.rs`) or the hotfixes schema → `.agents/docs/systems/db2-stores.md`
 - Touching `ScriptMgr`, `scripts_plugin` or content scripts (`cs_*`, `spell_*`, AI) → `.agents/docs/systems/script-mgr.md`
 - Porting C++ code from TrinityCore or AzerothCore → `.agents/docs/porting-parity.md` (update the port-tracking copies in the same change)
+- Writing a planning doc (plan, outline, milestone proposal) → `.agents/docs/agent-plans.md`
 
 ## Modules
 
