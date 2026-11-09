@@ -603,6 +603,10 @@ impl WorldSocket {
                 match cfg.MaxOverspeedPings {
                     Some(max_allowed) if (self.over_speed_pings > max_allowed) && world_session.is_some() => {
                         // TODO: RBAC_PERM_SKIP_CHECK_OVERSPEED_PING check: AZC-PARTIAL until RBAC (M2)
+                        let player_info: Option<String> = None; // TODO: Implement WorldSession::GetPlayerInfo
+                        error!(target:"network", player_info, remote=self.remote_ip_address(),  "WorldSocket::HandlePing: kicked for over-speed pings");
+                        // _worldSession->GetPlayerInfo().c_str(),
+                        // GetRemoteIpAddress().to_string().c_str(),
                         return false;
                     },
                     _ => {},
@@ -817,6 +821,7 @@ impl WorldSocket {
                 new_country = this.ip_country,
                 "WorldSocket::HandleAuthSession: Sent Auth Response (Account country differs)."
             );
+            script_mgr.on_failed_account_login(&mut commands, account.game_id);
             // We could log on hook only instead of an additional db log, however action logger is config based. Better keep DB logging as well
             return_delayed_close!();
         }
