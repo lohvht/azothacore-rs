@@ -45,6 +45,9 @@ The deletions are tracked in git, so each one is reviewable and can be undone:
 - **Both cores**: when a feature is in both TC and AC, delete it from both copies. Code that exists
   only in AC (module hooks, AC-only systems) is tracked only in the AC copy. Its 3.3.5-specific
   parts that do not apply to 7.3.5 are deleted as `skip:`.
+- **Doc comments**: a ported item's doc starts with its upstream name and core, e.g.
+  `/// ScriptMgr::OnEmailChange in TC/AC` (`in AC`; `X in AC / Y in TC` when the names differ),
+  then the upstream comment verbatim, `@brief`/`@param` blocks included.
 - Keep the copies on the checked-out upstream revision. Do not paste code from another revision of
   the same core (e.g. pre-`WorldSessionMgr` AC session code) into them.
 - The copies do not need to compile. To run the reference servers, use the run scripts, which
