@@ -663,7 +663,6 @@ impl WorldSocket {
         login_db: Res<LoginDatabase>,
         cfg: Res<ConfigMgr<WorldConfig>>,
         realm: Res<CurrentRealm>,
-        script_mgr: ScriptMgr,
         sock_query: Query<&Self>,
     ) {
         let Ok(this) = sock_query.get(entity) else {
@@ -808,7 +807,7 @@ impl WorldSocket {
                     "WorldSocket::HandleAuthSession: Sent Auth Response (Account IP differs)."
                 );
                 // We could log on hook only instead of an additional db log, however action logger is config based. Better keep DB logging as well
-                script_mgr.on_failed_account_login(&mut commands, account.game_id);
+                ScriptMgr::on_failed_account_login_deferred(&mut commands, account.game_id);
                 return_delayed_close!();
             }
         } else if !matches!(account.battle_net_lock_country.as_str(), "" | "00")
@@ -821,7 +820,7 @@ impl WorldSocket {
                 new_country = this.ip_country,
                 "WorldSocket::HandleAuthSession: Sent Auth Response (Account country differs)."
             );
-            script_mgr.on_failed_account_login(&mut commands, account.game_id);
+            ScriptMgr::on_failed_account_login_deferred(&mut commands, account.game_id);
             // We could log on hook only instead of an additional db log, however action logger is config based. Better keep DB logging as well
             return_delayed_close!();
         }
@@ -846,7 +845,7 @@ impl WorldSocket {
         if account.is_banned() {
             this.send_auth_response_error(BattlenetRpcErrorCode::GameAccountBanned);
             error!(target:"network", "WorldSocket::HandleAuthSession: Sent Auth Response (Account banned).");
-            script_mgr.on_failed_account_login(&mut commands, account.game_id);
+            ScriptMgr::on_failed_account_login_deferred(&mut commands, account.game_id);
             return_delayed_close!();
         }
 
@@ -864,7 +863,7 @@ impl WorldSocket {
                 target:"network",
                 "WorldSocket::HandleAuthSession: User tries to login but his security level is not enough"
             );
-            script_mgr.on_failed_account_login(&mut commands, account.game_id);
+            ScriptMgr::on_failed_account_login_deferred(&mut commands, account.game_id);
             return_delayed_close!();
         }
 
@@ -881,8 +880,8 @@ impl WorldSocket {
         rt.spawn(async move { LoginDatabase::upd_last_ip(&*login_db_clone, args).await });
 
         // At this point, we can safely hook a successful login
-        script_mgr.on_account_login(&mut commands, account.game_id);
-        script_mgr.on_last_ip_update(&mut commands, account.game_id, address.to_string());
+        ScriptMgr::on_account_login_deferred(&mut commands, account.game_id);
+        ScriptMgr::on_last_ip_update_deferred(&mut commands, account.game_id, address.to_string());
 
         // Initialize Warden system only if it is enabled by config
         // TODO: Implement warden

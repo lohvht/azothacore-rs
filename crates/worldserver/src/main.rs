@@ -155,13 +155,7 @@ fn show_banner(cfg: Res<ConfigMgr<WorldConfig>>) {
 }
 
 /// Initialize connection to the database
-fn start_db(
-    mut commands: Commands,
-    mut cfg: ResMut<ConfigMgr<WorldConfig>>,
-    rt: Res<TokioRuntime>,
-    script_mgr: ScriptMgr,
-    mut signal: ResMut<SignalReceiver>,
-) -> AzResult<()> {
+fn start_db(mut commands: Commands, mut cfg: ResMut<ConfigMgr<WorldConfig>>, rt: Res<TokioRuntime>, mut signal: ResMut<SignalReceiver>) -> AzResult<()> {
     let top_span = info_span!(target:"server::worldserver", "start_db");
     let _top_span_guard = top_span.enter();
     let modules: Vec<_> = MODULES_LIST.iter().map(|s| s.to_string()).collect();
@@ -262,13 +256,14 @@ fn start_db(
     }
     info!("> Version DB world:     {}", world_db_version.db_version);
     commands.insert_resource(world_db_version);
-    script_mgr.on_after_databases_loaded(&mut commands, updates.EnableDatabases);
 
     // Register DBs as resources
     commands.insert_resource(auth_db);
     commands.insert_resource(world_db);
     commands.insert_resource(characters_db);
     commands.insert_resource(hotfix_db);
+
+    ScriptMgr::on_after_databases_loaded_deferred(&mut commands, updates.EnableDatabases);
     Ok(())
 }
 

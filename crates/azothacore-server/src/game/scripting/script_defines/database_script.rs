@@ -8,6 +8,8 @@ use crate::{
 };
 
 pub trait DatabaseScript: Script {
+    /// DatabaseScript::OnAfterDatabasesLoaded in AC
+    /// Called after all databases are loaded, with the update flags from the loader
     fn on_after_databases_loaded(&self) -> Option<impl System<In = In<FlagSet<DatabaseType>>, Out = ()>> {
         input_script_non!(In<FlagSet<DatabaseType>>)
     }

@@ -13,11 +13,9 @@ pub struct ScriptsInitSet;
 pub fn scripts_plugin(_app: &mut App) {
     info!(target:"server::loading", "Initializing Scripts...");
     // Adding scripts first, then they can load modules
-    // let mut script_mgr = ScriptMgr::default();
 
     // scripts::add_scripts(app.world_mut(), &mut script_mgr);
     // azothacore_module_scripts::add_scripts(app.world_mut(), &mut script_mgr);
-    // app.insert_resource(script_mgr);
 }
 
 // pub mod mod_skeleton_example;

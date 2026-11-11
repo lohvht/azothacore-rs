@@ -6,29 +6,45 @@ use crate::{
 };
 
 pub trait AccountScript: Script {
+    /// AccountScript::OnAccountLogin in TC/AC
+    /// Called when an account logged in successfully
     fn on_account_login(&self) -> Option<impl System<In = In<u32>, Out = ()> + 'static> {
         input_script_non!(In<u32>)
     }
+    /// AccountScript::OnLastIpUpdate in AC
+    /// Called when an ip logged in successfully
     fn on_last_ip_update(&self) -> Option<impl System<In = In<(u32, String)>, Out = ()>> {
         input_script_non!(In<(u32, String)>)
     }
+    /// AccountScript::OnFailedAccountLogin in TC/AC
+    /// Called when an account login failed
     fn on_failed_account_login(&self) -> Option<impl System<In = In<u32>, Out = ()>> {
         input_script_non!(In<u32>)
     }
+    /// AccountScript::OnEmailChange in TC/AC
+    /// Called when Email is successfully changed for Account
     fn on_email_change(&self) -> Option<impl System<In = In<u32>, Out = ()>> {
         input_script_non!(In<u32>)
     }
+    /// AccountScript::OnFailedEmailChange in TC/AC
+    /// Called when Email failed to change for Account
     fn on_failed_email_change(&self) -> Option<impl System<In = In<u32>, Out = ()>> {
         input_script_non!(In<u32>)
     }
+    /// AccountScript::OnPasswordChange in TC/AC
+    /// Called when Password is successfully changed for Account
     fn on_password_change(&self) -> Option<impl System<In = In<u32>, Out = ()>> {
         input_script_non!(In<u32>)
     }
+    /// AccountScript::OnFailedPasswordChange in TC/AC
+    /// Called when Password failed to change for Account
     fn on_failed_password_change(&self) -> Option<impl System<In = In<u32>, Out = ()>> {
         input_script_non!(In<u32>)
     }
-    fn can_account_create_character(&self) -> Option<impl System<In = In<(u32, u8, u8)>, Out = ()>> {
-        input_script_non!(In<(u32, u8, u8)>)
+    /// AccountScript::CanAccountCreateCharacter in AC
+    /// Called when creating a character on the Account
+    fn can_account_create_character(&self) -> Option<impl System<In = In<(u32, u8, u8)>, Out = bool>> {
+        input_script_non!(In<(u32, u8, u8)> => bool)
     }
 }
 
@@ -41,7 +57,7 @@ pub struct AccountScriptObject {
     pub on_failed_email_change:       Option<SystemId<In<u32>>>,
     pub on_password_change:           Option<SystemId<In<u32>>>,
     pub on_failed_password_change:    Option<SystemId<In<u32>>>,
-    pub can_account_create_character: Option<SystemId<In<(u32, u8, u8)>>>,
+    pub can_account_create_character: Option<SystemId<In<(u32, u8, u8)>, bool>>,
 }
 
 impl<S: AccountScript> IntoScriptObject<S, AccountScriptObject> for S {

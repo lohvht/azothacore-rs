@@ -45,12 +45,14 @@ pub use config::*;
 #[derive(Resource)]
 pub struct World {
     sysid_load_config_settings:      SystemId<In<bool>>,
+    sysid_apply_config_settings:     SystemId<In<bool>>,
     sysid_set_player_security_limit: SystemId<In<AccountTypes>>,
 }
 
 pub fn world_plugin(app: &mut App) {
     let world = World {
         sysid_load_config_settings:      app.world_mut().register_system(World::load_config_settings),
+        sysid_apply_config_settings:     app.world_mut().register_system(World::apply_config_settings),
         sysid_set_player_security_limit: app.world_mut().register_system(World::set_player_security_limit),
     };
     app.insert_resource(world).insert_resource(AllowedSecurityLevel(AccountTypes::SecPlayer));
@@ -173,9 +175,16 @@ impl WorldTrait<WorldConfig> for World {
         }
     }
 
-    fn load_config_settings(In(reload): In<bool>, mut commands: Commands, mut cfg: ResMut<ConfigMgr<WorldConfig>>, script_mgr: ScriptMgr) {
+    fn load_config_settings(In(reload): In<bool>, world: &mut bevy::prelude::World) {
         // Happens earlier than AC b/c config reload is built into Config object directly
-        script_mgr.on_before_config_load(&mut commands, reload);
+        ScriptMgr::on_before_config_load(world, reload);
+        let id = world.resource::<Self>().sysid_apply_config_settings;
+        if let Err(e) = world.run_system_with(id, reload) {
+            error!(cause=?e, "failed to apply world config");
+        }
+    }
+
+    fn apply_config_settings(In(reload): In<bool>, mut commands: Commands, mut cfg: ResMut<ConfigMgr<WorldConfig>>) {
         if reload && let Err(e) = cfg.reload_from_path() {
             error!(target:"server.loading", cause=?e, "World settings reload fail: can't read settings.");
             return;
@@ -241,7 +250,7 @@ impl WorldTrait<WorldConfig> for World {
         // MMAP::MMapFactory::InitializeDisabledMaps();
 
         // call ScriptMgr if we're reloading the configuration
-        script_mgr.on_after_config_load(&mut commands, reload);
+        ScriptMgr::on_after_config_load_deferred(&mut commands, reload);
     }
 
     // fn stop_now(&mut self, exit_code: i32) -> Result<i32, WorldError> {

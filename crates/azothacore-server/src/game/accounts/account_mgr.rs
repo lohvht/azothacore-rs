@@ -204,16 +204,15 @@ impl AccountMgr {
     pub fn change_password_scripted<'a, A: DbAcquire<'a>>(
         rt: &Runtime,
         commands: &mut Commands<'a, 'a>,
-        script_mgr: &ScriptMgr,
         login_db: A,
         account_id: u32,
         new_password: &str,
     ) -> AccountOpResult<()> {
         let res = rt.block_on(Self::change_password(login_db, account_id, new_password));
         if res.is_err() {
-            script_mgr.on_failed_password_change(commands, account_id);
+            ScriptMgr::on_failed_password_change_deferred(commands, account_id);
         } else {
-            script_mgr.on_password_change(commands, account_id);
+            ScriptMgr::on_password_change_deferred(commands, account_id);
         }
         res
     }
@@ -240,16 +239,15 @@ impl AccountMgr {
     pub fn change_email_scripted<'a, A: DbAcquire<'a>>(
         rt: &Runtime,
         commands: &mut Commands<'a, 'a>,
-        script_mgr: &ScriptMgr,
         login_db: A,
         account_id: u32,
         new_email: &str,
     ) -> AccountOpResult<()> {
         let res = rt.block_on(Self::change_email(login_db, account_id, new_email));
         if res.is_err() {
-            script_mgr.on_failed_email_change(commands, account_id);
+            ScriptMgr::on_failed_email_change_deferred(commands, account_id);
         } else {
-            script_mgr.on_email_change(commands, account_id);
+            ScriptMgr::on_email_change_deferred(commands, account_id);
         }
         res
     }
@@ -271,16 +269,15 @@ impl AccountMgr {
     pub fn change_reg_email_scripted<'a, A: DbAcquire<'a>>(
         rt: &Runtime,
         commands: &mut Commands<'a, 'a>,
-        script_mgr: &ScriptMgr,
         login_db: A,
         account_id: u32,
         new_email: &str,
     ) -> AccountOpResult<()> {
         let res = rt.block_on(Self::change_reg_email(login_db, account_id, new_email));
         if res.is_err() {
-            script_mgr.on_failed_email_change(commands, account_id);
+            ScriptMgr::on_failed_email_change_deferred(commands, account_id);
         } else {
-            script_mgr.on_email_change(commands, account_id);
+            ScriptMgr::on_email_change_deferred(commands, account_id);
         }
         res
     }

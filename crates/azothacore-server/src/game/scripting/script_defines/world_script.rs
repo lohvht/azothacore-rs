@@ -2,6 +2,7 @@ use bevy::{
     ecs::system::{FunctionSystem, SystemId},
     prelude::*,
 };
+use wow_db2::Locale;
 
 use crate::{
     game::scripting::script_object::{IntoScriptObject, Script, ScriptObjectTrait},
@@ -9,70 +10,83 @@ use crate::{
 };
 
 pub trait WorldScript: Script {
+    /// WorldScript::OnOpenStateChange in TC/AC
     /// Called when the open/closed state of the world changes.
     fn on_open_state_change(&self) -> Option<impl System<In = In<bool>, Out = ()>> {
         input_script_non!(In<bool>)
     }
 
+    /// WorldScript::OnAfterConfigLoad in AC / WorldScript::OnConfigLoad in TC
     /// Called after the world configuration is (re)loaded.
     fn on_after_config_load(&self) -> Option<impl System<In = In<bool>, Out = ()>> {
         input_script_non!(In<bool>)
     }
 
+    /// WorldScript::OnLoadCustomDatabaseTable in AC
     /// Called when loading custom database tables
     fn on_load_custom_database_table(&self) -> Option<impl System<In = (), Out = ()>> {
         None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
+    /// WorldScript::OnBeforeConfigLoad in AC
     /// Called before the world configuration is (re)loaded.
     fn on_before_config_load(&self) -> Option<impl System<In = In<bool>, Out = ()>> {
         input_script_non!(In<bool>)
     }
 
+    /// WorldScript::OnMotdChange in TC/AC
     /// Called before the message of the day is changed.
-    fn on_motd_change(&self) -> Option<impl System<In = In<String>, Out = ()>> {
-        input_script_non!(In<String>)
+    fn on_motd_change(&self) -> Option<impl System<In = (In<Locale>, InMut<'static, String>), Out = ()>> {
+        input_script_non!((In<Locale>, InMut<String>))
     }
 
+    /// WorldScript::OnShutdownInitiate in TC/AC
     /// Called when a world shutdown is initiated.
     fn on_shutdown_initiate(&self) -> Option<impl System<In = In<(u32, u64)>, Out = ()>> {
         input_script_non!(In<(u32, u64)>)
     }
 
+    /// WorldScript::OnShutdownCancel in TC/AC
     /// Called when a world shutdown is cancelled.
     fn on_shutdown_cancel(&self) -> Option<impl System<In = (), Out = ()>> {
         None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
+    /// WorldScript::OnUpdate in TC/AC
     /// Called on every world tick (don't execute too heavy code here).
-    fn on_update(&self) -> Option<impl System<In = (), Out = ()>> {
-        None::<FunctionSystem<fn(), (), (), fn()>>
+    fn on_update(&self) -> Option<impl System<In = In<u32>, Out = ()>> {
+        input_script_non!(In<u32>)
     }
 
+    /// WorldScript::OnStartup in TC/AC
     /// Called when the world is started.
     fn on_startup(&self) -> Option<impl System<In = (), Out = ()>> {
         None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
+    /// WorldScript::OnShutdown in TC/AC
     /// Called when the world is actually shut down.
     fn on_shutdown(&self) -> Option<impl System<In = (), Out = ()>> {
         None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
+    /// WorldScript::OnAfterUnloadAllMaps in AC
     /// Called after all maps are unloaded from core
     fn on_after_unload_all_maps(&self) -> Option<impl System<In = (), Out = ()>> {
         None::<FunctionSystem<fn(), (), (), fn()>>
     }
 
+    /// WorldScript::OnBeforeFinalizePlayerWorldSession in AC
     ///
     /// @brief This hook runs before finalizing the player world session. Can be also used to mutate the cache version of the Client.
     ///
     /// @param version The cache version that we will be sending to the Client.
     ///
-    fn on_before_finalize_player_world_session(&self) -> Option<impl System<In = In<u32>, Out = ()>> {
-        input_script_non!(In<u32>)
+    fn on_before_finalize_player_world_session(&self) -> Option<impl System<In = InMut<'static, u32>, Out = ()>> {
+        input_script_non!(InMut<u32>)
     }
 
+    /// WorldScript::OnBeforeWorldInitialized in AC
     ///
     /// @brief This hook runs after all scripts loading and before itialized
     ///
@@ -87,14 +101,14 @@ pub struct WorldScriptObject {
     pub on_after_config_load: Option<SystemId<In<bool>>>,
     pub on_load_custom_database_table: Option<SystemId>,
     pub on_before_config_load: Option<SystemId<In<bool>>>,
-    pub on_motd_change: Option<SystemId<In<String>>>,
+    pub on_motd_change: Option<SystemId<(In<Locale>, InMut<'static, String>)>>,
     pub on_shutdown_initiate: Option<SystemId<In<(u32, u64)>>>,
     pub on_shutdown_cancel: Option<SystemId>,
-    pub on_update: Option<SystemId>,
+    pub on_update: Option<SystemId<In<u32>>>,
     pub on_startup: Option<SystemId>,
     pub on_shutdown: Option<SystemId>,
     pub on_after_unload_all_maps: Option<SystemId>,
-    pub on_before_finalize_player_world_session: Option<SystemId<In<u32>>>,
+    pub on_before_finalize_player_world_session: Option<SystemId<InMut<'static, u32>>>,
     pub on_before_world_initialized: Option<SystemId>,
 }
 

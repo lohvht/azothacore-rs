@@ -7,7 +7,7 @@ use azothacore_common::{
 use azothacore_database::database_env::{LoginDatabase, WorldDatabase};
 use bevy::prelude::*;
 
-use crate::game::{scripting::script_mgr::ScriptMgr, world::CurrentRealm};
+use crate::game::world::{CurrentRealm, WorldConfig};
 
 /// World::m_allowedSecurityLevel in TC / World::_allowedSecurityLevel in AC
 #[derive(Resource)]
@@ -19,7 +19,8 @@ where
 {
     // fn is_stopped(&self) -> bool;
     /// Initialize config values - LoadConfigSettings in TC / AC
-    fn load_config_settings(reload: In<bool>, commands: Commands, cfg: ResMut<ConfigMgr<C>>, script_mgr: ScriptMgr);
+    fn load_config_settings(reload: In<bool>, world: &mut bevy::prelude::World);
+    fn apply_config_settings(reload: In<bool>, commands: Commands, cfg: ResMut<ConfigMgr<WorldConfig>>);
     fn load_db_allowed_security_level(
         this: Res<Self>,
         commands: Commands,
