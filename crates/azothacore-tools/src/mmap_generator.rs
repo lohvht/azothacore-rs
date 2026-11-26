@@ -5,7 +5,7 @@ use azothacore_common::{
     ChildMapData,
     Locale,
     ParentMapData,
-    bevy_app::bevy_app,
+    bevy_app::{TokioRuntime, bevy_app},
     collision::management::vmap_mgr2::{VMapManager2InitSet, VmapConfig, vmap_mgr2_plugin},
     configuration::{Config, config_mgr_plugin},
     utils::buffered_file_open,
@@ -99,7 +99,9 @@ pub fn main_path_generator<P: AsRef<Path>>(cfg_file: P, args: &ExtractorConfig, 
         .collect::<HashMap<_, _>>();
 
     let mut app = bevy_app();
-    app.insert_resource(ChildMapData(map_id_to_child_map_ids))
+    let rt = tokio::runtime::Builder::new_multi_thread().enable_all().build().unwrap();
+    app.insert_resource(TokioRuntime(rt))
+        .insert_resource(ChildMapData(map_id_to_child_map_ids))
         .insert_resource(ParentMapData(parent_map_data))
         .insert_resource(VmapNotDisabled)
         .insert_resource(LiquidTypes(liquid_types))

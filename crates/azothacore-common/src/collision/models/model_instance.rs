@@ -72,6 +72,8 @@ pub struct ModelInstance {
     pub spawn:     VmapModelSpawn,
     pub inv_scale: f32,
     pub inv_rot:   Matrix3<f32>,
+    /// NOTE: the model is merely a Bevy Asset Handle.
+    /// Before usage, it must be checked via the underlying Assets<WorldModel>
     pub model:     AssetHandle<WorldModel>,
 }
 

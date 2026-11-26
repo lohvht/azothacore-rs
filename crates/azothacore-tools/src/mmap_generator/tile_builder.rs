@@ -438,7 +438,7 @@ impl TileBuilder {
             // will hold final navmesh
             let mut nav_data = vec![];
             info!("Building navmesh tile...");
-            if let Err(e) = detour_create_nav_mesh_data(&mut params, &mut nav_data) {
+            if let Err(e) = detour_create_nav_mesh_data(TILES_PER_MAP, &mut params, &mut nav_data) {
                 warn!(e);
                 break;
             }

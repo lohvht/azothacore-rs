@@ -1,29 +1,30 @@
 use std::{
     collections::HashMap,
     ffi::OsStr,
-    io,
     path::{Path, PathBuf},
 };
 
 use bevy::{
     app::{App, Startup},
-    asset::{AssetApp, AssetLoader, AssetServer, Assets, LoadContext, io::Reader as BevyAssetIoReader},
+    asset::AssetApp,
     ecs::system::SystemParam,
     prelude::*,
 };
 use flagset::FlagSet;
-use tracing::{debug, error, instrument};
+use tracing::{error, instrument};
 
 use crate::{
-    AzError,
     ChildMapData,
     MapLiquidTypeFlag,
     ParentMapData,
-    bevy_app::{AzStartupFailedEvent, az_startup_succeeded},
+    bevy_app::{
+        AzStartupFailedEvent,
+        az_startup_succeeded,
+        manual_assets::{ManualAssetsHandler, manual_asset_plugin},
+    },
     collision::{management::VMapMgr, maps::map_tree::StaticMapTree, models::world_model::WorldModel},
     configuration::ConfigMgr,
     deref_boilerplate,
-    utils::buffered_file_open,
 };
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
@@ -37,7 +38,7 @@ where
 {
     app.insert_resource(VmapInstanceMapTrees(HashMap::default()))
         .init_asset::<WorldModel>()
-        .init_asset_loader::<WorldModelAssetLoader>()
+        .add_plugins(manual_asset_plugin::<WorldModel>)
         .add_systems(
             Startup,
             vmap_mgr2_init_check::<C, L, V>.run_if(az_startup_succeeded()).in_set(VMapManager2InitSet),
@@ -144,9 +145,8 @@ pub struct VMapModelStore<'w, C>
 where
     C: VmapConfig,
 {
-    cfg_mgr:                Res<'w, ConfigMgr<C>>,
-    pub loaded_model_files: ResMut<'w, Assets<WorldModel>>,
-    asset_loader:           Res<'w, AssetServer>,
+    cfg_mgr:            Res<'w, ConfigMgr<C>>,
+    world_model_assets: ManualAssetsHandler<'w, WorldModel>,
 }
 
 /// pushes an extension to the path, making `ext` the new extension
@@ -170,54 +170,16 @@ where
     /// acquireModelInstance in TC/AC
     pub fn acquire_model_instance(&mut self, filename: &str, load_async: bool) -> Option<Handle<WorldModel>> {
         let path = push_extension(self.cfg_mgr.vmaps_dir().join(filename), "vmo");
-        if load_async {
-            return Some(self.asset_loader.load(path));
-        }
-        if let Some(h) = self.asset_loader.get_handle(path.to_path_buf()) {
-            return Some(h);
-        }
-        match buffered_file_open(&path) {
-            Err(e) => {
-                error!("misc: VMapMgr2: could not load {}; err {e}", path.display());
-                None
-            },
-            Ok(mut f) => match WorldModel::read_file(&mut f) {
-                Ok(m) => Some(self.loaded_model_files.add(m)),
-                Err(e) => {
-                    debug!("error trying to open world model file: {filename}; e: {e}");
-                    None
-                },
-            },
-        }
-    }
-}
-
-#[derive(Default, TypePath)]
-pub struct WorldModelAssetLoader;
-
-impl AssetLoader for WorldModelAssetLoader {
-    type Asset = WorldModel;
-    type Error = AzError;
-    type Settings = ();
-
-    async fn load(
-        &self,
-        reader: &mut dyn BevyAssetIoReader,
-        _settings: &Self::Settings,
-        load_context: &mut LoadContext<'_>,
-    ) -> Result<Self::Asset, Self::Error> {
-        let mut bytes = vec![];
-        let filename = load_context.path();
-        reader
-            .read_to_end(&mut bytes)
-            .await
-            .inspect_err(|e| error!("misc: could not load world model {filename}; err {e}"))?;
-        let mut cursor = io::Cursor::new(bytes.as_slice());
-        WorldModel::read_file(&mut cursor).inspect_err(|e| debug!("error trying to open world model file: {filename}; e: {e}"))
+        self.world_model_assets
+            .load(&path, load_async)
+            .inspect_err(|e| {
+                error!(cause=?e, ?path, "misc: VMapMgr2: could not load vmo");
+            })
+            .ok()
     }
 
-    fn extensions(&self) -> &[&str] {
-        &["vmo"]
+    pub fn get_model(&self, h: &Handle<WorldModel>) -> Option<&WorldModel> {
+        self.world_model_assets.get(h)
     }
 }
 

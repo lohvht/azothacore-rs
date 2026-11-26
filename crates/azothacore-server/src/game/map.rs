@@ -16,13 +16,20 @@ pub mod map_file;
 pub mod map_mgr;
 
 #[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize)]
+pub struct MapLiquidDataNoHeight {
+    pub liquid_level: f32,
+    pub width:        u8,
+    pub height:       u8,
+}
+
+#[derive(Debug, PartialEq, serde::Deserialize, serde::Serialize)]
 pub struct MapLiquidData {
     /// header flags are different from liquid_flags
     pub map_liquid_entry_flags: Result<MapLiquidDataEntryFlags, MapLiquidDataGlobalEntryFlags>,
     pub offset_x:               u8,
     pub offset_y:               u8,
     /// height is nrows, width is ncols
-    pub liquid_height_details:  Result<DMatrix<f32>, f32>,
+    pub liquid_height_details:  Result<DMatrix<f32>, MapLiquidDataNoHeight>,
 }
 
 impl MapLiquidData {
@@ -36,7 +43,9 @@ impl MapLiquidData {
     pub fn get_liquid_level(&self, x: usize, y: usize) -> f32 {
         match &self.liquid_height_details {
             Ok(liquid_map) => liquid_map[(x, y)],
-            Err(global_level) => *global_level,
+            Err(MapLiquidDataNoHeight {
+                liquid_level: global_level, ..
+            }) => *global_level,
         }
     }
 }

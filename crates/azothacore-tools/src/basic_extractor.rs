@@ -32,6 +32,7 @@ use azothacore_server::{
             MapLiquidData,
             MapLiquidDataEntryFlags,
             MapLiquidDataGlobalEntryFlags,
+            MapLiquidDataNoHeight,
             MapLiquidTypeFlag,
             map_file::{MapFile, MapFilev9v8, MapHeightData, MapHeightFlightBox},
         },
@@ -720,7 +721,7 @@ pub fn convert_adt(
         // _liquidMap = new float[uint32(_liquidWidth) * uint32(_liquidHeight)];
 
         let liquid_height_details = if !should_include_height {
-            Err(liquid_level)
+            Err(MapLiquidDataNoHeight { liquid_level, width, height })
         } else {
             // map.liquidMapSize += sizeof(float) * liquidHeader.width * liquidHeader.height;
             let offset_y = offset_y as usize;

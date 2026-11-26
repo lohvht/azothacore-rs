@@ -36,7 +36,7 @@ impl IntermediateValues<'_> {
             }};
         }
 
-        let dest_filename_tmpl = meshes_base_dir.as_ref().join(format!("{map_id:04}{tile_x:02}{tile_y:02}.xxx"));
+        let dest_filename_tmpl = meshes_base_dir.as_ref().join(format!("{map_id:04}{tile_y:02}{tile_x:02}.xxx"));
 
         // if let Some(v) = &self.heightfield {
         //     debug_write!(dest_filename_tmpl, "hf", v, debug_write_recast_heightfield);
@@ -56,7 +56,7 @@ impl IntermediateValues<'_> {
     }
 
     pub fn generate_obj_file<P: AsRef<Path>>(&self, meshes_base_dir: P, map_id: u32, tile_x: u16, tile_y: u16, mesh_data: &MeshData) {
-        let obj_file_name = meshes_base_dir.as_ref().join(format!("map{map_id:04}{tile_y:02}{tile_x:2}.obj"));
+        let obj_file_name = meshes_base_dir.as_ref().join(format!("map{map_id:04}{tile_y:02}{tile_x:02}.obj"));
         info!("writing debug output to {}", obj_file_name.display());
         let mut obj_file = match buffered_file_create(&obj_file_name) {
             Err(e) => {
@@ -92,7 +92,7 @@ impl IntermediateValues<'_> {
         _ = obj_file.flush();
 
         info!("writing debug output");
-        let obj_file_name = meshes_base_dir.as_ref().join(format!("map{map_id:04}.map"));
+        let obj_file_name = meshes_base_dir.as_ref().join(format!("{map_id:04}.map"));
         let mut obj_file = match buffered_file_create(&obj_file_name) {
             Err(e) => {
                 tracing::error!("Failed to open for writing: {}; e {e}", obj_file_name.display());
@@ -102,7 +102,7 @@ impl IntermediateValues<'_> {
         };
         _ = obj_file.write_all(&[0]);
 
-        let obj_file_name = meshes_base_dir.as_ref().join(format!("{map_id:04}{tile_y:02}{tile_x:2}.mesh"));
+        let obj_file_name = meshes_base_dir.as_ref().join(format!("{map_id:04}{tile_y:02}{tile_x:02}.mesh"));
         let mut obj_file = match buffered_file_create(&obj_file_name) {
             Err(e) => {
                 tracing::error!("Failed to open for writing: {}; e {e}", obj_file_name.display());
@@ -111,11 +111,11 @@ impl IntermediateValues<'_> {
             Ok(f) => f,
         };
 
-        _ = obj_file.write_all(&(all_verts.len() as u32).to_ne_bytes());
+        _ = obj_file.write_all(&(all_verts.len() as u32 / 3).to_ne_bytes());
         _ = obj_file.write_all(&all_verts.iter().flat_map(|v| v.to_ne_bytes()).collect::<Vec<_>>());
         _ = obj_file.flush();
 
-        _ = obj_file.write_all(&(all_tris.len() as u32).to_ne_bytes());
+        _ = obj_file.write_all(&(all_tris.len() as u32 / 3).to_ne_bytes());
         _ = obj_file.write_all(&all_tris.iter().flat_map(|v| v.to_ne_bytes()).collect::<Vec<_>>());
         _ = obj_file.flush();
     }

@@ -157,6 +157,171 @@ impl DetourNavMesh {
         let status = unsafe { dtNavMesh_removeTile(self.handle, tile_ref, std::ptr::null_mut(), std::ptr::null_mut()) };
         DetourStatus::from_raw_status(status).wrap_result(())
     }
+
+    pub fn tiles(&self) -> impl Iterator<Item = DetourMeshTile<'_>> {
+        let nav = unsafe { &*self.handle };
+        (0..unsafe { nav.getMaxTiles() })
+            .filter_map(move |i| unsafe { nav.getTile(i).as_ref() })
+            .filter(|t| !t.header.is_null())
+            .map(DetourMeshTile)
+    }
+
+    pub fn poly_vertices(&self, poly_ref: dtPolyRef) -> Option<Vec<[f32; 3]>> {
+        let mut tile = std::ptr::null();
+        let mut poly = std::ptr::null();
+        let status = unsafe { (*self.handle).getTileAndPolyByRef(poly_ref, &mut tile, &mut poly) };
+        DetourStatus::from_raw_status(status).wrap_result(()).ok()?;
+        let (tile, poly) = unsafe { (DetourMeshTile(&*tile), &*poly) };
+        Some(tile.poly_vertices(poly).collect())
+    }
+}
+
+#[derive(Clone, Copy)]
+pub struct DetourMeshTile<'a>(&'a dtMeshTile);
+
+impl<'a> DetourMeshTile<'a> {
+    pub fn header(&self) -> &'a dtMeshHeader {
+        unsafe { &*self.0.header }
+    }
+
+    pub fn polys(&self) -> &'a [dtPoly] {
+        unsafe { slice::from_raw_parts(self.0.polys, self.header().polyCount as usize) }
+    }
+
+    fn vertex(&self, i: u16) -> [f32; 3] {
+        unsafe { *self.0.verts.add(usize::from(i) * 3).cast::<[f32; 3]>() }
+    }
+
+    pub fn poly_vertices(&self, poly: &dtPoly) -> impl Iterator<Item = [f32; 3]> {
+        poly.verts[..usize::from(poly.vertCount)].iter().map(|&v| self.vertex(v))
+    }
+
+    /// The detail triangles of each ground polygon, as drawn by Recast's `duDebugDrawNavMesh`.
+    pub fn for_each_detail_triangle(&self, mut f: impl FnMut(&dtPoly, [[f32; 3]; 3])) {
+        for (i, poly) in self.polys().iter().enumerate() {
+            if poly_type(poly) == dtPolyTypes_DT_POLYTYPE_OFFMESH_CONNECTION {
+                continue;
+            }
+            let detail = unsafe { &*self.0.detailMeshes.add(i) };
+            for t in 0..u32::from(detail.triCount) {
+                let tri = unsafe { slice::from_raw_parts(self.0.detailTris.add(((detail.triBase + t) * 4) as usize), 3) };
+                // Indices below vertCount are the polygon's own vertices, the rest index detailVerts.
+                let corner = |k: u8| {
+                    if k < poly.vertCount {
+                        self.vertex(poly.verts[usize::from(k)])
+                    } else {
+                        let idx = detail.vertBase as usize + usize::from(k - poly.vertCount);
+                        unsafe { *self.0.detailVerts.add(idx * 3).cast::<[f32; 3]>() }
+                    }
+                };
+                f(poly, [corner(tri[0]), corner(tri[1]), corner(tri[2])]);
+            }
+        }
+    }
+}
+
+pub fn poly_area(poly: &dtPoly) -> u8 {
+    poly.areaAndtype & 0x3f
+}
+
+pub fn poly_type(poly: &dtPoly) -> dtPolyTypes {
+    dtPolyTypes::from(poly.areaAndtype >> 6)
+}
+
+pub struct DetourNavMeshQuery<'a> {
+    handle: *mut dtNavMeshQuery,
+    _nav:   std::marker::PhantomData<&'a DetourNavMesh>,
+}
+
+impl Drop for DetourNavMeshQuery<'_> {
+    fn drop(&mut self) {
+        unsafe { dtFreeNavMeshQuery(self.handle) };
+    }
+}
+
+impl<'a> DetourNavMeshQuery<'a> {
+    pub fn init(nav: &'a DetourNavMesh, max_nodes: i32) -> Result<(Self, DetourStatus), DetourStatus> {
+        let handle = unsafe { dtAllocNavMeshQuery() };
+        if handle.is_null() {
+            return Err(DetourStatus {
+                status:  DetourHighLevelStatus::Failure.into(),
+                details: DetourStatusDetails::OutOfMemory.into(),
+            });
+        }
+        let query = Self {
+            handle,
+            _nav: std::marker::PhantomData,
+        };
+        let res = unsafe { (*handle).init(nav.handle, max_nodes) };
+        DetourStatus::from_raw_status(res).wrap_result(query)
+    }
+
+    /// Returns a zero poly ref when no polygon lies within `half_extents` of `center`.
+    pub fn find_nearest_poly(
+        &self,
+        center: &[f32; 3],
+        half_extents: &[f32; 3],
+        filter: &dtQueryFilter,
+    ) -> Result<((dtPolyRef, [f32; 3]), DetourStatus), DetourStatus> {
+        let mut poly_ref = 0;
+        let mut nearest = [0.0; 3];
+        let res = unsafe { (*self.handle).findNearestPoly(center.as_ptr(), half_extents.as_ptr(), filter, &mut poly_ref, nearest.as_mut_ptr()) };
+        DetourStatus::from_raw_status(res).wrap_result((poly_ref, nearest))
+    }
+
+    pub fn find_path(
+        &self,
+        start_ref: dtPolyRef,
+        end_ref: dtPolyRef,
+        start_pos: &[f32; 3],
+        end_pos: &[f32; 3],
+        filter: &dtQueryFilter,
+        max_path: usize,
+    ) -> Result<(Vec<dtPolyRef>, DetourStatus), DetourStatus> {
+        let mut path = vec![0; max_path];
+        let mut count = 0;
+        let res = unsafe {
+            (*self.handle).findPath(
+                start_ref,
+                end_ref,
+                start_pos.as_ptr(),
+                end_pos.as_ptr(),
+                filter,
+                path.as_mut_ptr(),
+                &mut count,
+                max_path as i32,
+            )
+        };
+        path.truncate(count as usize);
+        DetourStatus::from_raw_status(res).wrap_result(path)
+    }
+
+    pub fn find_straight_path(
+        &self,
+        start_pos: &[f32; 3],
+        end_pos: &[f32; 3],
+        path: &[dtPolyRef],
+        max_points: usize,
+    ) -> Result<(Vec<[f32; 3]>, DetourStatus), DetourStatus> {
+        let mut points = vec![[0.0; 3]; max_points];
+        let mut count = 0;
+        let res = unsafe {
+            (*self.handle).findStraightPath(
+                start_pos.as_ptr(),
+                end_pos.as_ptr(),
+                path.as_ptr(),
+                path.len() as i32,
+                points.as_mut_ptr().cast(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                &mut count,
+                max_points as i32,
+                0,
+            )
+        };
+        points.truncate(count as usize);
+        DetourStatus::from_raw_status(res).wrap_result(points)
+    }
 }
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -193,18 +358,11 @@ impl DetourNavMeshParams {
     }
 }
 
-pub fn detour_create_nav_mesh_data<W: io::Write>(params: &mut dtNavMeshCreateParams, w: &mut W) -> Result<usize, Box<dyn std::error::Error>> {
-    unsafe {
-        let mut data: *mut u8 = std::ptr::null_mut();
-        let mut n = 0;
-
-        let res = dtCreateNavMeshData(params, &mut data, &mut n);
-        if res {
-            let out = slice::from_raw_parts_mut(data, n as usize);
-            w.write_all(out)?;
-            return Ok(n as usize);
-        }
-    }
+pub fn detour_create_nav_mesh_data<W: io::Write>(
+    tiles_per_map: usize,
+    params: &mut dtNavMeshCreateParams,
+    w: &mut W,
+) -> Result<usize, Box<dyn std::error::Error>> {
     // Error handling
     // these values are checked within dtCreateNavMeshData - handle them here
     // so we have a clear error message
@@ -238,13 +396,10 @@ pub fn detour_create_nav_mesh_data<W: io::Write>(params: &mut dtNavMeshCreatePar
             params.detailTris.is_null(),
         )
         .into())
-    } else if params.polyCount == 0 || params.polys.is_null()
-    // || TILES_PER_MAP * TILES_PER_MAP == (params.polyCount as usize)
-    {
+    } else if params.polyCount == 0 || params.polys.is_null() || tiles_per_map * tiles_per_map == (params.polyCount as usize) {
         // we have flat tiles with no actual geometry - don't build those, its useless
         // keep in mind that we do output those into debug info
         // drop tiles with only exact count - some tiles may have geometry while having less tiles
-        // TILES_PER_MAP_sq = TILES_PER_MAP * TILES_PER_MAP,
         Err(format!(
             "No polygons to build on tile. params.polyCount={}, params.polys.is_null() = {}",
             params.polyCount,
@@ -252,6 +407,18 @@ pub fn detour_create_nav_mesh_data<W: io::Write>(params: &mut dtNavMeshCreatePar
         )
         .into())
     } else {
-        Err("Failed building navmesh tile!".into())
+        unsafe {
+            let mut data: *mut u8 = std::ptr::null_mut();
+            let mut n = 0;
+
+            let res = dtCreateNavMeshData(params, &mut data, &mut n);
+            if res {
+                let out = slice::from_raw_parts_mut(data, n as usize);
+                w.write_all(out)?;
+                Ok(n as usize)
+            } else {
+                Err("Failed building navmesh tile!".into())
+            }
+        }
     }
 }

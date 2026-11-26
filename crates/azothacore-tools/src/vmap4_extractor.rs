@@ -698,9 +698,17 @@ impl VmapExtractor {
                 //     .toRotationMatrix() * wmoRotation)
                 //     .toEulerAnglesXYZ(rotation.z, rotation.x, rotation.y);
                 // X - roll, Y - pitch, Z - yaw
-                let (z, x, y) = (UnitQuaternion::from_quaternion(Quaternion::from(doodad.rotation)).to_rotation_matrix() * wmo_rotation)
-                    // .transpose() // Different from TC, have to transpose because G3D is in row-major, but nalgebra is in column major
+                let (c, a, b) = (UnitQuaternion::from_quaternion(Quaternion::from(doodad.rotation)).to_rotation_matrix() * wmo_rotation)
+                    .transpose()
                     .euler_angles();
+                // NOTE: nalgebra's euler_angles applied the rotation in ZYX order, similar to how G3D Matrix3's toEulerAnglesZYX work
+                // but TC/AC code uses toEulerAnglesXYZ, which applies rotation in the XYZ order, thus
+                // needs a transpose here + negations to match the order of operations there.
+                let x = -a;
+                let y = -b;
+                let z = -c;
+
+                // Different from TC, have to transpose because G3D is in row-major, but nalgebra is in column major
                 let rotation = Vector3::new(x.to_degrees(), y.to_degrees(), z.to_degrees());
 
                 let name_set = 0; // not used for models
@@ -734,6 +742,7 @@ impl VmapExtractor {
             }
         };
         // first doodad set is always active
+        // note: TC 7.3.5 only spawns the chosen set, set 0 is from TC master 20aeb63026 (Core/Vmaps: Extract more doodad sets)
         extract_single_set(&doodad_data.sets[0]);
         if wmo.doodad_set != 0 && usize::from(wmo.doodad_set) < doodad_data.sets.len() {
             extract_single_set(&doodad_data.sets[usize::from(wmo.doodad_set)]);

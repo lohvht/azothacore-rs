@@ -1,4 +1,4 @@
-use std::{io, marker::PhantomData};
+use std::{io, marker::PhantomData, path::Path};
 
 use bevy::{asset::Asset, reflect::TypePath};
 use nalgebra::{DMatrix, Vector3};
@@ -7,10 +7,11 @@ use parry3d::{bounding_volume::Aabb, partitioning::Qbvh, shape::TriMesh};
 use crate::{
     AzError,
     AzResult,
+    bevy_app::manual_assets::ManualAsset,
     cmp_or_return,
     collision::vmap_definitions::{LIQUID_TILE_SIZE, VMAP_MAGIC},
     read_le,
-    utils::{bincode_deserialise, bincode_serialise},
+    utils::{bincode_deserialise, bincode_serialise, buffered_file_open},
 };
 
 /// Holds a model (converted M2 or WMO) in its original coordinate space
@@ -19,6 +20,16 @@ pub struct WorldModel {
     root_wmoid:       u32,
     pub group_models: Vec<GroupModel>,
     group_tree:       Qbvh<usize>,
+}
+
+impl ManualAsset for WorldModel {
+    fn load_asset(path: &Path) -> AzResult<Self>
+    where
+        Self: std::marker::Sized,
+    {
+        let mut file = buffered_file_open(path)?;
+        WorldModel::read_file(&mut file)
+    }
 }
 
 impl WorldModel {

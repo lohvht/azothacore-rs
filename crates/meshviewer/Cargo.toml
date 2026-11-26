@@ -1,0 +1,31 @@
+[package]
+name = "meshviewer"
+version = "0.0.0"
+edition.workspace = true
+
+[dependencies]
+# Local crates
+azothacore-common.workspace = true
+recastnavigation-sys.workspace = true
+# External crates
+bevy = { workspace = true, features = [
+    "bevy_core_pipeline",
+    "bevy_gizmos",
+    "bevy_gizmos_render",
+    "bevy_log",
+    "bevy_pbr",
+    "bevy_render",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_ui_render",
+    "bevy_window",
+    "bevy_winit",
+    "default_font",
+    "free_camera",
+    "tonemapping_luts",
+    "zstd_rust",
+    "wayland",
+    "x11",
+] }
+clap.workspace = true
+flagset.workspace = true

@@ -190,8 +190,8 @@ impl MapBuilder<'_> {
                 //that we dont do anything (like how it silently fails for AC / TC)
                 if let Ok((min_x, min_y, max_x, max_y)) = get_grid_bounds(&mut tb, *map_id) {
                     // add all tiles within bounds to tile list.
-                    for i in min_x..max_x {
-                        for j in min_y..max_y {
+                    for i in min_x..=max_x {
+                        for j in min_y..=max_y {
                             map_tiles.insert((i, j));
                         }
                     }
@@ -435,6 +435,9 @@ impl MapBuilder<'_> {
 #[derive(Component)]
 struct AttemptedLoadMesh;
 
+/// Caps peak memory: mesh data and the models of unloaded tiles are only freed after the frame ends.
+const MAX_TILES_LOADED_PER_FRAME: usize = 256;
+
 #[allow(clippy::type_complexity)]
 fn load_tile_meshdata_work(
     mut commands: Commands,
@@ -461,7 +464,7 @@ fn load_tile_meshdata_work(
         };
         commands.entity(e).insert(mesh_data);
 
-        if count > 1000 {
+        if count >= MAX_TILES_LOADED_PER_FRAME {
             // break so that we give the other systems in the same stage a chance
             break;
         }

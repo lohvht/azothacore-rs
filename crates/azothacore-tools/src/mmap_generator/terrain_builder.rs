@@ -7,7 +7,7 @@ use azothacore_common::{
     row_vector_to_matrix_index,
     utils::buffered_file_open,
 };
-use azothacore_server::game::map::{GridMap, MapLiquidTypeFlag, map_file::MapFile};
+use azothacore_server::game::map::{GridMap, MapLiquidDataNoHeight, MapLiquidTypeFlag, map_file::MapFile};
 use bevy::{ecs::system::SystemParam, prelude::*};
 use flagset::FlagSet;
 use nalgebra::{DMatrix, SMatrix, Vector3};
@@ -125,22 +125,22 @@ impl TerrainBuilder<'_> {
             return Ok(());
         };
 
-        _ = self.load_map_spot(map_id, tile_x + 1, tile_y, Spot::Left, mesh_data);
-        _ = self.load_map_spot(map_id, tile_x - 1, tile_y, Spot::Right, mesh_data);
-        _ = self.load_map_spot(map_id, tile_x, tile_y + 1, Spot::Top, mesh_data);
-        _ = self.load_map_spot(map_id, tile_x, tile_y - 1, Spot::Bottom, mesh_data);
+        _ = self.load_map_spot(map_id, tile_x.wrapping_add(1), tile_y, Spot::Left, mesh_data);
+        _ = self.load_map_spot(map_id, tile_x.wrapping_sub(1), tile_y, Spot::Right, mesh_data);
+        _ = self.load_map_spot(map_id, tile_x, tile_y.wrapping_add(1), Spot::Top, mesh_data);
+        _ = self.load_map_spot(map_id, tile_x, tile_y.wrapping_sub(1), Spot::Bottom, mesh_data);
 
         Ok(())
     }
 
     fn load_map_spot(&self, map_id: u32, tile_x: u16, tile_y: u16, portion: Spot, mesh_data: &mut MeshData) -> AzResult<()> {
-        let mut tried_map_ids = vec![];
+        let mut tried_parent_map_id = None;
         let mut used_map_id = Some(map_id);
         let map_file = loop {
             let map_id = match used_map_id {
                 None => {
                     break Err(az_error!(
-                        "error retrieving map spot for the map {map_id:04}[{tile_x},{tile_y}], tried finding from these maps: {tried_map_ids:?}"
+                        "error retrieving map spot for the map {map_id:04}[{tile_x},{tile_y}], tried finding from these maps: {tried_parent_map_id:?}"
                     ));
                 },
                 Some(i) => i,
@@ -148,7 +148,11 @@ impl TerrainBuilder<'_> {
             let map_file_name = GridMap::file_name(self.cfg.output_map_path(), map_id, tile_y, tile_x);
             let f = match buffered_file_open(&map_file_name).map_err(|e| e.into()).and_then(|mut f| MapFile::read(&mut f)) {
                 Err(_) => {
-                    tried_map_ids.push(map_id);
+                    if tried_parent_map_id.is_some() {
+                        used_map_id = None;
+                        continue;
+                    }
+                    tried_parent_map_id = Some(map_id);
                     used_map_id = self.vmap_mgr.helper.parent_map_data.get(&map_id).cloned();
                     continue;
                 },
@@ -157,20 +161,15 @@ impl TerrainBuilder<'_> {
             break Ok(f);
         }?;
 
-        // i.e. Has height
-        let have_terrain = map_file.map_height_data.map_heights.is_some();
-        let have_liquid = !self.cfg.mmap_path_generator.skip_liquid && map_file.map_liquid_data.is_some();
-
-        if !have_terrain && !have_liquid {
-            return Err(az_error!("no data in this map file"));
-        }
-
         // Temporary
+        let mut have_terrain = false;
+        let mut have_liquid = false;
         let mut ltriangles = vec![];
         let mut ttriangles = vec![];
 
         // terrain data
         if let Some(v9v8) = &map_file.map_height_data.map_heights {
+            have_terrain = true;
             let (v9, v8) = v9v8.to_v9v8(map_file.map_height_data.grid_height, map_file.map_height_data.grid_max_height);
             let count = mesh_data.solid_verts.len() / 3;
             let x_offset = (tile_x as f32 - 32.0) * GRID_SIZE;
@@ -202,7 +201,8 @@ impl TerrainBuilder<'_> {
         }
 
         // liquid data
-        if let Some(liq_data) = &map_file.map_liquid_data {
+        if let Some(liq_data) = map_file.map_liquid_data.as_ref().filter(|_| !self.cfg.mmap_path_generator.skip_liquid) {
+            have_liquid = true;
             let count = mesh_data.liquid_verts.len() / 3;
             let x_offset = (tile_x as f32 - 32.0) * GRID_SIZE;
             let y_offset = (tile_y as f32 - 32.0) * GRID_SIZE;
@@ -239,7 +239,7 @@ impl TerrainBuilder<'_> {
                         j += 1;
                     }
                 },
-                Err(liquid_level) => {
+                Err(MapLiquidDataNoHeight { liquid_level, .. }) => {
                     for i in 0..V9_SIZE_SQ {
                         let (row, col) = row_vector_to_matrix_index!(S: (V9_SIZE, V9_SIZE), i);
                         mesh_data.liquid_verts.push(-(x_offset + col as f32 * GRID_PART_SIZE));
@@ -260,6 +260,11 @@ impl TerrainBuilder<'_> {
                     ltriangles.push(indices[0] + i32::try_from(count).unwrap());
                 }
             }
+        }
+
+        // i.e. Has height
+        if !have_terrain && !have_liquid {
+            return Err(az_error!("no data in this map file"));
         }
 
         // now that we have gathered the data, we can figure out which parts to keep:
@@ -408,14 +413,14 @@ impl TerrainBuilder<'_> {
     }
 
     pub fn load_vmap(&mut self, map_id: u32, tile_x: u16, tile_y: u16, mesh_data: &mut MeshData) -> AzResult<()> {
-        if let Err(e) = self.vmap_mgr.load_single_map_tile(map_id, tile_x, tile_y, true) {
+        if let Err(e) = self.vmap_mgr.load_single_map_tile(map_id, tile_x, tile_y, false) {
             debug!("Unable to load vmap tile. Tile reference may have been from Map instead; err was {e}");
             return Ok(());
         };
 
         let tree = self.vmap_mgr.instance_map_tree(map_id).unwrap();
         for instance in tree.tile_model_instances(tile_x, tile_y) {
-            let Some(world_model) = self.vmap_mgr.model_store.loaded_model_files.get(&instance.model) else {
+            let Some(world_model) = self.vmap_mgr.model_store.get_model(&instance.model) else {
                 continue;
             };
             // model instances exist in tree even though there are instances of that model in this tile
@@ -524,13 +529,13 @@ impl TerrainBuilder<'_> {
                             let idx4 = square + tiles_y + 1 + x;
 
                             // top triangle
-                            liq_tris.push(idx3 as u16);
-                            liq_tris.push(idx2 as u16);
-                            liq_tris.push(idx1 as u16);
+                            liq_tris.push(idx3 as i32);
+                            liq_tris.push(idx2 as i32);
+                            liq_tris.push(idx1 as i32);
                             // bottom triangle
-                            liq_tris.push(idx4 as u16);
-                            liq_tris.push(idx3 as u16);
-                            liq_tris.push(idx1 as u16);
+                            liq_tris.push(idx4 as i32);
+                            liq_tris.push(idx3 as i32);
+                            liq_tris.push(idx1 as i32);
                         }
                     }
                     let liq_offset = i32::try_from(mesh_data.liquid_verts.len() / 3).unwrap();
@@ -540,9 +545,9 @@ impl TerrainBuilder<'_> {
                         mesh_data.liquid_verts.push(liq_vert.x);
                     }
                     for i in 0..(liq_tris.len() / 3) {
-                        mesh_data.liquid_tris.push(i32::from(liq_tris[i * 3 + 1]) + liq_offset);
-                        mesh_data.liquid_tris.push(i32::from(liq_tris[i * 3 + 2]) + liq_offset);
-                        mesh_data.liquid_tris.push(i32::from(liq_tris[i * 3]) + liq_offset);
+                        mesh_data.liquid_tris.push(liq_tris[i * 3 + 1] + liq_offset);
+                        mesh_data.liquid_tris.push(liq_tris[i * 3 + 2] + liq_offset);
+                        mesh_data.liquid_tris.push(liq_tris[i * 3] + liq_offset);
                         mesh_data.liquid_types.push(typ);
                     }
                 }

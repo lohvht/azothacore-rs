@@ -22,7 +22,7 @@ pub fn get_tile_bounds(tile_x: u16, tile_y: u16, verts: &[f32], bmin: &mut [f32;
     if !verts.is_empty() {
         unsafe { rcCalcBounds(verts.as_ptr(), verts.len() as i32 / 3, bmin.as_mut_ptr(), bmax.as_mut_ptr()) };
     } else {
-        bmin[1] = f32::EPSILON;
+        bmin[1] = f32::MIN_POSITIVE;
         bmax[1] = f32::MAX;
     }
 

@@ -17,6 +17,8 @@ use tracing::{error, info};
 
 use crate::{AzResult, az_error, deref_boilerplate};
 
+pub mod manual_assets;
+
 /// Default we use for FixedUpdates in azothacore, can be overwritten again
 pub const DEFAULT_FRAME_RATE: f64 = 144.0; // Bevy default 64;
 

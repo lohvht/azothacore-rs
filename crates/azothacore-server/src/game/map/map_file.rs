@@ -119,7 +119,7 @@ pub struct MapHeightFlightBox {
     pub min: Matrix3<i16>,
 }
 
-const MAP_MAGIC: &[u8] = b"MAPSv2.1";
+const MAP_MAGIC: &[u8] = b"MAPSv2.2";
 
 // Methods to pack into MapFile
 impl MapFile {
