@@ -8,7 +8,7 @@ use azothacore_common::{
     utils::{bincode_deserialise, buffered_file_open},
 };
 use flagset::FlagSet;
-use recastnavigation_sys::{dtPolyRef, dtQueryFilter};
+use recastnavigation_sys::{dtPolyRef, dtQueryFilter, dtStraightPathFlags_DT_STRAIGHTPATH_END, dtStraightPathFlags_DT_STRAIGHTPATH_OFFMESH_CONNECTION};
 
 /// Loads `{map_id}.mmap` and its `.mmtile` files. `tiles` holds (x, y) pairs; empty loads every tile.
 pub fn load_navmesh(mmaps_dir: &Path, map_id: u32, tiles: &[(u16, u16)]) -> AzResult<(DetourNavMesh, usize)> {
@@ -42,6 +42,9 @@ pub fn load_navmesh(mmaps_dir: &Path, map_id: u32, tiles: &[(u16, u16)]) -> AzRe
 const NEAREST_POLY_EXTENTS: [[f32; 3]; 2] = [[3.0, 5.0, 3.0], [3.0, 50.0, 3.0]];
 const MAX_PATH_POLYS: usize = 4096;
 const MAX_PATH_POINTS: usize = 4096;
+const SMOOTH_PATH_STEP_SIZE: f32 = 4.0;
+const SMOOTH_PATH_SLOP: f32 = 0.3;
+const MAX_VISIT_POLY: usize = 16;
 
 pub struct PathResult {
     pub start:    [f32; 3],
@@ -75,10 +78,7 @@ pub fn find_path(nav: &DetourNavMesh, start: [f32; 3], end: [f32; 3]) -> Result<
         .find_path(start_ref, end_ref, &start, &end, &filter, MAX_PATH_POLYS)
         .map_err(|e| format!("findPath failed: {e}"))?;
     let partial = status.details.contains(DetourStatusDetails::PartialResult);
-    // On a partial corridor Detour clamps `end` to the last polygon itself.
-    let (points, _) = query
-        .find_straight_path(&start, &end, &corridor, MAX_PATH_POINTS)
-        .map_err(|e| format!("findStraightPath failed: {e}"))?;
+    let points = find_smooth_path(nav, &query, &filter, &start, &end, &corridor)?;
     Ok(PathResult {
         start,
         end,
@@ -86,4 +86,126 @@ pub fn find_path(nav: &DetourNavMesh, start: [f32; 3], end: [f32; 3]) -> Result<
         points,
         partial,
     })
+}
+
+/// TC's `PathGenerator::FindSmoothPath`, the path the server sends by default. Detour's straight
+/// path only has the corners, so its segments cut through hills between them.
+fn find_smooth_path(
+    nav: &DetourNavMesh,
+    query: &DetourNavMeshQuery,
+    filter: &dtQueryFilter,
+    start: &[f32; 3],
+    end: &[f32; 3],
+    corridor: &[dtPolyRef],
+) -> Result<Vec<[f32; 3]>, String> {
+    let mut polys = corridor.to_vec();
+    let boundary = |poly, pos| {
+        query
+            .closest_point_on_poly_boundary(poly, pos)
+            .map(|(p, _)| p)
+            .map_err(|e| format!("closestPointOnPolyBoundary failed: {e}"))
+    };
+    let mut iter_pos = boundary(polys[0], start)?;
+    let target_pos = boundary(polys[polys.len() - 1], end)?;
+    let mut points = vec![iter_pos];
+
+    while !polys.is_empty() && points.len() < MAX_PATH_POINTS {
+        let Some((steer_pos, steer_flags, steer_ref)) = steer_target(query, &iter_pos, &target_pos, &polys) else {
+            break;
+        };
+        let end_of_path = steer_flags & dtStraightPathFlags_DT_STRAIGHTPATH_END as u8 != 0;
+        let off_mesh = steer_flags & dtStraightPathFlags_DT_STRAIGHTPATH_OFFMESH_CONNECTION as u8 != 0;
+
+        let delta = sub(&steer_pos, &iter_pos);
+        let len = dot(&delta, &delta).sqrt();
+        // Don't step past the end of the path or an off-mesh link.
+        let scale = if (end_of_path || off_mesh) && len < SMOOTH_PATH_STEP_SIZE {
+            1.0
+        } else {
+            SMOOTH_PATH_STEP_SIZE / len
+        };
+        let move_target = [0, 1, 2].map(|i| iter_pos[i] + delta[i] * scale);
+
+        let (mut result, visited) = match query.move_along_surface(polys[0], &iter_pos, &move_target, filter, MAX_VISIT_POLY) {
+            Ok((m, _)) => (m.pos, m.visited),
+            Err(_) => (iter_pos, vec![]),
+        };
+        fixup_corridor(&mut polys, &visited);
+        if let Ok((h, _)) = query.get_poly_height(polys[0], &result) {
+            result[1] = h;
+        }
+        result[1] += 0.5;
+        iter_pos = result;
+
+        if end_of_path && in_range_yzx(&iter_pos, &steer_pos, SMOOTH_PATH_SLOP, 1.0) {
+            points.push(target_pos);
+            break;
+        } else if off_mesh && in_range_yzx(&iter_pos, &steer_pos, SMOOTH_PATH_SLOP, 1.0) {
+            // Advance the corridor up to and over the off-mesh connection.
+            let mut prev_ref = 0;
+            let mut poly_ref = polys[0];
+            let mut npos = 0;
+            while npos < polys.len() && poly_ref != steer_ref {
+                prev_ref = poly_ref;
+                poly_ref = polys[npos];
+                npos += 1;
+            }
+            polys.drain(..npos);
+            if let Some((connection_start, connection_end)) = nav.off_mesh_connection_end_points(prev_ref, poly_ref) {
+                points.push(connection_start);
+                iter_pos = connection_end;
+                if let Some(&poly) = polys.first()
+                    && let Ok((h, _)) = query.get_poly_height(poly, &iter_pos)
+                {
+                    iter_pos[1] = h;
+                }
+                iter_pos[1] += 0.5;
+            }
+        }
+        points.push(iter_pos);
+    }
+    Ok(points)
+}
+
+/// TC's `PathGenerator::GetSteerTarget`: the first straight path corner further than `SMOOTH_PATH_SLOP`
+/// away, at the current height.
+fn steer_target(query: &DetourNavMeshQuery, start: &[f32; 3], end: &[f32; 3], polys: &[dtPolyRef]) -> Option<([f32; 3], u8, dtPolyRef)> {
+    let (steer_path, _) = query.find_straight_path(start, end, polys, 3).ok()?;
+    let p = steer_path
+        .iter()
+        .find(|p| p.flags & dtStraightPathFlags_DT_STRAIGHTPATH_OFFMESH_CONNECTION as u8 != 0 || !in_range_yzx(&p.pos, start, SMOOTH_PATH_SLOP, 1000.0))?;
+    let mut pos = p.pos;
+    pos[1] = start[1];
+    Some((pos, p.flags, p.poly))
+}
+
+/// TC's `PathGenerator::FixupCorridor`: replaces the corridor up to the furthest visited polygon with
+/// the polygons `moveAlongSurface` walked through.
+fn fixup_corridor(path: &mut Vec<dtPolyRef>, visited: &[dtPolyRef]) {
+    let Some((furthest_path, furthest_visited)) = path
+        .iter()
+        .enumerate()
+        .rev()
+        .find_map(|(i, p)| visited.iter().position(|v| v == p).map(|j| (i, j)))
+    else {
+        return;
+    };
+    let rest = path.split_off(furthest_path + 1);
+    path.clear();
+    path.extend(visited[furthest_visited..].iter().rev());
+    path.extend(rest);
+    path.truncate(MAX_PATH_POLYS);
+}
+
+fn in_range_yzx(a: &[f32; 3], b: &[f32; 3], r: f32, h: f32) -> bool {
+    let (dx, dy, dz) = (b[0] - a[0], b[1] - a[1], b[2] - a[2]);
+    dx * dx + dz * dz < r * r && dy.abs() < h
+}
+
+fn sub(a: &[f32; 3], b: &[f32; 3]) -> [f32; 3] {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
+}
+
+fn dot(a: &[f32; 3], b: &[f32; 3]) -> f32 {
+    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }

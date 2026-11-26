@@ -238,15 +238,15 @@ fn setup(
     };
     let input_mat = materials.add(StandardMaterial {
         base_color: Color::srgb(0.55, 0.55, 0.58),
-        ..surface(0.0)
+        ..surface(-800.0)
     });
-    let poly_mat = materials.add(surface(200.0));
-    let detail_mat = materials.add(surface(200.0));
-    let nav_mat = materials.add(surface(400.0));
+    let poly_mat = materials.add(surface(-600.0));
+    let detail_mat = materials.add(surface(-600.0));
+    let nav_mat = materials.add(surface(-400.0));
+    // wgpu rejects depth bias on line topology, so the surfaces are pushed back instead.
     let edge_mat = materials.add(StandardMaterial {
         base_color: Color::srgb(0.05, 0.1, 0.05),
         unlit: true,
-        depth_bias: 800.0,
         ..default()
     });
 
